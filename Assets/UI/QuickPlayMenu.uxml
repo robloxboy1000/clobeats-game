@@ -1,0 +1,5 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:VisualElement style="flex-grow: 1; top: 24px; bottom: 24px; left: 24px; width: 1227px; right: 24px; position: absolute;">
+        <ui:Image style="background-image: url(&quot;project://database/Assets/Texture2D/Background.png?fileID=2800000&amp;guid=c2863048694fcfd4bb84de464d4a68d0&amp;type=3#Background&quot;); background-color: rgba(255, 255, 255, 0); height: 671px; width: 1231px; -unity-background-scale-mode: stretch-to-fill; -unity-slice-scale: initial; -unity-slice-left: 32; -unity-slice-top: 32; -unity-slice-right: 32; -unity-slice-bottom: 32; opacity: 0.6; -unity-slice-type: tiled;"/>
+    </ui:VisualElement>
+</ui:UXML>

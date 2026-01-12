@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<HelpList>
+    <Entry key="quickplay" value="Play by yourself."/>
+    <Entry key="multiplayer" value="Play with company. (or friends.)"/>
+    <Entry key="onlinemultiplayer" value="Play with other random people."/>
+    <Entry key="leaderboards" value="View local or online top scores."/>
+    <Entry key="options" value="Set game volume, controller settings, etc."/>
+</HelpList>

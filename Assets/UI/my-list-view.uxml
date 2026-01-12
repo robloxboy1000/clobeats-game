@@ -1,0 +1,6 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements">
+    <Style src="MainUI.uss" />
+    <ui:VisualElement name="main-container">
+        <ui:ListView name="my-list-view" focusable="true" />
+    </ui:VisualElement>
+</ui:UXML>

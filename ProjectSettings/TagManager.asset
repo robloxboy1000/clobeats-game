@@ -1,0 +1,72 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags:
+  - Note
+  - HOPONote
+  - Deletable
+  - SustainNoteStart
+  - SustainNoteEnd
+  - TapNote
+  - Green_Note
+  - Green_HOPO_Note
+  - Green_Tap_Note
+  - Red_Note
+  - Yellow_Note
+  - Blue_Note
+  - Orange_Note
+  - Open_Note
+  - Red_Tap_Note
+  - ExceptionText
+  - Green_Sustain
+  - Red_Sustain
+  - Yellow_Sustain
+  - Blue_Sustain
+  - Orange_Sustain
+  - Purple_Sustain
+  - FirstBar
+  - LastBeat
+  - Open_HOPO_Note
+  - Strikeline
+  - DelayedStrikeline
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - vlight
+  - Post-process
+  - Highway Post Process
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  m_RenderingLayers:
+  - Default
