@@ -10,12 +10,12 @@ GameObject:
   m_Component:
   - component: {fileID: 9152987152049864199}
   m_Layer: 0
-  m_Name: 
+  m_Name: Base
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &9152987152049864199
 Transform:
   m_ObjectHideFlags: 0
@@ -46,12 +46,12 @@ GameObject:
   - component: {fileID: 6450315608368028772}
   - component: {fileID: 7159548244915303}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &4986332545466902702
 Transform:
   m_ObjectHideFlags: 0
@@ -136,12 +136,12 @@ GameObject:
   - component: {fileID: 375910275496301592}
   - component: {fileID: 3914586360623495141}
   m_Layer: 0
-  m_Name: 
+  m_Name: Middle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &5459334739150126503
 Transform:
   m_ObjectHideFlags: 0
@@ -224,6 +224,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5486582855386787748}
   - component: {fileID: 1984768494156572630}
+  - component: {fileID: -1383325901851476699}
   m_Layer: 0
   m_Name: Strum_Open
   m_TagString: Untagged
@@ -263,6 +264,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   disableColliders: 1
+--- !u!114 &-1383325901851476699
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2680695234009890312}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a56c06674f842943aa777202dd40a4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ScheduledTime
+  scheduledSeconds: 0
 --- !u!1 &3421374557841922008
 GameObject:
   m_ObjectHideFlags: 0
@@ -273,12 +287,12 @@ GameObject:
   m_Component:
   - component: {fileID: 8706480889626231771}
   m_Layer: 0
-  m_Name: 
+  m_Name: Color
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &8706480889626231771
 Transform:
   m_ObjectHideFlags: 0
@@ -309,12 +323,12 @@ GameObject:
   - component: {fileID: 3445493638132379865}
   - component: {fileID: 5279631710045056655}
   m_Layer: 0
-  m_Name: 
+  m_Name: Middle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &2684850365033326553
 Transform:
   m_ObjectHideFlags: 0
@@ -399,12 +413,12 @@ GameObject:
   - component: {fileID: 5409304540527078067}
   - component: {fileID: 8374054632002499827}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &3379908545041486237
 Transform:
   m_ObjectHideFlags: 0
@@ -489,12 +503,12 @@ GameObject:
   - component: {fileID: 7364334027548768973}
   - component: {fileID: 5277946175189101427}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &2133685927067087097
 Transform:
   m_ObjectHideFlags: 0
@@ -579,12 +593,12 @@ GameObject:
   - component: {fileID: 1080392429788287344}
   - component: {fileID: 8528280766324867945}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &8352702996205207863
 Transform:
   m_ObjectHideFlags: 0
@@ -669,12 +683,12 @@ GameObject:
   - component: {fileID: 420922450137688530}
   - component: {fileID: 4802680636388584413}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &3810328246569347078
 Transform:
   m_ObjectHideFlags: 0
@@ -758,12 +772,12 @@ GameObject:
   - component: {fileID: 7956984977760144604}
   - component: {fileID: 3675590614467775184}
   m_Layer: 0
-  m_Name: 
+  m_Name: HOPO
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &7956984977760144604
 Transform:
   m_ObjectHideFlags: 0
@@ -807,12 +821,12 @@ GameObject:
   - component: {fileID: 5985871744468483398}
   - component: {fileID: 4505873386200515109}
   m_Layer: 0
-  m_Name: 
+  m_Name: Corner2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &8222047245713493257
 Transform:
   m_ObjectHideFlags: 0
@@ -897,12 +911,12 @@ GameObject:
   - component: {fileID: 3469128354152136082}
   - component: {fileID: 7056085921259036402}
   m_Layer: 0
-  m_Name: 
+  m_Name: Middle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &7985523672393371964
 Transform:
   m_ObjectHideFlags: 0
@@ -987,12 +1001,12 @@ GameObject:
   - component: {fileID: 4254057701226552348}
   - component: {fileID: 7093573209994070176}
   m_Layer: 0
-  m_Name: 
+  m_Name: Sustain
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1695700306888345075
 Transform:
   m_ObjectHideFlags: 0
