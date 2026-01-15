@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 public class SongFolderLoader : MonoBehaviour
 {
+    public static SongFolderLoader Instance { get; private set; }
     public string songFolderPath;
     public string songName = "Unset";
     public string songArtist = "Unset";
@@ -42,7 +43,7 @@ public class SongFolderLoader : MonoBehaviour
         }
     }
 
-    public void Load()
+    public async Task Load()
     {
         if (string.IsNullOrEmpty(songFolderPath) || !System.IO.Directory.Exists(songFolderPath))
         {
@@ -82,8 +83,8 @@ public class SongFolderLoader : MonoBehaviour
                     songLoader.songVideoClipPath = string.Empty;
                     songVideoClipPathSet = false;
                 }
-                songLoader.SetSongData(songLoader.chartFilePath, songLoader.songAudioClipPath, songLoader.guitarAudioClipPath, songLoader.songVideoClipPath);
-                //LoadIniFile(System.IO.File.ReadAllText(songFolderPath + @"\song.ini"));
+                await songLoader.SetSongData(songLoader.chartFilePath, songLoader.songAudioClipPath, songLoader.guitarAudioClipPath, songLoader.songVideoClipPath);
+                await Task.Yield();
             }
             catch (Exception ex)
             {
@@ -91,6 +92,17 @@ public class SongFolderLoader : MonoBehaviour
                 Debug.LogError(ex.StackTrace);
             }
         }
+    }
+    public void ClearValues()
+    {
+        songFolderPath = string.Empty;
+        songName = string.Empty;
+        songArtist = string.Empty;
+        songAlbum = string.Empty;
+        songYear = 0;
+        loadingPhrase = string.Empty;
+        authorName = string.Empty;
+        previewStartTime = 0;
     }
     public async Task LoadIniFile(string data)
     {
@@ -130,7 +142,14 @@ public class SongFolderLoader : MonoBehaviour
                 }
                 else if (parts.Length == 2 && parts[0].Trim() == "loading_phrase" && parts[1].Trim() is string phrase)
                 {
-                    loadingPhrase = phrase.Trim();
+                    if (phrase == string.Empty || phrase == null)
+                    {
+                        loadingPhrase = string.Empty;
+                    }
+                    else
+                    {
+                        loadingPhrase = phrase.Trim();
+                    }
                 }
                 else if (parts.Length == 2 && parts[0].Trim() == "charter" && parts[1].Trim() is string author)
                 {

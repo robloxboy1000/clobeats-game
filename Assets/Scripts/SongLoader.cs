@@ -14,7 +14,7 @@ public class SongLoader : MonoBehaviour
 
     public bool songDataSet = false;
 
-    private void Awake()
+    async void Awake()
     {
         if (Instance != null && Instance != this)
         {
@@ -26,7 +26,7 @@ public class SongLoader : MonoBehaviour
         DontDestroyOnLoad(gameObject);
         if (chartFilePath != "" && songAudioClipPath != "" && guitarAudioClipPath != "" && songVideoClipPath != "")
         {
-            SetSongData($@"{chartFilePath}", $@"{songAudioClipPath}", $@"{guitarAudioClipPath}", $@"{songVideoClipPath}");
+            await SetSongData($@"{chartFilePath}", $@"{songAudioClipPath}", $@"{guitarAudioClipPath}", $@"{songVideoClipPath}");
         }
     }
     void Start()
@@ -34,14 +34,16 @@ public class SongLoader : MonoBehaviour
         
     }
 
-    public void SetSongData(string chartPath, string audioPath, string guitarPath, string videoPath)
+    public async Task SetSongData(string chartPath, string audioPath, string guitarPath, string videoPath)
     {
         chartFilePath = chartPath;
         songAudioClipPath = audioPath;
         guitarAudioClipPath = guitarPath;
         songVideoClipPath = videoPath;
         songDataSet = true;
+        await Task.Yield();
     }
+
 
     public async Task LoadSongData(System.Action<string, string, string, string> onLoaded)
     {

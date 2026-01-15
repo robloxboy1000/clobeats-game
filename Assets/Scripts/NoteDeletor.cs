@@ -104,12 +104,7 @@ public class NoteDeletor : MonoBehaviour
     void Update()
     {
         
-        if (isPlaying && musicPlayer != null && noteSpawner != null)
-        {
-            float elapsedSeconds = (float)musicPlayer.GetClampedElapsedTimeDsp();
-            float tick = noteSpawner.GetTickAtTimeSeconds(elapsedSeconds, false); // floor to avoid jumping ahead
-            noteSpawner.UpdateCurrentTick(tick);
-        }
+        
         
     }
 }

@@ -42,7 +42,11 @@ public class CameraEffects : MonoBehaviour
             }
             else
             {
-                return;
+                cameraToTweak.AddComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>();
+                cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().isGlobal = true;
+                cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile = new UnityEngine.Rendering.PostProcessing.PostProcessProfile();
+                var chromaticAberration = cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.AddSettings<UnityEngine.Rendering.PostProcessing.ChromaticAberration>();
+                chromaticAberration.intensity.value = intensity;
             }
         }
     }

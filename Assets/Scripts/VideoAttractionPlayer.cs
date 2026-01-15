@@ -24,7 +24,7 @@ public class VideoAttractionPlayer : MonoBehaviour
         inputSystemListener = InputSystem.onAnyButtonPress.Call(OnButtonPressed);
         if (videoPlayer != null)
         {
-            videoURL = PlayerPrefs.GetString("VideoAttractPath", Path.Combine(Application.streamingAssetsPath, "video_attract.webm"));
+            videoURL = PlayerPrefs.GetString("VideoAttractPath", Application.streamingAssetsPath + "/video_attract.webm");
             videoPlayer.url = videoURL;
             if (!videoPlayer.isPrepared)
             {

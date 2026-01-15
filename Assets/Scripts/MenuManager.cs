@@ -34,8 +34,9 @@ public class MenuManager : MonoBehaviour
     Button playSongOnlineUIButton;
     GameObject songInfoPanel;
 
-    GameObject cbFeedPanel;
-    GameObject loadingPanel;
+    public GameObject cbFeedPanel;
+    public GameObject loadingPanel;
+    public GameObject loadingPreviewImage;
 
     public Color accentColor;
 
@@ -48,7 +49,7 @@ public class MenuManager : MonoBehaviour
     {
         
     }
-    void Awake()
+    async void Awake()
     {
         m_EventListener = InputSystem.onAnyButtonPress.Call(OnButtonPressed);
         startPanel = menuCanvas.transform.Find("StartPanel").gameObject;
@@ -58,7 +59,7 @@ public class MenuManager : MonoBehaviour
         cbFeedPanel = menuCanvas.transform.Find("CBFeedPanel").gameObject;
         loadingPanel = menuCanvas.transform.Find("LoadingPanel").gameObject;
         playSongUIButton = songInfoPanel.transform.Find("PlaySongButton").gameObject.GetComponent<Button>();
-        playSongUIButton.onClick.AddListener(() =>
+        playSongUIButton.onClick.AddListener(async () =>
         {
             LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
             if (loadingManager != null)
@@ -69,7 +70,7 @@ public class MenuManager : MonoBehaviour
                 if (songFolderLoader != null)
                 {
                     songFolderLoader.songFolderPath = currentPreviewingSongPath;
-                    songFolderLoader.Load();
+                    await songFolderLoader.Load();
                 }
                 else
                 {
@@ -87,7 +88,8 @@ public class MenuManager : MonoBehaviour
             }
         });
         playSongOnlineUIButton = songInfoPanel.transform.Find("PlaySongOnlineButton").gameObject.GetComponent<Button>();
-        logoObject = menuCanvas.transform.Find("Logo").gameObject.transform.Find("LogoImage").gameObject;
+        loadingPreviewImage = songInfoPanel.transform.Find("AlbumImage").gameObject.transform.Find("LoadingImage").gameObject;
+        logoObject = menuCanvas.transform.Find("Logo").gameObject;
         exitgamePanel = menuCanvas.transform.Find("ExitGamePanel").gameObject;
         hoverHelpText = mainMenuPanel.transform.Find("HoverHelpText").GetComponent<TMPro.TextMeshProUGUI>();
         optionsPanel = menuCanvas.transform.Find("OptionsPanel").gameObject;
@@ -95,7 +97,7 @@ public class MenuManager : MonoBehaviour
         UGUIListHelper = FindFirstObjectByType<UGUIMenuList>().gameObject;
 
         hoverHelpFilePath = Path.Combine(Application.streamingAssetsPath, "HoverHelpData.xml");
-        hoverHelpStrings = ReadXmlToDictionary(hoverHelpFilePath);
+        hoverHelpStrings = await ReadXmlToDictionary(hoverHelpFilePath);
         menuButtons = new Dictionary<string, GameObject>();
         foreach (Transform child in mainMenuPanel.transform)
         {
@@ -141,6 +143,12 @@ public class MenuManager : MonoBehaviour
         optionsPanel.SetActive(false);
         if (onlineIndicatorPanel != null)
         onlineIndicatorPanel.SetActive(false);
+        if (cbFeedPanel != null)
+        cbFeedPanel.SetActive(true);
+        if (loadingPanel != null)
+        loadingPanel.SetActive(false);
+        if (loadingPreviewImage != null)
+        loadingPreviewImage.SetActive(false);
     }
 
     private bool CheckIfButtonsAreNull()
@@ -298,12 +306,12 @@ public class MenuManager : MonoBehaviour
         m_EventListener.Dispose();
     }
 
-    public Dictionary<string, string> ReadXmlToDictionary(string filePath)
+    public async Task<Dictionary<string, string>> ReadXmlToDictionary(string filePath)
     {
         try
         {
             // Load the XML document from the file path
-            XDocument doc = XDocument.Load(filePath);
+            XDocument doc = await Task.Run ( () => XDocument.Load(filePath) );
 
             // Use LINQ to select elements and convert to a dictionary
             Dictionary<string, string> settingsDict = doc.Root

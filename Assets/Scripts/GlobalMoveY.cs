@@ -64,6 +64,17 @@ public class GlobalMoveY : MonoBehaviour
         if (ns == null) ns = FindAnyObjectByType<NoteSpawner>();
 
         // Iterate backwards so we can remove destroyed/null entries safely
+        // Prefer DSP-derived elapsed time (allows negative lead before audio starts).
+        float currentSongSeconds = 0f;
+        if (mp != null)
+        {
+            currentSongSeconds = (float)mp.GetElapsedTimeDsp();
+        }
+        else if (ns != null)
+        {
+            currentSongSeconds = ns.GetTimeInSecondsAtTick(ns.currentTick);
+        }
+
         for (int i = objectsToMove.Count - 1; i >= 0; --i)
         {
             var obj = objectsToMove[i];
@@ -74,12 +85,27 @@ public class GlobalMoveY : MonoBehaviour
             }
 
             var t = obj.transform;
-            t.Translate(0f, -ns.currentTick, 0f, Space.World);
+            // If the object has a ScheduledTime component, compute its world Y directly
+            // from its scheduled song time and the currentSongSeconds using NoteSpawner's
+            // layout parameters so tempo changes are respected.
+            var sched = obj.GetComponent<ScheduledTime>();
+            if (sched != null && ns != null)
+            {
+                float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", ns != null ? ns.desiredHyperspeedSingleThreaded : speed);
+                float strikeY = ns != null ? ns.GetStrikeLineY() : 0f;
+                float targetY = strikeY + ns.startingYPosition + ns.startingYOffset + ((sched.scheduledSeconds - currentSongSeconds) + ns.spawnLeadSeconds) * spacingFactor;
+                // preserve x,z
+                t.position = new Vector3(t.position.x, targetY, t.position.z);
+            }
+            else
+            {
+                t.Translate(0f, -speed * Time.deltaTime, 0f, Space.World);
+            }
 
             if (t.position.y < -100f)
             {
-                //NotePoolManager.Instance.Return(obj);
-                //objectsToMove.RemoveAt(i);
+                NotePoolManager.Instance.Return(obj);
+                objectsToMove.RemoveAt(i);
                 continue;
             }
 
@@ -88,8 +114,9 @@ public class GlobalMoveY : MonoBehaviour
                 float strikeY = sl.transform.position.y;
                 if (t.position.y <= strikeY + EPS)
                 {
-                    mp?.PlayScheduled(mp.dspSongStart);
-                    if (nd != null) nd.isPlaying = true;
+                    //mp.dspSongStart = AudioSettings.dspTime + 0.25;
+                    //mp?.PlayScheduled(mp.dspSongStart);
+                    //if (nd != null) nd.isPlaying = true;
                     musicStarted = true;
                 }
             }

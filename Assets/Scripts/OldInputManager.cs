@@ -165,7 +165,11 @@ public class OldInputManager : MonoBehaviour
         // Optionally handle level load events here
         if (scene.name != "Gameplay")
         {
-            denyInput = true;
+            denyInput = false;
+        }
+        else if (scene.name == "Gameplay")
+        {
+            denyInput = false;
         }
         else
         {

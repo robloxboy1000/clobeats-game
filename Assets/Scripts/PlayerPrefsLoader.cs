@@ -120,7 +120,7 @@ public class PlayerPrefsLoader : MonoBehaviour
         }
 
         playButton = gameObject.transform.Find("PlayButton").GetComponent<Button>();
-        playButton.onClick.AddListener(() =>
+        playButton.onClick.AddListener(async () =>
         {
             PlayerPrefs.SetString("SelectedFolderPath", pathInputField.text);
             PlayerPrefs.SetFloat("Hyperspeed", speedInputField.value);
@@ -136,7 +136,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             if (songFolderLoader != null)
             {
                 songFolderLoader.songFolderPath = pathInputField.text;
-                songFolderLoader.Load();
+                await songFolderLoader.Load();
             }
             else
             {

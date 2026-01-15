@@ -104,6 +104,7 @@ public class UGUIMenuList : MonoBehaviour
     }
     async Task GenerateList(List<string> items)
     {
+        MenuManager menuManager = FindAnyObjectByType<MenuManager>();
         // Instantiate a new item for each entry in the data list
         foreach (string itemName in items)
         {
@@ -130,7 +131,20 @@ public class UGUIMenuList : MonoBehaviour
             {
                 button.onClick.AddListener(async () => await OnItemClicked(itemName));
             }
+
+            
+            if (menuManager != null)
+            {
+                menuManager.loadingPanel.SetActive(true);
+            }
             await Task.Yield();
+        }
+        
+        if (menuManager != null)
+        {
+            menuManager.loadingPanel.SetActive(false);
+            SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+            songFolderLoader.ClearValues();
         }
     }
 

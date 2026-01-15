@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
+using ManagedBass;
 
 public class AudioLevelMeter : MonoBehaviour
 {
@@ -20,7 +21,7 @@ public class AudioLevelMeter : MonoBehaviour
         // Fill the array with the current audio data
         // Use AudioListener.GetOutputData to get the master output, 
         // or AudioSource.GetOutputData for a specific source.
-        AudioListener.GetOutputData(spectrumData, 0); // Channel 0
+        Bass.ChannelGetData(0, spectrumData, spectrumData.Length); // Channel 0
 
         // Process the data to find the average/peak level
         float sum = 0f;

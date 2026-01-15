@@ -151,6 +151,14 @@ public class NoteSpawner : MonoBehaviour
 
     private Coroutine barBeatSpawnerCoroutine = null;
     private MusicPlayer musicPlayer;
+    // how many seconds visuals lead before audio starts (audio scheduled at dspTime + visualLeadSeconds)
+    public float visualLeadSeconds = 4f;
+    // Progressive spawning controls: small initial pre-spawn, then spawn as song plays
+    public bool useProgressiveSpawning = true;
+    public float initialPreSpawnSeconds = 2f; // small window to prepopulate visible notes
+    public float runtimeSpawnLeadSeconds = 6f; // spawn when note is within this many seconds ahead
+    private int nextRuntimeSpawnIndex = 0;
+    private Coroutine runtimeSpawnCoroutine = null;
     string videoClipPath;
     bool videoPrepared = false;
     [SerializeField]
@@ -166,7 +174,8 @@ public class NoteSpawner : MonoBehaviour
 
     public float noteSpawningXOffset = 0; // used for multiplayer
     public string playerType = "Single";
-    private float desiredHyperspeedSingleThreaded = 5f;
+    public float desiredHyperspeedSingleThreaded = 5f;
+    public bool preSpawnOnParse = false;
 
     void Start()
     {
@@ -178,6 +187,8 @@ public class NoteSpawner : MonoBehaviour
     }
     async void Awake()
     {
+        songLoader = FindFirstObjectByType<SongLoader>();
+        songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         desiredDifficultySingleThreaded = PlayerPrefs.GetString("SelectedDifficulty", "Expert");
         desiredHyperspeedSingleThreaded = PlayerPrefs.GetFloat("Hyperspeed", 5f);
         CreatePools();
@@ -187,12 +198,15 @@ public class NoteSpawner : MonoBehaviour
             uiUpdater.loadingOverlay.SetActive(true);
             uiUpdater.songInfoPanel.SetActive(false);
         }
-        await System.Threading.Tasks.Task.Delay(5000);
         await Load();
     }
     
     private async Task Load()
     {
+        if (songLoader == null)
+        {
+            songLoader = FindAnyObjectByType<SongLoader>();
+        }
         if (songLoader != null && songLoader.songDataSet)
         {
             await songLoader.LoadSongData((txtAsset, audioClip, guitarClip, videoClip) =>
@@ -203,9 +217,9 @@ public class NoteSpawner : MonoBehaviour
                 videoClipPath = videoClip;
             });
             await songFolderLoader.LoadIniFile(System.IO.File.ReadAllText(songFolderLoader.songFolderPath + @"\song.ini"));
-            musicPlayer.loadAudio(audioClipPath);
+            await musicPlayer.loadAudio(audioClipPath);
             musicPlayer.loadVideo(videoClipPath);
-            musicPlayer.loadGuitarAudio(guitarClipPath);
+            await musicPlayer.loadGuitarAudio(guitarClipPath);
             
             
             await ParseChartFile(chartFileData);
@@ -255,6 +269,14 @@ public class NoteSpawner : MonoBehaviour
 
     public void Play()
     {
+        // Schedule audio to start after a visual lead so notes/bars can move before audio starts
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        if (musicPlayer != null)
+        {
+            double dspStart = AudioSettings.dspTime + visualLeadSeconds;
+            musicPlayer.PlayScheduled(dspStart);
+        }
+
         StartMovingNotes();
         // Start managed spawning of bars/beats (pooled, ahead-window)
         if (PlayerPrefs.GetInt("EnableBarBeats", 1) == 1)
@@ -269,6 +291,8 @@ public class NoteSpawner : MonoBehaviour
             // PlayerPrefs requests no bars/beats; still spawn a single FirstBar to synchronize music.
             SpawnFirstBarOnly();
         }
+        // Start progressive runtime spawning of notes (small initial window + streaming spawn)
+        StartProgressiveSpawning();
     }
         
 
@@ -290,7 +314,7 @@ public class NoteSpawner : MonoBehaviour
         float barTime = GetTimeInSecondsAtTick(firstBarTick);
         float currentSongSeconds = 0f;
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        if (musicPlayer != null) currentSongSeconds = (float)musicPlayer.GetElapsedTime();
+        if (musicPlayer != null) currentSongSeconds = (float)musicPlayer.GetElapsedTimeDsp();
 
         float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", 5f);
         float strikeY = GetStrikeLineY();
@@ -305,6 +329,10 @@ public class NoteSpawner : MonoBehaviour
         bGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
         bar.SetActive(true);
         scheduledTimeByObject[bar] = barTime;
+        // tag the pooled object with its scheduled time for GlobalMoveY to compute positions
+        var sched = bar.GetComponent<ScheduledTime>();
+        if (sched == null) sched = bar.AddComponent<ScheduledTime>();
+        sched.scheduledSeconds = barTime;
 
         GlobalMoveY gm = FindAnyObjectByType<GlobalMoveY>();
         if (gm != null && !gm.objectsToMove.Contains(bar)) gm.objectsToMove.Add(bar);
@@ -686,11 +714,12 @@ public class NoteSpawner : MonoBehaviour
                                 length = lengthInTicks
                             };
                         }
+                        notes.Add(currentNote);
                         previousNote = currentNote; // Update the previous note
                         parsedNotesCount++;
 
                         // Optionally pre-spawn the visual note immediately if we have enough sync data
-                        if (syncTrack != null && syncTrack.Count > 0)
+                        if (preSpawnOnParse && syncTrack != null && syncTrack.Count > 0)
                         {
                             
                             float spacingFactor = desiredHyperspeedSingleThreaded;
@@ -699,136 +728,22 @@ public class NoteSpawner : MonoBehaviour
                             {
                                 musicPlayer.currentTime = Mathf.Clamp(timeSeconds, 0, songLengthInTicks - 1);
                             }
-                            float strikeY = GetStrikeLineY();
-                            float yPosition = preSpawnLongPlane
-                                ? strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
-                                : strikeY + startingYPosition + startingYOffset + ((timeSeconds - ((musicPlayer != null) ? (float)musicPlayer.GetElapsedTime() : 0f)) + spawnLeadSeconds) * spacingFactor;
-
-                            Vector2 position = new Vector2((fret - 2f) + noteSpawningXOffset, yPosition);
-                            Vector2 openNotePosition = new Vector2(0 + noteSpawningXOffset, yPosition);
-                            GameObject noteInstance = null;
-                            
                             if (currentNote is OpenNoteInfo)
                             {
-                                if (openNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(openNotePrefab); noteInstance.transform.position = openNotePosition;
+                                SpawnNoteInstance(7,timeSeconds,spacingFactor);
                             }
                             else
                             {
                                 switch (fret)
                                 {
-                                    case 0: if (greenNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(greenNotePrefab); if (noteInstance != null) noteInstance.transform.position = position; break;
-                                    case 1: if (redNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(redNotePrefab); if (noteInstance != null) noteInstance.transform.position = position; break;
-                                    case 2: if (yellowNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(yellowNotePrefab); if (noteInstance != null) noteInstance.transform.position = position; break;
-                                    case 3: if (blueNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(blueNotePrefab); if (noteInstance != null) noteInstance.transform.position = position; break;
-                                    case 4: if (orangeNotePrefab != null) noteInstance = NotePoolManager.Instance.Get(orangeNotePrefab); if (noteInstance != null) noteInstance.transform.position = position; break;
+                                    case 0: SpawnNoteInstance(0,timeSeconds,spacingFactor); break;
+                                    case 1: SpawnNoteInstance(1,timeSeconds,spacingFactor); break;
+                                    case 2: SpawnNoteInstance(2,timeSeconds,spacingFactor); break;
+                                    case 3: SpawnNoteInstance(3,timeSeconds,spacingFactor); break;
+                                    case 4: SpawnNoteInstance(4,timeSeconds,spacingFactor); break;
                                     default: break;
                                 }
                             }
-                            
-
-                            if (noteInstance != null)
-                            {
-                                var gate = noteInstance.GetComponent<VisibilityGate>();
-                                if (gate == null) gate = noteInstance.AddComponent<VisibilityGate>();
-                                gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
-                                try { LaneManager.Instance.RegisterNote(noteInstance, fret); } catch (Exception) { }
-                                noteInstance.SetActive(true);
-                                // Compute HOPO flags: if the time between consecutive notes is within the
-                                // HOPO threshold (in milliseconds), mark the later note's `isHopo = true`.
-                                try
-                                {
-                                    for (int i2 = 1; i2 < notes.Count; i2++)
-                                    {
-                                        var prev = notes[i2 - 1];
-                                        var curr = notes[i2];
-                                        if (prev == null || curr == null) continue;
-                                        // time difference in milliseconds
-                                        float prevSec = GetTimeInSecondsAtTick((int)prev.spawnTime);
-                                        float currSec = GetTimeInSecondsAtTick((int)curr.spawnTime);
-                                        float deltaMs = (currSec - prevSec) * 1000f;
-
-                                        // Detect if a "forced" indicator (fret 5) exists on the same tick as `curr`.
-                                        bool hasForcedSameTick = false;
-                                        for (int j = 0; j < notes.Count; j++)
-                                        {
-                                            var maybe = notes[j];
-                                            if (maybe == null) continue;
-                                            if ((int)maybe.spawnTime == (int)curr.spawnTime && maybe.fret == 5)
-                                            {
-                                                hasForcedSameTick = true;
-                                                break;
-                                            }
-                                        }
-
-                                        if (hasForcedSameTick)
-                                        {
-                                            // Forced indicator toggles the default behavior:
-                                            // - If the time delta is outside the HOPO threshold -> force HOPO
-                                            // - If inside the HOPO threshold -> force normal note
-                                            curr.isHopo = (deltaMs > hopoThreshold);
-                                        }
-                                        else
-                                        {
-                                            // Default HOPO rule: within threshold (and >0) -> HOPO
-                                            curr.isHopo = (deltaMs > 0f && deltaMs <= hopoThreshold);
-                                        }
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.LogWarning("Failed computing HOPO flags: " + ex.Message);
-                                }
-                                // If the note was computed as a HOPO, enable its HOPO indicator child or component.
-                                try
-                                {
-                                    
-                                    bool hopo = false;
-                                    // safe-guard: `note` may be a NoteInfo reference
-                                    hopo = currentNote.isHopo;
-                                    // Try to find a child named "HOPO" first
-                                    var hopoChild = noteInstance.transform.Find("HOPO");
-                                    if (hopoChild != null)
-                                    {
-                                        hopoChild.gameObject.SetActive(hopo);
-                                    }
-                                    else
-                                    {
-                                        // Or try a component named HopoIndicator on the prefab
-                                        var hopoComp = noteInstance.GetComponentInChildren<MonoBehaviour>(true);
-                                        if (hopoComp != null && hopoComp.GetType().Name == "HopoIndicator")
-                                        {
-                                            hopoComp.gameObject.SetActive(hopo);
-                                        }
-                                    }
-                                }
-                                catch (Exception) { }
-                                AddObjectToGlobalMoveY(noteInstance);
-                            }
-                            else
-                            {
-                                
-                            }
-
-                            // sustain creation (kept simple here: instantiate sustain prefab children if available)
-                            GameObject sustainInstance = null;
-                            if (lengthInTicks > 0)
-                            {
-                                if (noteInstance != null)
-                                {
-                                    sustainInstance = noteInstance.GetComponentInChildren<Sustain>().gameObject;
-                                }
-                                
-                                if (sustainInstance != null)
-                                {
-                                    SetupSustain(sustainInstance, tickStart, lengthInTicks, spacingFactor);
-                                    var sGate = sustainInstance.GetComponent<VisibilityGate>();
-                                    if (sGate == null) sGate = sustainInstance.AddComponent<VisibilityGate>();
-                                    sGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
-                                    sustainInstance.SetActive(true);
-                                }
-                            }
-
-                            
                         }
                         else
                         {
@@ -916,8 +831,18 @@ public class NoteSpawner : MonoBehaviour
         if (sustainInstance == null) return;
         float startSeconds = GetTimeInSecondsAtTick((int)startTick);
         float endSeconds = GetTimeInSecondsAtTick((int)(startTick + lengthTicks));
-        Vector2 sustainPosition = new Vector2(sustainInstance.transform.position.x, startSeconds);
-        sustainInstance.transform.position = sustainPosition;
+        // Compute world Y positions for start/end using the same layout rules as notes
+        float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+        float strikeY = GetStrikeLineY();
+        float startY = preSpawnLongPlane
+            ? strikeY + startingYPosition + startingYOffset + (startSeconds + spawnLeadSeconds) * spacingFactor
+            : strikeY + startingYPosition + startingYOffset + ((startSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
+        float endY = preSpawnLongPlane
+            ? strikeY + startingYPosition + startingYOffset + (endSeconds + spawnLeadSeconds) * spacingFactor
+            : strikeY + startingYPosition + startingYOffset + ((endSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
+        // Position the sustain so its head aligns at startY; the sustain visual component should
+        // handle scaling/length based on start/end seconds in Initialize.
+        sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, startY, sustainInstance.transform.position.z);
         // Ensure there is a Sustain component to manage visual updates
         var sustainComp = sustainInstance.GetComponent<Sustain>();
         if (sustainComp == null) sustainComp = sustainInstance.AddComponent<Sustain>();
@@ -950,6 +875,136 @@ public class NoteSpawner : MonoBehaviour
         if (globalMoveY != null)
         {
             globalMoveY.isMoving = true;
+        }
+    }
+
+    // Start progressive spawning: small initial pre-spawn window, then spawn remaining notes at runtime
+    public void StartProgressiveSpawning()
+    {
+        if (!useProgressiveSpawning)
+        {
+            // Fallback: spawn everything using existing behaviour (if you have a PreSpawnNotes implementation)
+            try { PreSpawnWindow(0f, preSpawnAheadSeconds); } catch { }
+            return;
+        }
+
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        float current = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+        // Prepopulate a small initial window so the immediate view isn't empty
+        PreSpawnWindow(current, initialPreSpawnSeconds);
+
+        // Find the first not-yet-spawned note index
+        nextRuntimeSpawnIndex = 0;
+        while (nextRuntimeSpawnIndex < notes.Count)
+        {
+            float t = GetTimeInSecondsAtTick(notes[nextRuntimeSpawnIndex].spawnTime);
+            if (t - current > initialPreSpawnSeconds) break;
+            nextRuntimeSpawnIndex++;
+        }
+
+        if (runtimeSpawnCoroutine == null) runtimeSpawnCoroutine = StartCoroutine(RuntimeSpawnLoop());
+    }
+
+    // Spawn only notes whose time is within `windowSeconds` of currentSeconds. Uses pooling.
+    private void PreSpawnWindow(float currentSeconds, float windowSeconds)
+    {
+        float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", desiredHyperspeedSingleThreaded);
+        for (int i = 0; i < notes.Count; i++)
+        {
+            var n = notes[i];
+            if (n == null) continue;
+            float t = GetTimeInSecondsAtTick(n.spawnTime);
+            if (t < currentSeconds - 1f) continue; // skip past notes
+            if (t - currentSeconds <= windowSeconds)
+            {
+                SpawnNoteInstance(i, t, spacingFactor);
+            }
+        }
+    }
+
+    private IEnumerator RuntimeSpawnLoop()
+    {
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        while (nextRuntimeSpawnIndex < notes.Count)
+        {
+            float current = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+            float lead = runtimeSpawnLeadSeconds;
+            // spawn all notes that have entered the lead window
+            while (nextRuntimeSpawnIndex < notes.Count)
+            {
+                var n = notes[nextRuntimeSpawnIndex];
+                if (n == null) { nextRuntimeSpawnIndex++; continue; }
+                float noteTime = GetTimeInSecondsAtTick(n.spawnTime);
+                if (noteTime - current <= lead)
+                {
+                    SpawnNoteInstance(nextRuntimeSpawnIndex, noteTime, PlayerPrefs.GetFloat("Hyperspeed", desiredHyperspeedSingleThreaded));
+                    nextRuntimeSpawnIndex++;
+                    continue;
+                }
+                break;
+            }
+            yield return null;
+        }
+        runtimeSpawnCoroutine = null;
+    }
+
+    // Spawn a single note (pooled) with sustain handling and lane registration
+    private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
+    {
+        if (noteIndex < 0 || noteIndex >= notes.Count) return;
+        var n = notes[noteIndex];
+        if (n == null) return;
+
+        int fret = n.fret;
+        float strikeY = GetStrikeLineY();
+        float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+        float yPosition = preSpawnLongPlane
+            ? strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
+            : strikeY + startingYPosition + startingYOffset + ((timeSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
+
+        Vector2 pos = (fret == 7) ? new Vector2(0 + noteSpawningXOffset, yPosition) : new Vector2((fret - 2f) + noteSpawningXOffset, yPosition);
+        GameObject inst = null;
+
+        if (fret == 7)
+        {
+            if (openNotePrefab != null) inst = NotePoolManager.Instance.Get(openNotePrefab);
+        }
+        else
+        {
+            switch (fret)
+            {
+                case 0: if (greenNotePrefab != null) inst = NotePoolManager.Instance.Get(greenNotePrefab); break;
+                case 1: if (redNotePrefab != null) inst = NotePoolManager.Instance.Get(redNotePrefab); break;
+                case 2: if (yellowNotePrefab != null) inst = NotePoolManager.Instance.Get(yellowNotePrefab); break;
+                case 3: if (blueNotePrefab != null) inst = NotePoolManager.Instance.Get(blueNotePrefab); break;
+                case 4: if (orangeNotePrefab != null) inst = NotePoolManager.Instance.Get(orangeNotePrefab); break;
+                default: break;
+            }
+        }
+
+        if (inst == null) return;
+        inst.transform.position = pos;
+        // attach scheduled time so GlobalMoveY can compute exact positions relative to song time
+        var sched = inst.GetComponent<ScheduledTime>();
+        if (sched == null) sched = inst.AddComponent<ScheduledTime>();
+        sched.scheduledSeconds = timeSeconds;
+        var gate = inst.GetComponent<VisibilityGate>(); if (gate == null) gate = inst.AddComponent<VisibilityGate>();
+        gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+        try { LaneManager.Instance.RegisterNote(inst, fret); } catch (Exception) { }
+        inst.SetActive(true);
+        AddObjectToGlobalMoveY(inst);
+
+        // sustain handling
+        if (n.length > 0)
+        {
+            var sustainObj = inst.GetComponentInChildren<Sustain>()?.gameObject;
+            if (sustainObj != null)
+            {
+                SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor);
+                var sGate = sustainObj.GetComponent<VisibilityGate>(); if (sGate == null) sGate = sustainObj.AddComponent<VisibilityGate>();
+                sGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+                sustainObj.SetActive(true);
+            }
         }
     }
 
@@ -1081,7 +1136,7 @@ public class NoteSpawner : MonoBehaviour
                 continue;
             }
 
-            float currentSongSeconds = (float)musicPlayer.GetElapsedTime();
+            float currentSongSeconds = (musicPlayer != null) ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
 
             // spawn bars while their time is within the ahead window
             while (nextBarTick < songLengthInTicks)
@@ -1138,6 +1193,9 @@ public class NoteSpawner : MonoBehaviour
                     gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
                     beatGO.SetActive(true);
                     scheduledTimeByObject[beatGO] = beatTime;
+                    var bsched = beatGO.GetComponent<ScheduledTime>();
+                    if (bsched == null) bsched = beatGO.AddComponent<ScheduledTime>();
+                    bsched.scheduledSeconds = beatTime;
                     // add to GlobalMoveY so pooled beats are moved along with notes
                     AddObjectToGlobalMoveY(beatGO);
                     int bInsert = activeBeats.FindIndex(bobj => {

@@ -33,25 +33,12 @@ public class GameManager : MonoBehaviour
     {
         if (scene.name == "Gameplay") // Gameplay scene
         {
-            //WaitForSecondsRealtime wait = new WaitForSecondsRealtime(120f);
-            //StartCoroutine(PlaySong(wait));
+            OldInputManager inputManager = FindAnyObjectByType<OldInputManager>();
+            if (inputManager != null)
+            {
+                inputManager.denyInput = false;
+            }
         }
-    }
-
-    public IEnumerator DelayedPlaySong(WaitForSecondsRealtime wait)
-    {
-        yield return wait;
-        UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
-        if (uiUpdater != null)
-        {
-            uiUpdater.songInfoPanel.SetActive(false);
-        }
-        NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
-        if (noteSpawner != null)
-        {
-            noteSpawner.Play();
-        }
-        yield return null;
     }
 
     public IEnumerator PlaySong()
@@ -82,7 +69,7 @@ public class GameManager : MonoBehaviour
             if (venue != null)
             {
                 Animation venueAnim = venue.GetComponent<Animation>();
-                venueAnim.Play("VenueEntry");
+                //venueAnim.Play("VenueEntry");
                 if (venueAnimManager != null)
                 {
                     venueAnimManager.leftDoor.GetComponent<Animation>().Play("RightDoorOpen");
@@ -110,11 +97,6 @@ public class GameManager : MonoBehaviour
         if (venueAnimationPlayer != null)
         {
             venueAnimationPlayer.Load();
-        }
-        MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        if (musicPlayer != null)
-        {
-            musicPlayer.dspSongStart = AudioSettings.dspTime;
         }
         NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
         if (noteSpawner != null)
@@ -214,6 +196,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Used for loading DDS images.
     public static Texture2D FlipTextureVerticallyGPU(Texture2D original)
     {
         RenderTexture rt = RenderTexture.GetTemporary(original.width, original.height, 0, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
@@ -234,39 +217,7 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Time.timeScale == 0)
-        {
-            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            if (musicPlayer != null)
-            {
-                musicPlayer.pauseAudio();
-            }
-        }
-        else if (!Application.isFocused)
-        {
-            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            if (musicPlayer != null)
-            {
-                //musicPlayer.setVolume(0.05f);
-            }
-        }
-        else if (Application.isFocused)
-        {
-            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            if (musicPlayer != null)
-            {
-                musicPlayer.setVolume(1f);
-            }
-        }
-        else
-        {
-            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            if (musicPlayer != null)
-            {
-                musicPlayer.resumeAudio();
-            }
-        }
-
+        
     }
     
 }
