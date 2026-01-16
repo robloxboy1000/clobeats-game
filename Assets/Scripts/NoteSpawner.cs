@@ -2,12 +2,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI;
 using System.Threading.Tasks; // Added namespace for Task support
 using UnityEngine.SceneManagement;
-using Unity.VisualScripting;
+using System.Linq;
 
 
 public class NoteSpawner : MonoBehaviour
@@ -30,6 +28,7 @@ public class NoteSpawner : MonoBehaviour
 
     public List<NoteInfo> notes = new List<NoteInfo>();
     public List<SyncInfo> syncTrack = new List<SyncInfo>();
+
     // map tick -> concatenated event string
     public Dictionary<int, string> events = new Dictionary<int, string>();
     
@@ -176,6 +175,8 @@ public class NoteSpawner : MonoBehaviour
     public string playerType = "Single";
     public float desiredHyperspeedSingleThreaded = 5f;
     public bool preSpawnOnParse = false;
+
+    public Transform highwayTransform;
 
     void Start()
     {
@@ -348,7 +349,7 @@ public class NoteSpawner : MonoBehaviour
         {
             for (int i = 0; i < barPoolSize; i++)
             {
-                var go = Instantiate(barPrefab);
+                var go = Instantiate(barPrefab, highwayTransform);
                 // Ensure visibility gate exists and is initialized so pooled bars are hidden until reveal Z
                 var gate = go.GetComponent<VisibilityGate>();
                 if (gate == null) gate = go.AddComponent<VisibilityGate>();
@@ -362,7 +363,7 @@ public class NoteSpawner : MonoBehaviour
         {
             for (int i = 0; i < beatPoolSize; i++)
             {
-                var go = Instantiate(beatPrefab);
+                var go = Instantiate(beatPrefab, highwayTransform);
                 var gate = go.GetComponent<VisibilityGate>();
                 if (gate == null) gate = go.AddComponent<VisibilityGate>();
                 gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
@@ -390,7 +391,7 @@ public class NoteSpawner : MonoBehaviour
             }
         }
 
-        var newGo = Instantiate(barPrefab);
+        var newGo = Instantiate(barPrefab, highwayTransform);
         newGo.SetActive(false);
         return newGo;
     }
@@ -427,7 +428,7 @@ public class NoteSpawner : MonoBehaviour
             }
         }
 
-        var newGo = Instantiate(beatPrefab);
+        var newGo = Instantiate(beatPrefab, highwayTransform);
         newGo.SetActive(false);
         return newGo;
     }
@@ -842,7 +843,7 @@ public class NoteSpawner : MonoBehaviour
             : strikeY + startingYPosition + startingYOffset + ((endSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
         // Position the sustain so its head aligns at startY; the sustain visual component should
         // handle scaling/length based on start/end seconds in Initialize.
-        sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, startY, sustainInstance.transform.position.z);
+        //sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, startY, sustainInstance.transform.position.z);
         // Ensure there is a Sustain component to manage visual updates
         var sustainComp = sustainInstance.GetComponent<Sustain>();
         if (sustainComp == null) sustainComp = sustainInstance.AddComponent<Sustain>();

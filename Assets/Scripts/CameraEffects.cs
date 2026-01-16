@@ -1,6 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
+
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -42,7 +42,6 @@ public class CameraEffects : MonoBehaviour
             }
             else
             {
-                cameraToTweak.AddComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>();
                 cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().isGlobal = true;
                 cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile = new UnityEngine.Rendering.PostProcessing.PostProcessProfile();
                 var chromaticAberration = cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.AddSettings<UnityEngine.Rendering.PostProcessing.ChromaticAberration>();

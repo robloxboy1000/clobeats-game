@@ -8,9 +8,11 @@ public class CameraTimelineEditor : EditorWindow
 {
     [System.Serializable]
     public class VecData { public float x; public float y; public float z; public Vector3 ToV3() => new Vector3(x, y, z); public static VecData FromV3(Vector3 v) => new VecData { x = v.x, y = v.y, z = v.z }; }
+    [System.Serializable]
+    public class PostProcData {}
 
     [System.Serializable]
-    public class Keyframe { public float tick; public VecData position; public VecData rotation; public float focalLength; }
+    public class Keyframe { public float tick; public VecData position; public VecData rotation; public float focalLength; public PostProcData postProc;}
 
     [System.Serializable]
     public class KeyframeCollection { public Keyframe[] keyframes; }
@@ -28,11 +30,21 @@ public class CameraTimelineEditor : EditorWindow
     int previewChannels = 0;
     int previewFrequency = 0;
 
-    [MenuItem("Window/Camera Timeline Editor")]
+    RenderTexture cameraPreviewRT;
+    public int previewWidth = 640;
+    public int previewHeight = 360;
+    public bool livePreview = true;
+
+    [MenuItem("Window/CloBeats/Venue/Camera Timeline Editor")]
     public static void ShowWindow() { GetWindow<CameraTimelineEditor>("Camera Timeline"); }
 
     void OnGUI()
     {
+        // split UI: left = timeline/editor, right = camera preview
+        EditorGUILayout.BeginHorizontal();
+
+        // Left column: main timeline/editor UI
+        EditorGUILayout.BeginVertical(GUILayout.Width(position.width * 0.58f));
         EditorGUILayout.BeginHorizontal();
         targetCamera = (Camera)EditorGUILayout.ObjectField("Camera", targetCamera, typeof(Camera), true);
         if (GUILayout.Button("Use Scene Camera", GUILayout.Width(120))) { if (SceneView.lastActiveSceneView != null) targetCamera = SceneView.lastActiveSceneView.camera; Repaint(); }
@@ -64,14 +76,15 @@ public class CameraTimelineEditor : EditorWindow
             ApplyTickToCamera(scrubTick);
             // play a tiny PCM preview at the scrub position
             PlayScrubPreview(scrubTick);
+            if (livePreview) RenderCameraPreview();
             Repaint();
         }
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button(isPlaying ? "Pause" : "Play", GUILayout.Width(80)))
-        { 
-            if (isPlaying) PausePreview(); 
-            else StartPreview(false); 
+        {
+            if (isPlaying) PausePreview();
+            else StartPreview(false);
         }
         if (GUILayout.Button("Stop", GUILayout.Width(60))) { StopPreview(); scrubTick = minTick; ApplyTickToCamera(scrubTick); }
         if (GUILayout.Button("Apply Scrub To Camera")) ApplyTickToCamera(scrubTick);
@@ -100,6 +113,36 @@ public class CameraTimelineEditor : EditorWindow
         EditorGUILayout.EndScrollView();
 
         if (GUILayout.Button("Sort by Tick")) frames = frames.OrderBy(f => f.tick).ToList();
+
+        EditorGUILayout.EndVertical(); // end left column
+
+        // Right column: camera preview
+        EditorGUILayout.BeginVertical();
+        EditorGUILayout.LabelField("Camera Preview", EditorStyles.boldLabel);
+        livePreview = EditorGUILayout.Toggle("Live Preview", livePreview);
+        EditorGUILayout.BeginHorizontal();
+        previewWidth = EditorGUILayout.IntField("Width", previewWidth);
+        previewHeight = EditorGUILayout.IntField("Height", previewHeight);
+        EditorGUILayout.EndHorizontal();
+        if (GUILayout.Button("Capture Now")) RenderCameraPreview();
+
+        // allocate RT if needed
+        EnsurePreviewRT();
+
+        Rect previewRect = GUILayoutUtility.GetRect(previewWidth, previewHeight, GUILayout.ExpandWidth(true));
+        if (cameraPreviewRT != null)
+        {
+            EditorGUI.DrawPreviewTexture(previewRect, cameraPreviewRT, null, ScaleMode.ScaleToFit);
+        }
+        else
+        {
+            EditorGUI.DrawRect(previewRect, Color.black);
+        }
+
+        EditorGUILayout.EndVertical(); // end right column
+        EditorGUILayout.EndHorizontal(); // end main split
+
+        
     }
 
     void OnEnable()
@@ -112,6 +155,12 @@ public class CameraTimelineEditor : EditorWindow
     {
         EditorApplication.update -= OnEditorUpdate;
         StopPreview();
+        if (cameraPreviewRT != null)
+        {
+            cameraPreviewRT.Release();
+            Object.DestroyImmediate(cameraPreviewRT);
+            cameraPreviewRT = null;
+        }
     }
 
     void StartPreview(bool scrubbing)
@@ -249,6 +298,40 @@ public class CameraTimelineEditor : EditorWindow
 
         transientPreviewClip.SetData(data, 0);
         previewAudioSource.PlayOneShot(transientPreviewClip);
+    }
+
+    void EnsurePreviewRT()
+    {
+        if (previewWidth <= 0) previewWidth = 640;
+        if (previewHeight <= 0) previewHeight = 360;
+        if (cameraPreviewRT == null || cameraPreviewRT.width != previewWidth || cameraPreviewRT.height != previewHeight)
+        {
+            if (cameraPreviewRT != null)
+            {
+                cameraPreviewRT.Release();
+                Object.DestroyImmediate(cameraPreviewRT);
+            }
+            cameraPreviewRT = new RenderTexture(previewWidth, previewHeight, 16, RenderTextureFormat.ARGB32);
+            cameraPreviewRT.hideFlags = HideFlags.HideAndDontSave;
+            cameraPreviewRT.Create();
+        }
+    }
+
+    void RenderCameraPreview()
+    {
+        if (targetCamera == null) return;
+        EnsurePreviewRT();
+        var prevRT = targetCamera.targetTexture;
+        try
+        {
+            targetCamera.targetTexture = cameraPreviewRT;
+            targetCamera.Render();
+        }
+        finally
+        {
+            targetCamera.targetTexture = prevRT;
+        }
+        Repaint();
     }
 
     void AddFromCamera()

@@ -2323,7 +2323,7 @@ AudioSource:
   m_GameObject: {fileID: 418749246}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: -727368022876087905, guid: ca5e00ddd1f76a042ae3ae5afb2a0527, type: 2}
+  OutputAudioMixerGroup: {fileID: 4005446951636368991, guid: 60e2ca80585101f4ab713701b5fdedb4, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -2589,7 +2589,7 @@ AudioSource:
   m_GameObject: {fileID: 428839824}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 243672017259290008, guid: ca5e00ddd1f76a042ae3ae5afb2a0527, type: 2}
+  OutputAudioMixerGroup: {fileID: -7757551549221153642, guid: 60e2ca80585101f4ab713701b5fdedb4, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -5968,7 +5968,7 @@ AudioSource:
   m_GameObject: {fileID: 1187515335}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 1601145608177232106, guid: ca5e00ddd1f76a042ae3ae5afb2a0527, type: 2}
+  OutputAudioMixerGroup: {fileID: 5879081999799138597, guid: 60e2ca80585101f4ab713701b5fdedb4, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -6453,9 +6453,15 @@ MonoBehaviour:
   guitarAudioSource: {fileID: 1187515337}
   previewAudioSource: {fileID: 418749248}
   sfxAudioSource: {fileID: 428839826}
-  useUnityAudio: 1
+  useUnityAudio: 0
   previewAudioPlaying: 0
   dspSongStart: 0
+  isPaused: 0
+  pausedElapsedDsp: 0
+  currentTime: 0
+  previousTime: 0
+  currentTimeInSamples: 0
+  currentTimeInDSP: 0
 --- !u!4 &1335966662
 Transform:
   m_ObjectHideFlags: 0
@@ -6613,6 +6619,11 @@ MonoBehaviour:
   previewStartTime: 0
   songVideoClipPathSet: 0
   songAccentColor: {r: 0, g: 0, b: 0, a: 0}
+  supportedFormats:
+  - wav
+  - ogg
+  - mp3
+  songFolderFiles: []
 --- !u!114 &1408682439
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7122,7 +7133,7 @@ AudioSource:
   m_GameObject: {fileID: 1528935620}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 243752053592687308, guid: ca5e00ddd1f76a042ae3ae5afb2a0527, type: 2}
+  OutputAudioMixerGroup: {fileID: 6467640641777264093, guid: 60e2ca80585101f4ab713701b5fdedb4, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -7422,53 +7433,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1562350846}
   m_CullTransparentMesh: 1
---- !u!1 &1617539499
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1617539501}
-  - component: {fileID: 1617539500}
-  m_Layer: 0
-  m_Name: ForgeEngineFacade
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1617539500
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1617539499}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6d813b0894ad9674fa430205f3289821, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Forge.Networking.Unity.ForgeEngineFacade
-  _sceneToLoad: 
-  _sceneToDisconnectTo: 
-  _prefabManager: {fileID: 11400000, guid: 199a06a8e37c3784fbfd739f9ffeb3ec, type: 2}
---- !u!4 &1617539501
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1617539499}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1639922345
 GameObject:
   m_ObjectHideFlags: 0
@@ -9399,5 +9363,4 @@ SceneRoots:
   - {fileID: 906629138}
   - {fileID: 1857359762}
   - {fileID: 1821195100}
-  - {fileID: 1617539501}
   - {fileID: 779913371}

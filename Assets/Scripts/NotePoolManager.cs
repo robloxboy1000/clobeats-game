@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Octokit;
 using UnityEngine;
 
 // Generic pool manager keyed by prefab GameObject. Intended for notes and sustains.
@@ -28,6 +29,13 @@ public class NotePoolManager : MonoBehaviour
     // Pool per prefab
     Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
 
+    NoteSpawner ns;
+
+    void Update()
+    {
+        if (ns == null) ns = FindAnyObjectByType<NoteSpawner>();
+    }
+
     // Prewarm a pool for a prefab
     public void Prewarm(GameObject prefab, int count)
     {
@@ -40,7 +48,7 @@ public class NotePoolManager : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            var inst = Instantiate(prefab);
+            var inst = Instantiate(prefab, ns.highwayTransform);
             var pn = inst.GetComponent<PooledNote>();
             if (pn == null) pn = inst.AddComponent<PooledNote>();
             pn.prefab = prefab;
@@ -66,7 +74,7 @@ public class NotePoolManager : MonoBehaviour
             return g;
         }
 
-        var newGo = Instantiate(prefab);
+        var newGo = Instantiate(prefab, ns.highwayTransform);
         var pnNew = newGo.GetComponent<PooledNote>();
         if (pnNew == null) pnNew = newGo.AddComponent<PooledNote>();
         pnNew.prefab = prefab;

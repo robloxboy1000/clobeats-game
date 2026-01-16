@@ -3,9 +3,7 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using System.IO;
 using System;
-using NUnit.Framework.Constraints;
 using UnityEngine.EventSystems;
-using Unity.VisualScripting;
 using System.Threading.Tasks;
 using Melanchall.DryWetMidi.Core;
 
@@ -183,11 +181,18 @@ public class UGUIMenuList : MonoBehaviour
                 if (musicPlayer.previewAudioPlaying)
                 {
                     musicPlayer.StopPreviewAudio();
-                    await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
+                    if (File.Exists(name + @"\song.ogg"))
+                    {
+                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
+                    }
+                    
                 }
                 else
                 {
-                    await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
+                    if (File.Exists(name + @"\song.ogg"))
+                    {
+                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
+                    }
                 }
             }
 

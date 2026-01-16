@@ -24848,7 +24848,7 @@ Transform:
   m_GameObject: {fileID: 802243020}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0, z: 0}
+  m_LocalPosition: {x: 0, y: -0, z: 20}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -33054,52 +33054,6 @@ Transform:
   - {fileID: 275170200}
   m_Father: {fileID: 2087174829}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1030708662
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1030708664}
-  - component: {fileID: 1030708663}
-  m_Layer: 0
-  m_Name: VenueAnimationManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1030708663
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1030708662}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a7a83e32d775f6242b34fc24adfab5f4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
-  leftDoor: {fileID: 0}
-  rightDoor: {fileID: 0}
---- !u!4 &1030708664
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1030708662}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -84, y: 2.15513, z: 103.42593}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1032178662
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -41216,6 +41170,7 @@ GameObject:
   - component: {fileID: 1298628031}
   - component: {fileID: 1298628032}
   - component: {fileID: 1298628033}
+  - component: {fileID: 1298628034}
   m_Layer: 7
   m_Name: 3DVenue_Camera
   m_TagString: MainCamera
@@ -41241,7 +41196,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 1
-  m_BackGroundColor: {r: 0, g: 0, b: 1, a: 1}
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 2
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -41291,7 +41246,7 @@ Transform:
   m_GameObject: {fileID: 1298628024}
   serializedVersion: 2
   m_LocalRotation: {x: 0.1792839, y: 0.41272923, z: -0.08322081, w: 0.8891492}
-  m_LocalPosition: {x: 9.18, y: 6.5, z: 12.33}
+  m_LocalPosition: {x: 3.05, y: 13.18, z: 12.33}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -41393,6 +41348,25 @@ Animation:
   m_AnimatePhysics: 0
   m_UpdateMode: 0
   m_CullingType: 0
+--- !u!320 &1298628034
+PlayableDirector:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298628024}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_PlayableAsset: {fileID: 11400000, guid: db01913dad2ea1d42b974db4fcb1dcaf, type: 2}
+  m_InitialState: 1
+  m_WrapMode: 2
+  m_DirectorUpdateMode: 1
+  m_InitialTime: 0
+  m_SceneBindings:
+  - key: {fileID: 1625345418761134261, guid: db01913dad2ea1d42b974db4fcb1dcaf, type: 2}
+    value: {fileID: 0}
+  m_ExposedReferences:
+    m_References: []
 --- !u!1001 &1299988903
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -68403,6 +68377,5 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1298628029}
-  - {fileID: 1030708664}
   - {fileID: 207720023}
   - {fileID: 802243021}

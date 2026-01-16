@@ -39,6 +39,7 @@ public class MusicPlayer : MonoBehaviour
     // ManagedBass stream handles
     private int songStreamHandle = 0;
     private int guitarStreamHandle = 0;
+    private int previewStreamHandle = 0;
 
 
     public float currentTime = 0f;
@@ -76,8 +77,16 @@ public class MusicPlayer : MonoBehaviour
         {
             if (!Bass.Init())
             {
-                Debug.LogError("BASS init failed: " + Bass.LastError);
-                bassInitialized = false;
+                if (Bass.LastError == Errors.Already)
+                {
+                    Debug.Log("BASS already initialized.");
+                    bassInitialized = true;
+                }
+                else
+                {
+                    Debug.LogError("BASS init failed: " + Bass.LastError);
+                    bassInitialized = false;
+                }
             }
             else
             {
@@ -337,34 +346,77 @@ public class MusicPlayer : MonoBehaviour
     }
     public async Task PlayPreviewAudio(string filePath, float startPoint = 0)
     {
-        if (previewAudioSource != null)
+        if (useUnityAudio)
         {
-            using var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip("file://" + filePath, AudioType.OGGVORBIS);
-            var operation = www.SendWebRequest();
-            while (!operation.isDone) 
-            { 
-                MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-                menuManager.loadingPreviewImage.SetActive(true);
-                await Task.Yield(); 
-            }
-            AudioClip audioClip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
-            if (audioClip != null)
+            if (previewAudioSource != null)
             {
-                MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-                menuManager.loadingPreviewImage.SetActive(false);
-                previewAudioSource.clip = audioClip;
-                previewAudioSource.time = startPoint;
-                previewAudioSource.Play();
-                previewAudioPlaying = true;
+                using var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip("file://" + filePath, AudioType.OGGVORBIS);
+                var operation = www.SendWebRequest();
+                while (!operation.isDone) 
+                { 
+                    MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                    menuManager.loadingPreviewImage.SetActive(true);
+                    await Task.Yield(); 
+                }
+                AudioClip audioClip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
+                if (audioClip != null)
+                {
+                    MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                    menuManager.loadingPreviewImage.SetActive(false);
+                    previewAudioSource.clip = audioClip;
+                    previewAudioSource.time = startPoint;
+                    previewAudioSource.Play();
+                    previewAudioPlaying = true;
+                }
             }
         }
+        else
+        {
+            if (!bassInitialized) InitBASS();
+            if (bassInitialized)
+            {
+                MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                menuManager.loadingPreviewImage.SetActive(true);
+                Debug.Log("Loading preview (ManagedBass) from path: " + filePath);
+                try
+                {
+                    if (previewStreamHandle != 0) { Bass.StreamFree(previewStreamHandle); previewStreamHandle = 0; }
+                    previewStreamHandle = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
+                    long previewStartBytePosition = Bass.ChannelSeconds2Bytes(previewStreamHandle, (double)(startPoint / 1000f));
+                    Bass.ChannelSetPosition(previewStreamHandle, previewStartBytePosition);
+                    Bass.ChannelPlay(previewStreamHandle);
+                    await Task.Yield();
+                    menuManager.loadingPreviewImage.SetActive(false);
+                    previewAudioPlaying = true;
+                    if (previewStreamHandle == 0) Debug.LogError("Failed to create BASS preview stream: " + Bass.LastError);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError("Exception creating BASS preview stream: " + ex.Message);
+                }
+            }
+        }
+        
     }
     public void StopPreviewAudio()
     {
-        if (previewAudioSource != null)
+        if (useUnityAudio)
         {
-            previewAudioSource.Stop();
-            previewAudioPlaying = false;
+            if (previewAudioSource != null)
+            {
+                previewAudioSource.Stop();
+                previewAudioPlaying = false;
+            }
+        }
+        else
+        {
+            if (previewStreamHandle != 0 && bassInitialized)
+            {
+                try { Bass.ChannelStop(previewStreamHandle); } catch { }
+                try { Bass.StreamFree(previewStreamHandle); } catch { }
+                previewStreamHandle = 0;
+                previewAudioPlaying = false;
+            }
         }
     }
 

@@ -1542,6 +1542,11 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!4 &1070376620 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7054210308235656232, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1092334949
 GameObject:
   m_ObjectHideFlags: 0
@@ -2093,17 +2098,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2c359f2c6817f74a91225b7f8a01ffa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NoteSpawner
-  greenNotePrefab: {fileID: 5870174100904184411, guid: 3b3f00c676985644fa3c846ef241a5eb, type: 3}
-  redNotePrefab: {fileID: 5870174100904184411, guid: e09dc1b89e7f954448662bd00c8bc8c5, type: 3}
-  yellowNotePrefab: {fileID: 5870174100904184411, guid: 2b06e15c1d2ce044e91c257a3f695b7a, type: 3}
-  blueNotePrefab: {fileID: 5870174100904184411, guid: bc56a1e501654194fb80351aa0f8da63, type: 3}
-  orangeNotePrefab: {fileID: 5870174100904184411, guid: 03e262a81fa82c2438001bf060d9e216, type: 3}
-  openNotePrefab: {fileID: 2680695234009890312, guid: 54f1b8ff63ec3184ebe3bac3d04614f5, type: 3}
+  greenNotePrefab: {fileID: 5870174100904184411, guid: 1f6aa81d26288f84eb828a0d4081ceaa, type: 3}
+  redNotePrefab: {fileID: 5870174100904184411, guid: 9459943bb7b1992489dfe27182fac693, type: 3}
+  yellowNotePrefab: {fileID: 5870174100904184411, guid: 5aed44f1342838f47b0c94758f3a021b, type: 3}
+  blueNotePrefab: {fileID: 5870174100904184411, guid: f3238eed3f3833449bc588e1297dd0dc, type: 3}
+  orangeNotePrefab: {fileID: 5870174100904184411, guid: 7e3ba3607b742934c9ca21857c9f02ad, type: 3}
+  openNotePrefab: {fileID: 2680695234009890312, guid: b7be6615889dae54f994e32cdb30631c, type: 3}
   barPrefab: {fileID: 2174839338255832015, guid: 2b76cd1aeb6850348ac1b4bba199c009, type: 3}
   beatPrefab: {fileID: 7394045019533855855, guid: fe930747aee88814baaa833c563d069b, type: 3}
   songLengthInTicks: 0
   currentTick: 0
-  startingYPosition: 16
+  startingYPosition: 0
   spawnLeadSeconds: 0
   preSpawnAheadSeconds: 0
   preSpawnLongPlane: 0
@@ -2113,11 +2118,18 @@ MonoBehaviour:
   barPoolSize: 8
   beatPoolSize: 8
   recycleGraceSeconds: 1
+  visualLeadSeconds: 0
+  useProgressiveSpawning: 1
+  initialPreSpawnSeconds: 2
+  runtimeSpawnLeadSeconds: 2
   songLoader: {fileID: 0}
   songFolderLoader: {fileID: 0}
   hopoThreshold: 170
   noteSpawningXOffset: 0
   playerType: Single
+  desiredHyperspeedSingleThreaded: 5
+  preSpawnOnParse: 0
+  highwayTransform: {fileID: 1070376620}
 --- !u!1 &2077398492
 GameObject:
   m_ObjectHideFlags: 0
@@ -2307,6 +2319,38 @@ PrefabInstance:
       propertyPath: m_Name
       value: GuitarPlayer
       objectReference: {fileID: 0}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: redBase
+      value: 
+      objectReference: {fileID: 3193120349281168060}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: blueBase
+      value: 
+      objectReference: {fileID: 3193120349281168058}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: greenBase
+      value: 
+      objectReference: {fileID: 3193120349281168061}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: orangeBase
+      value: 
+      objectReference: {fileID: 3193120349281168057}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: yellowBase
+      value: 
+      objectReference: {fileID: 3193120349281168059}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: flamePrefab
+      value: 
+      objectReference: {fileID: 5282078635711392982, guid: 63bf9e5077dde984695970ac0542ab45, type: 3}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: SustainFlamePrefab
+      value: 
+      objectReference: {fileID: 4893077338054298762, guid: 35c517da979055c4fb2814e7540d5e1d, type: 3}
+    - target: {fileID: 3992974127098868705, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+      propertyPath: sustainSparksPrefab
+      value: 
+      objectReference: {fileID: 4503612902121041701, guid: 5a936c83b1746f14f9100db745e94f04, type: 3}
     - target: {fileID: 7789558625127986451, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 244085039
@@ -2323,6 +2367,31 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+--- !u!1 &3193120349281168057 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2261367784985515396, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &3193120349281168058 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3188096732061030007, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &3193120349281168059 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7121754994777990784, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &3193120349281168060 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8679209970684632178, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &3193120349281168061 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6575466809455836254, guid: 849ed199fe3c9b24fb46a14d03549174, type: 3}
+  m_PrefabInstance: {fileID: 3193120349281168056}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

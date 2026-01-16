@@ -1,11 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using System.Globalization;
 using System.Drawing;
 using System.Threading.Tasks;
+using System.IO;
+using System.Linq;
 
 public class SongFolderLoader : MonoBehaviour
 {
@@ -20,6 +21,8 @@ public class SongFolderLoader : MonoBehaviour
     public int previewStartTime = 0;
     public bool songVideoClipPathSet = false;
     public UnityEngine.Color songAccentColor;
+    public List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
+    public string[] songFolderFiles;
 
     void Awake()
     {
@@ -45,7 +48,7 @@ public class SongFolderLoader : MonoBehaviour
 
     public async Task Load()
     {
-        if (string.IsNullOrEmpty(songFolderPath) || !System.IO.Directory.Exists(songFolderPath))
+        if (string.IsNullOrEmpty(songFolderPath) || !Directory.Exists(songFolderPath))
         {
             Debug.LogError("Invalid song folder path: " + songFolderPath);
             return;
@@ -55,25 +58,42 @@ public class SongFolderLoader : MonoBehaviour
             try
             {
                 Debug.Log("Loading song folder: " + songFolderPath);
+                songFolderFiles = await Task.Run (() => Directory.GetFiles(songFolderPath));
+                
+
                 SongLoader songLoader = FindFirstObjectByType<SongLoader>();
-                if (System.IO.File.Exists(songFolderPath + @"\song.ogg"))
+
+                // Find a file named "song" with a supported extension and set the audio path
+                var songMatch = songFolderFiles
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
+
+                if (songMatch != null)
                 {
-                    songLoader.songAudioClipPath = songFolderPath + @"\song.ogg";
+                    songLoader.songAudioClipPath = songMatch.path;
                 }
-                if (System.IO.File.Exists(songFolderPath + @"\guitar.ogg"))
+
+                // Find a file named "guitar" with a supported extension and set the guitar path
+                var guitarMatch = songFolderFiles
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => x.name == "guitar" && supportedFormats.Contains(x.ext));
+
+                if (guitarMatch != null)
                 {
-                    songLoader.guitarAudioClipPath = songFolderPath + @"\guitar.ogg";
+                    songLoader.guitarAudioClipPath = guitarMatch.path;
                 }
-                if (System.IO.File.Exists(songFolderPath + @"\notes.chart"))
+
+
+                if (File.Exists(songFolderPath + @"\notes.chart"))
                 {
                     songLoader.chartFilePath = songFolderPath + @"\notes.chart";
                 }
-                if (System.IO.File.Exists(songFolderPath + @"\venueAnim.json"))
+                if (File.Exists(songFolderPath + @"\venueAnim.json"))
                 {
                     VenueAnimationPlayer.Instance.cameraAnimationFile = songFolderPath + @"\venueAnim.json";
                 }
                 
-                if (System.IO.File.Exists(songFolderPath + @"\video.webm"))
+                if (File.Exists(songFolderPath + @"\video.webm"))
                 {
                     songLoader.songVideoClipPath = songFolderPath + @"\video.webm";
                     songVideoClipPathSet = true;
