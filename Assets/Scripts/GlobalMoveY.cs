@@ -102,9 +102,10 @@ public class GlobalMoveY : MonoBehaviour
                 t.Translate(0f, -speed * Time.deltaTime, 0f, Space.World);
             }
 
-            if (t.position.y < -100f)
+            if (t.position.y < -1f)
             {
                 NotePoolManager.Instance.Return(obj);
+                LaneManager.Instance.UnregisterNote(obj);
                 objectsToMove.RemoveAt(i);
                 continue;
             }

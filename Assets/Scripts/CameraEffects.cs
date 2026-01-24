@@ -36,15 +36,15 @@ public class CameraEffects : MonoBehaviour
     {
         if (cameraToTweak != null)
         {
-            if (cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>() != null)
+            if (cameraToTweak.gameObject.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>() != null)
             {
-                cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.GetSetting<UnityEngine.Rendering.PostProcessing.ChromaticAberration>().intensity.value = intensity;
+                cameraToTweak.gameObject.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.GetSetting<UnityEngine.Rendering.PostProcessing.ChromaticAberration>().intensity.value = intensity;
             }
             else
             {
-                cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().isGlobal = true;
-                cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile = new UnityEngine.Rendering.PostProcessing.PostProcessProfile();
-                var chromaticAberration = cameraToTweak.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.AddSettings<UnityEngine.Rendering.PostProcessing.ChromaticAberration>();
+                cameraToTweak.gameObject.AddComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>();
+                var chromaticAberration = cameraToTweak.gameObject.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessVolume>().profile.AddSettings<UnityEngine.Rendering.PostProcessing.ChromaticAberration>();
+                if (chromaticAberration != null)
                 chromaticAberration.intensity.value = intensity;
             }
         }
