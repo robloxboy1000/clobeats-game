@@ -19,7 +19,6 @@ public class SongFolderLoader : MonoBehaviour
     public string loadingPhrase = "Unset";
     public string authorName = "Unset";
     public int previewStartTime = 0;
-    public int songLength = 0;
     public bool songVideoClipPathSet = false;
     public UnityEngine.Color songAccentColor;
     public List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
@@ -74,6 +73,16 @@ public class SongFolderLoader : MonoBehaviour
                     songLoader.songAudioClipPath = songMatch.path;
                 }
 
+                // Find a file named "guitar" with a supported extension and set the guitar path
+                var guitarMatch = songFolderFiles
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => x.name == "guitar" && supportedFormats.Contains(x.ext));
+
+                if (guitarMatch != null)
+                {
+                    songLoader.guitarAudioClipPath = guitarMatch.path;
+                }
+
 
                 if (File.Exists(songFolderPath + @"\notes.chart"))
                 {
@@ -94,7 +103,7 @@ public class SongFolderLoader : MonoBehaviour
                     songLoader.songVideoClipPath = string.Empty;
                     songVideoClipPathSet = false;
                 }
-                await songLoader.SetSongData(songLoader.chartFilePath, songLoader.songAudioClipPath, songLoader.songVideoClipPath);
+                await songLoader.SetSongData(songLoader.chartFilePath, songLoader.songAudioClipPath, songLoader.guitarAudioClipPath, songLoader.songVideoClipPath);
                 await Task.Yield();
             }
             catch (Exception ex)
@@ -114,7 +123,6 @@ public class SongFolderLoader : MonoBehaviour
         loadingPhrase = string.Empty;
         authorName = string.Empty;
         previewStartTime = 0;
-        songLength = 0;
     }
     public async Task LoadIniFile(string data)
     {
@@ -169,8 +177,9 @@ public class SongFolderLoader : MonoBehaviour
                 }
                 else if (parts.Length == 2 && parts[0].Trim() == "song_length" && int.TryParse(parts[1].Trim(), out int length))
                 {
-                    songLength = length;
-                    // don't rely on this anymore, for metadata only
+                    NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
+                    if (noteSpawner != null)
+                    noteSpawner.songLengthInTicks = length;
                 }
                 else if (parts.Length == 2 && parts[0].Trim() == "back_color" && parts[1].Trim() is string hex)
                 {

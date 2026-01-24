@@ -32,6 +32,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/VideoAttractionScene.unity
     guid: f75cfd97d55d47f4984db9e769a88129
+  - enabled: 0
+    path: Assets/Scenes/ServerManagerScene.unity
+    guid: 9545bd16541fcf243864d2b21aa6d80e
   m_configObjects:
     com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: f5f6d25453d818947a7f06dd3caf6a5f, type: 2}
     com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 3dbf434c4d599db4d9435deca71f60e1, type: 2}

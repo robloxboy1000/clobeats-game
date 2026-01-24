@@ -1,39 +1,45 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using System;
-using System.Linq;
+using UnityEngine.Audio;
+using ManagedBass;
 
 public class AudioLevelMeter : MonoBehaviour
 {
-    public int audioLevel; // This float will hold the current audio level (0 to 1)
-    public int unclampedAudioLevel;
-
-
-
+    public float audioLevel; // This float will hold the current audio level (0 to 1)
+    private float[] spectrumData; // Array to hold the raw audio data
     // Start is called before the first frame update
     void Start()
     {
-        
+        // Define the size of the array (must be a power of 2: 64, 128, 512, etc.)
+        spectrumData = new float[512];
     }
 
     // Update is called once per frame
     void Update()
     {
-        try
+        // Fill the array with the current audio data
+        // Use AudioListener.GetOutputData to get the master output, 
+        // or AudioSource.GetOutputData for a specific source.
+        Bass.ChannelGetData(0, spectrumData, spectrumData.Length); // Channel 0
+
+        // Process the data to find the average/peak level
+        float sum = 0f;
+        foreach (float sample in spectrumData)
         {
-            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            unclampedAudioLevel = musicPlayer.GetSongAudioLevel(); // 0 to 32768
-            
+            // Sum the absolute values of the samples
+            sum += Mathf.Abs(sample);
         }
-        catch (Exception ex)
+
+        // Calculate the average (RMS-ish) level and clamp it between 0 and 1
+        audioLevel = Mathf.Clamp(sum / spectrumData.Length, 0f, 1f);
+
+        // You can now use the 'audioLevel' float to drive UI elements, visual effects, etc.
+        // E.g., Debug.Log("Current Level: " + audioLevel);
+        if (FindAnyObjectByType<CameraEffects>() != null)
         {
-            Debug.LogError("Failed to get audio level: " + ex.Message);
-        }
-        
-        CameraEffects cameraEffects = FindAnyObjectByType<CameraEffects>();
-        if (cameraEffects != null)
-        {
+            CameraEffects cameraEffects = FindAnyObjectByType<CameraEffects>();
             cameraEffects.SetChromaticAberration(audioLevel);
         }
-        
     }
 }

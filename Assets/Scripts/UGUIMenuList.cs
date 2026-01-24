@@ -16,39 +16,62 @@ public class UGUIMenuList : MonoBehaviour
     // Reference to the content container (where items will be instantiated)
     public Transform contentContainer;
     public Transform rootTransform;
-    public List<string> itemNames = new List<string>();
-    List<GameObject> instantiatedListItems = new List<GameObject>();
+    public List<string> itemNames;
+    List<GameObject> instantiatedListItems;
 
     public Button regenerateItemsButton;
-    public int itemCount = 0;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        
-    }
-
-    async void OnEnable()
-    {
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
-        await ClearItemObjects();
-        itemNames.Clear();
-        await GenerateList(gameManager.songFolders);
-    }
-
-    void Awake()
-    {
+        itemNames = new List<string>();
+        instantiatedListItems = new List<GameObject>();
         if (regenerateItemsButton != null)
         {
             regenerateItemsButton.onClick.AddListener(async () =>
             {
-                GameManager gameManager = FindAnyObjectByType<GameManager>();
                 await ClearItemObjects();
                 itemNames.Clear();
-                await GenerateList(gameManager.songFolders);
+                await GenerateItemNames();
+                await GenerateList(itemNames);
             });
         }
     }
 
+    async void OnEnable()
+    {
+        await ClearItemObjects();
+        itemNames.Clear();
+        await GenerateItemNames();
+        await GenerateList(itemNames);
+    }
+
+    void Awake()
+    {
+    }
+
+    public async Task GenerateItemNames()
+    {
+        if (itemNames.Count == 0)
+        {
+            try
+            {
+                string[] directories = Directory.GetDirectories(PlayerPrefs.GetString("SongsFolderPath", string.Empty));
+                foreach (string dir in directories)
+                {
+                    itemNames.Add(dir);
+                    await Task.Yield();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Song listing failed: " + ex.Message);
+            }
+        }
+        else
+        {
+            return;
+        }
+    }
 
     // Update is called once per frame
     void Update()
@@ -84,13 +107,10 @@ public class UGUIMenuList : MonoBehaviour
         foreach (string itemName in items)
         {
             Debug.Log("Item name: " + itemName);
-            Debug.Log("Directory name: " + Path.GetFileName(itemName));
-            if (Path.GetFileName(itemName).StartsWith("sub_")) continue;
             
             // Instantiate the prefab inside the specified container
             GameObject newItem = Instantiate(listItemPrefab, contentContainer);
             instantiatedListItems.Add(newItem);
-            itemCount++;
             // Find the text component within the new item and set its value
             // (You might need a dedicated script for complex prefabs)
             GameObject songArtistTextObject = newItem.transform.Find("SongArtistText").gameObject;
@@ -102,7 +122,7 @@ public class UGUIMenuList : MonoBehaviour
             SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
             await songFolderLoader.LoadIniFile(File.ReadAllText(itemName + @"\song.ini"));
 
-            songArtistText.text = "(" + itemCount + ") " +songFolderLoader.songArtist;
+            songArtistText.text = songFolderLoader.songArtist;
             songTitleText.text = songFolderLoader.songName;
             Button button = newItem.GetComponent<Button>();
             if (button != null)
@@ -144,15 +164,7 @@ public class UGUIMenuList : MonoBehaviour
             try
             {
                 Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(name + @"\album.jpg");
-                if (loadedTexture != null)
-                {
-                    albumTexture.texture = loadedTexture;
-                }
-                else
-                {
-                    albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
-                }
-                
+                albumTexture.texture = loadedTexture;
             }
             catch (Exception ex)
             {
@@ -171,7 +183,7 @@ public class UGUIMenuList : MonoBehaviour
                     musicPlayer.StopPreviewAudio();
                     if (File.Exists(name + @"\song.ogg"))
                     {
-                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime);
+                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
                     }
                     
                 }
@@ -179,7 +191,7 @@ public class UGUIMenuList : MonoBehaviour
                 {
                     if (File.Exists(name + @"\song.ogg"))
                     {
-                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime);
+                        await musicPlayer.PlayPreviewAudio(name + @"\song.ogg", songFolderLoader.previewStartTime / 1000f);
                     }
                 }
             }

@@ -33,8 +33,6 @@ public class LaneInputManager : MonoBehaviour
 
     public bool autoPlayEnabled = false;
     public bool showHitWindow = false;
-    GameObject note = null;
-
 
     void Start()
     {
@@ -105,14 +103,6 @@ public class LaneInputManager : MonoBehaviour
             strikeline.ReleaseLane(4);
         }
 
-        if (autoPlayEnabled)
-        {
-            hitWindowSeconds = 0.05f; // center to strikeline
-            for (int i = 0; i <= 4; i++)
-            {
-                TryHitLane(i, true);
-            }
-        }
     }
 
     // Input handlers to wire from the Input System
@@ -131,8 +121,8 @@ public class LaneInputManager : MonoBehaviour
     public void OnStrum()
     {
         // One-shot guard: ignore additional calls in the same frame or within a short cooldown
-        if (Time.frameCount == lastStrumFrame) heldLanes.Clear();
-        if (Time.unscaledTime - lastStrumTime < strumCooldownSeconds) heldLanes.Clear();
+        if (Time.frameCount == lastStrumFrame) return;
+        if (Time.unscaledTime - lastStrumTime < strumCooldownSeconds) return;
         lastStrumFrame = Time.frameCount;
         lastStrumTime = Time.unscaledTime;
 
@@ -143,7 +133,6 @@ public class LaneInputManager : MonoBehaviour
         {
             TryHitLane(lane);
         }
-        
     }
 
     // Backwards-compatible single-fret hit (e.g., mapping a single key without a strum action)
@@ -152,7 +141,7 @@ public class LaneInputManager : MonoBehaviour
         TryHitLane(laneIndex);
     }
 
-    void TryHitLane(int laneIndex, bool autoHit = false)
+    void TryHitLane(int laneIndex)
     {
         if (spawner == null) spawner = FindAnyObjectByType<NoteSpawner>();
         if (spawner == null) return;
@@ -166,33 +155,20 @@ public class LaneInputManager : MonoBehaviour
         // Try to hit as many consecutive notes in this lane as fall within the timing window.
         while (true)
         {
-            note = LaneManager.Instance.GetNextNoteInLane(laneIndex);
+            var note = LaneManager.Instance.GetNextNoteInLane(laneIndex);
             if (note == null) break;
 
             float noteY = note.transform.position.y;
-            // Prefer scheduled song time if available (more accurate and synced to audio DSP clock)
-            var sched = note.GetComponent<ScheduledTime>();
-            var mp = FindAnyObjectByType<MusicPlayer>();
-            float currentSongSeconds = mp != null ? (float)mp.GetElapsedTimeDsp() : Time.time;
-            float secondsUntil;
-            if (sched != null)
-            {
-                // scheduledSeconds is the song time when the note should be at the strike line
-                secondsUntil = sched.scheduledSeconds - currentSongSeconds;
-            }
-            else
-            {
-                // Fallback to world-Y -> time mapping used by NoteSpawner
-                // NoteSpawner: y = strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
-                // therefore timeSeconds = (y - baseY) / spacingFactor - spawnLeadSeconds
-                secondsUntil = (noteY - baseY) / Mathf.Max(0.0001f, spacingFactor) - spawner.spawnLeadSeconds;
-            }
+            // Convert world Y to seconds-until-strike using the same mapping NoteSpawner uses.
+            // NoteSpawner places objects at: y = strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
+            // therefore timeSeconds = (y - baseY) / spacingFactor - spawnLeadSeconds
+            float secondsUntil = (noteY - baseY) / Mathf.Max(0.0001f, spacingFactor) - spawner.spawnLeadSeconds;
             if (Mathf.Abs(secondsUntil) <= hitWindowSeconds)
             {
-                //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
+                Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
 
                 var sustainComp = note.GetComponent<SustainedNote>();
-                LaneManager.Instance.UnregisterNote(note);
+                //LaneManager.Instance.UnregisterNote(note);
 
                 if (sustainComp != null && sustainComp.durationSeconds > 0f)
                 {
@@ -208,7 +184,6 @@ public class LaneInputManager : MonoBehaviour
                     {
                         strikeline.HitNote(laneIndex - 2); // zero-based xOffset
                         strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
-                        strikeline.SLTopHit(laneIndex);
                     }
                     // Spawn / show separate sustain visual managed by SustainManager
                     if (SustainManager.Instance != null)
@@ -223,7 +198,6 @@ public class LaneInputManager : MonoBehaviour
                     if (strikeline != null)
                     {
                         strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                        strikeline.SLTopHit(laneIndex);
                     }
                 }
 
@@ -232,15 +206,12 @@ public class LaneInputManager : MonoBehaviour
             }
             else
             {
-                if (!autoHit)
+                // Next note is outside of timing window -> stop
+                if (strikeline != null)
                 {
-                    // Next note is outside of timing window -> stop
-                    if (strikeline != null)
-                    {
-                        strikeline.MissNote();
-                    }
+                    strikeline.MissNote();
                 }
-                //Debug.Log("No more hittable notes in lane " + laneIndex + "; next note in " + secondsUntil + " seconds."); 
+                Debug.Log("No more hittable notes in lane " + laneIndex + "; next note in " + secondsUntil + " seconds."); 
                 break;
             }
         }

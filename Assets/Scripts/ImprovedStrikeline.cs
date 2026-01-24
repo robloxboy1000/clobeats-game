@@ -8,12 +8,6 @@ public class ImprovedStrikeline : MonoBehaviour
     public GameObject SustainFlamePrefab;
     public GameObject sustainSparksPrefab;
 
-    public GameObject SLGreenTopPrefab;
-    public GameObject SLRedTopPrefab;
-    public GameObject SLYellowTopPrefab;
-    public GameObject SLBlueTopPrefab;
-    public GameObject SLOrangeTopPrefab;
-
     public GameObject greenBase;
     public GameObject redBase;
     public GameObject yellowBase;
@@ -58,97 +52,15 @@ public class ImprovedStrikeline : MonoBehaviour
     // co-routines
     public IEnumerator NoteFlame(Vector3 fret, float duration = 0.1f)
     {
-        if (flamePrefab != null)
-        {
-            GameObject flame = Instantiate(flamePrefab, fret, Quaternion.identity);
-            yield return new WaitForSeconds(duration);
-            Destroy(flame);
-        }
-        else
-        {
-            yield return null;
-        }
+        GameObject flame = Instantiate(flamePrefab, fret, Quaternion.identity);
+        yield return new WaitForSeconds(duration);
+        Destroy(flame);
     }
     public IEnumerator SustainFlame(Vector3 fret, float duration = 0.2f)
     {
-        if (SustainFlamePrefab != null)
-        {
-            GameObject sustainFlame = Instantiate(SustainFlamePrefab, fret, Quaternion.identity);
-            yield return new WaitForSeconds(duration);
-            Destroy(sustainFlame);
-        }
-        else
-        {
-            yield return null;
-        }
-    }
-
-    public void SLTopHit(float laneIndex)
-    {
-        if (laneIndex == 0)
-        {
-            if (SLGreenTopPrefab != null)
-            {
-                Animation topAnim = SLGreenTopPrefab.GetComponent<Animation>();
-                if (topAnim != null)
-                {
-                    topAnim.Stop();
-                    topAnim.Play("TopHit0");
-                }
-            }
-        }
-        else if (laneIndex == 1)
-        {
-            if (SLRedTopPrefab != null)
-            {
-                Animation topAnim = SLRedTopPrefab.GetComponent<Animation>();
-                if (topAnim != null)
-                {
-                    topAnim.Stop();
-                    topAnim.Play("TopHit1");
-                }
-            }
-        }
-        else if (laneIndex == 2)
-        {
-            if (SLYellowTopPrefab != null)
-            {
-                Animation topAnim = SLYellowTopPrefab.GetComponent<Animation>();
-                if (topAnim != null)
-                {
-                    topAnim.Stop();
-                    topAnim.Play("TopHit2");
-                }
-            }
-        }
-        else if (laneIndex == 3)
-        {
-            if (SLBlueTopPrefab != null)
-            {
-                Animation topAnim = SLBlueTopPrefab.GetComponent<Animation>();
-                if (topAnim != null)
-                {
-                    topAnim.Stop();
-                    topAnim.Play("TopHit3");
-                }
-            }
-        }
-        else if (laneIndex == 4)
-        {
-            if (SLOrangeTopPrefab != null)
-            {
-                Animation topAnim = SLOrangeTopPrefab.GetComponent<Animation>();
-                if (topAnim != null)
-                {
-                    topAnim.Stop();
-                    topAnim.Play("TopHit4");
-                }
-            }
-        }
-        else
-        {
-            Debug.LogWarning("Invalid fret lane index: " + laneIndex);
-        }
+        GameObject sustainFlame = Instantiate(SustainFlamePrefab, fret, Quaternion.identity);
+        yield return new WaitForSeconds(duration);
+        Destroy(sustainFlame);
     }
     public void EnableSustainSparks(Vector3 fret)
     {

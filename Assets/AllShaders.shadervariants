@@ -8,18 +8,6 @@ ShaderVariantCollection:
   m_PrefabAsset: {fileID: 0}
   m_Name: AllShaders
   m_Shaders:
-  - first: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
-    second:
-      variants: []
   - first: {fileID: 211, guid: 0000000000000000f000000000000000, type: 0}
-    second:
-      variants: []
-  - first: {fileID: 10750, guid: 0000000000000000f000000000000000, type: 0}
-    second:
-      variants: []
-  - first: {fileID: 10752, guid: 0000000000000000f000000000000000, type: 0}
-    second:
-      variants: []
-  - first: {fileID: 10755, guid: 0000000000000000f000000000000000, type: 0}
     second:
       variants: []

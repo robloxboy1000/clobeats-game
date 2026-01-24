@@ -135,19 +135,19 @@ public class OldInputManager : MonoBehaviour
         }
         if (!gamePadMode)
         {
-            if (Keyboard.current[fretKeys[0]].isPressed) await InputNoteDown(0);
-            if (!Keyboard.current[fretKeys[0]].isPressed) await InputNoteUp(0);
-            if (Keyboard.current[fretKeys[1]].isPressed) await InputNoteDown(1);
-            if (!Keyboard.current[fretKeys[1]].isPressed) await InputNoteUp(1);
-            if (Keyboard.current[fretKeys[2]].isPressed) await InputNoteDown(2);
-            if (!Keyboard.current[fretKeys[2]].isPressed) await InputNoteUp(2);
-            if (Keyboard.current[fretKeys[3]].isPressed) await InputNoteDown(3);
-            if (!Keyboard.current[fretKeys[3]].isPressed) await InputNoteUp(3);
-            if (Keyboard.current[fretKeys[4]].isPressed) await InputNoteDown(4);
-            if (!Keyboard.current[fretKeys[4]].isPressed) await InputNoteUp(4);
+            if (Keyboard.current[fretKeys[0]].wasPressedThisFrame) await InputNoteDown(0);
+            else if (Keyboard.current[fretKeys[0]].wasReleasedThisFrame) await InputNoteUp(0);
+            else if (Keyboard.current[fretKeys[1]].wasPressedThisFrame) await InputNoteDown(1);
+            else if (Keyboard.current[fretKeys[1]].wasReleasedThisFrame) await InputNoteUp(1);
+            else if (Keyboard.current[fretKeys[2]].wasPressedThisFrame) await InputNoteDown(2);
+            else if (Keyboard.current[fretKeys[2]].wasReleasedThisFrame) await InputNoteUp(2);
+            else if (Keyboard.current[fretKeys[3]].wasPressedThisFrame) await InputNoteDown(3);
+            else if (Keyboard.current[fretKeys[3]].wasReleasedThisFrame) await InputNoteUp(3);
+            else if (Keyboard.current[fretKeys[4]].wasPressedThisFrame) await InputNoteDown(4);
+            else if (Keyboard.current[fretKeys[4]].wasReleasedThisFrame) await InputNoteUp(4);
 
             if (Keyboard.current[strumDownKey].wasPressedThisFrame) await InputStrum();
-            if (Keyboard.current[strumUpKey].wasPressedThisFrame) await InputStrum();
+            else if (Keyboard.current[strumUpKey].wasPressedThisFrame) await InputStrum();
         }
         else if (gamePadMode)
         {

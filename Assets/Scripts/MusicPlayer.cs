@@ -16,7 +16,13 @@ public class MusicPlayer : MonoBehaviour
 {
 
     public VideoPlayer videoPlayer;
+    public AudioSource songAudioSource;
+    public AudioSource guitarAudioSource;
+    public AudioSource previewAudioSource;
+    public AudioSource sfxAudioSource;
 
+    [Tooltip("Enable this to use Unity Audio instead of BASS, which BASS has a bug that i cannot fix.")]
+    public bool useUnityAudio = false;
 
     public bool previewAudioPlaying = false;
 
@@ -24,7 +30,7 @@ public class MusicPlayer : MonoBehaviour
     public bool isPaused = false;
     public double pausedElapsedDsp = 0.0;
 
-    private Coroutine bassScheduledCoroutine = null;
+        private Coroutine bassScheduledCoroutine = null;
 
     string videoURL;
     NoteSpawner noteSpawner;
@@ -32,6 +38,7 @@ public class MusicPlayer : MonoBehaviour
 
     // ManagedBass stream handles
     private int songStreamHandle = 0;
+    private int guitarStreamHandle = 0;
     private int previewStreamHandle = 0;
 
 
@@ -41,7 +48,6 @@ public class MusicPlayer : MonoBehaviour
     public float currentTimeInSamples = 0f;
 
     public double currentTimeInDSP = 0.0;
-    public float NSSonglength = 0;
 
 
     
@@ -49,13 +55,18 @@ public class MusicPlayer : MonoBehaviour
     void Start()
     {
         DontDestroyOnLoad(this.gameObject);
-        
-        Debug.Log("Using BASS AudioManager for playback.");
-        if (!bassInitialized)
+        if (useUnityAudio)
         {
-            InitBASS();
+            Debug.Log("Using Unity AudioSource for playback.");
         }
-        
+        else
+        {
+            Debug.Log("Using BASS AudioManager for playback.");
+            if (!bassInitialized)
+            {
+                InitBASS();
+            }
+        }
         
     }
 
@@ -89,28 +100,50 @@ public class MusicPlayer : MonoBehaviour
             bassInitialized = false;
         }
     }
-    public async Task loadSongAudio(string audioClipPath)
+    public async Task loadAudio(string audioClipPath)
     {
         if (audioClipPath != null)
         {
             if (Path.GetFileName(audioClipPath).Contains("song", StringComparison.OrdinalIgnoreCase))
             {
-                if (!bassInitialized) InitBASS();
-                if (bassInitialized)
+                if (!useUnityAudio)
                 {
-                    Debug.Log("Loading song audio (ManagedBass) from path: " + audioClipPath);
-                    NSSonglength = noteSpawner.songLengthInTicks;
-                    try
+                    if (!bassInitialized) InitBASS();
+                    if (bassInitialized)
                     {
-                        await Task.Yield();
-                        if (songStreamHandle != 0) { Bass.StreamFree(songStreamHandle); songStreamHandle = 0; }
-                        // Create stream for file path
-                        songStreamHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Default);
-                        if (songStreamHandle == 0) Debug.LogError("Failed to create BASS stream: " + Bass.LastError);
+                        Debug.Log("Loading song audio (ManagedBass) from path: " + audioClipPath);
+                        try
+                        {
+                            if (songStreamHandle != 0) { Bass.StreamFree(songStreamHandle); songStreamHandle = 0; }
+                            // Create stream for file path
+                            songStreamHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Default);
+                            if (songStreamHandle == 0) Debug.LogError("Failed to create BASS stream: " + Bass.LastError);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogError("Exception creating BASS stream: " + ex.Message);
+                        }
                     }
-                    catch (Exception ex)
+                }
+                else
+                {
+                    Debug.Log("Loading song audio into Unity AudioSource from path: " + audioClipPath);
+                    using var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip("file://" + audioClipPath, AudioType.OGGVORBIS);
+                    var operation = www.SendWebRequest();
+                    while (!operation.isDone) 
+                    { 
+                        
+                        await Task.Yield(); 
+                    }
+                    AudioClip clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
+                    if (clip != null)
                     {
-                        Debug.LogError("Exception creating BASS stream: " + ex.Message);
+                        songAudioSource.clip = clip;
+                        
+                    }
+                    else
+                    {
+                        Debug.LogError("Failed to load AudioClip from path: " + audioClipPath);
                     }
                 }
             }
@@ -120,7 +153,58 @@ public class MusicPlayer : MonoBehaviour
             Debug.LogError("No AudioClip provided to loadAudio.");
         }
     }
-    
+    public async Task loadGuitarAudio(string guitarClipPath)
+    {
+        if (guitarClipPath != null)
+        {
+            if (Path.GetFileName(guitarClipPath).Contains("guitar", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!useUnityAudio)
+                {
+                    if (!bassInitialized) InitBASS();
+                    if (bassInitialized)
+                    {
+                        Debug.Log("Loading guitar audio (ManagedBass) from path: " + guitarClipPath);
+                        try
+                        {
+                            if (guitarStreamHandle != 0) { Bass.StreamFree(guitarStreamHandle); guitarStreamHandle = 0; }
+                            guitarStreamHandle = Bass.CreateStream(guitarClipPath, 0, 0, BassFlags.Default);
+                            if (guitarStreamHandle == 0) Debug.LogError("Failed to create BASS guitar stream: " + Bass.LastError);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogError("Exception creating BASS guitar stream: " + ex.Message);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.Log("Loading guitar audio into Unity AudioSource from path: " + guitarClipPath);
+                    using var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip("file://" + guitarClipPath, AudioType.OGGVORBIS);
+                    var operation = www.SendWebRequest();
+                    while (!operation.isDone) 
+                    { 
+                        
+                        await Task.Yield(); 
+                    }
+                    AudioClip clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
+                    if (clip != null)
+                    {
+                        guitarAudioSource.clip = clip;
+                        
+                    }
+                    else
+                    {
+                        Debug.LogError("Failed to load AudioClip from path: " + guitarClipPath);
+                    }
+                }
+            }
+        }
+        else
+        {
+            Debug.LogError("No AudioClip provided to loadAudio.");
+        }
+    }
     public void loadVideo(string videoClipPath)
     {
         if (!string.IsNullOrEmpty(videoClipPath))
@@ -164,11 +248,23 @@ public class MusicPlayer : MonoBehaviour
             catch { }
         }
 
-        
-        // Schedule BASS playback: wait until the DSP time is reached then start BASS streams
-        if (bassScheduledCoroutine != null) StopCoroutine(bassScheduledCoroutine);
-        bassScheduledCoroutine = StartCoroutine(StartBASSAt(dspTime));
-        
+        if (useUnityAudio)
+        {
+            if (songAudioSource != null)
+            {
+                songAudioSource.PlayScheduled(dspTime);
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.PlayScheduled(dspTime);
+            }
+        }
+        else
+        {
+            // Schedule BASS playback: wait until the DSP time is reached then start BASS streams
+            if (bassScheduledCoroutine != null) StopCoroutine(bassScheduledCoroutine);
+            bassScheduledCoroutine = StartCoroutine(StartBASSAt(dspTime));
+        }
     }
 
         private System.Collections.IEnumerator StartBASSAt(double dspStart)
@@ -186,6 +282,10 @@ public class MusicPlayer : MonoBehaviour
                     if (songStreamHandle != 0)
                     {
                         Bass.ChannelPlay(songStreamHandle);
+                    }
+                    if (guitarStreamHandle != 0)
+                    {
+                        Bass.ChannelPlay(guitarStreamHandle);
                     }
                 }
                 catch (Exception ex)
@@ -211,63 +311,111 @@ public class MusicPlayer : MonoBehaviour
         return Math.Max(0.0, GetElapsedTimeDsp());
     }
 
-    public async Task PlayPreviewAudio(string filePath, float startPoint = 0)
+    public void NoDelayPlayAudio()
     {
-        if (!bassInitialized) InitBASS();
-        if (bassInitialized)
+        Debug.Log("Playing audio streams.");
+        // anchor DSP start now and clear paused state so visuals use a moving DSP clock
+        dspSongStart = AudioSettings.dspTime;
+        isPaused = false;
+        pausedElapsedDsp = 0.0;
+        if (videoPlayer != null) videoPlayer.Play();
+        if (useUnityAudio)
         {
-            MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-            menuManager.loadingPreviewImage.SetActive(true);
-            Debug.Log("Loading preview (ManagedBass) from path: " + filePath);
+            if (songAudioSource != null)
+            {
+                songAudioSource.Play();
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.Play();
+            }
+            return;
+        }
+        if (!useUnityAudio && bassInitialized)
+        {
             try
             {
-                if (previewStreamHandle != 0) { Bass.StreamFree(previewStreamHandle); previewStreamHandle = 0; }
-                long previewStartBytePosition = Bass.ChannelSeconds2Bytes(previewStreamHandle, (double)(startPoint / 1000f));
-                previewStreamHandle = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
-                Bass.ChannelPlay(previewStreamHandle);
-                Bass.ChannelSetPosition(previewStreamHandle, previewStartBytePosition);
-                await Task.Yield();
-                menuManager.loadingPreviewImage.SetActive(false);
-                previewAudioPlaying = true;
-                if (previewStreamHandle == 0) Debug.LogError("Failed to create BASS preview stream: " + Bass.LastError);
+                if (songStreamHandle != 0) Bass.ChannelPlay(songStreamHandle);
+                if (guitarStreamHandle != 0) Bass.ChannelPlay(guitarStreamHandle);
             }
             catch (Exception ex)
             {
-                Debug.LogError("Exception creating BASS preview stream: " + ex.Message);
+                Debug.LogError("Failed to play BASS streams immediately: " + ex.Message);
             }
         }
+    }
+    public async Task PlayPreviewAudio(string filePath, float startPoint = 0)
+    {
+        if (useUnityAudio)
+        {
+            if (previewAudioSource != null)
+            {
+                using var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip("file://" + filePath, AudioType.OGGVORBIS);
+                var operation = www.SendWebRequest();
+                while (!operation.isDone) 
+                { 
+                    MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                    menuManager.loadingPreviewImage.SetActive(true);
+                    await Task.Yield(); 
+                }
+                AudioClip audioClip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
+                if (audioClip != null)
+                {
+                    MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                    menuManager.loadingPreviewImage.SetActive(false);
+                    previewAudioSource.clip = audioClip;
+                    previewAudioSource.time = startPoint;
+                    previewAudioSource.Play();
+                    previewAudioPlaying = true;
+                }
+            }
+        }
+        else
+        {
+            if (!bassInitialized) InitBASS();
+            if (bassInitialized)
+            {
+                MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+                menuManager.loadingPreviewImage.SetActive(true);
+                Debug.Log("Loading preview (ManagedBass) from path: " + filePath);
+                try
+                {
+                    if (previewStreamHandle != 0) { Bass.StreamFree(previewStreamHandle); previewStreamHandle = 0; }
+                    previewStreamHandle = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
+                    long previewStartBytePosition = Bass.ChannelSeconds2Bytes(previewStreamHandle, (double)(startPoint / 1000f));
+                    Bass.ChannelSetPosition(previewStreamHandle, previewStartBytePosition);
+                    Bass.ChannelPlay(previewStreamHandle);
+                    await Task.Yield();
+                    menuManager.loadingPreviewImage.SetActive(false);
+                    previewAudioPlaying = true;
+                    if (previewStreamHandle == 0) Debug.LogError("Failed to create BASS preview stream: " + Bass.LastError);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError("Exception creating BASS preview stream: " + ex.Message);
+                }
+            }
+        }
+        
     }
     public void StopPreviewAudio()
     {
-        if (previewStreamHandle != 0 && bassInitialized)
+        if (useUnityAudio)
         {
-            try { Bass.ChannelStop(previewStreamHandle); } catch { }
-            try { Bass.StreamFree(previewStreamHandle); } catch { }
-            previewStreamHandle = 0;
-            previewAudioPlaying = false;
-        }
-    }
-
-    public void PlayOneShotAudio(string filePath)
-    {
-        if (!bassInitialized) InitBASS();
-        if (bassInitialized)
-        {
-            int oneShotStream = 0;
-            Debug.Log("Loading one-shot (ManagedBass) from path: " + filePath);
-            try
+            if (previewAudioSource != null)
             {
-                if (oneShotStream != 0)
-                {
-                    Bass.StreamFree(oneShotStream);
-                    oneShotStream = 0;
-                }
-                oneShotStream = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
-                Bass.ChannelPlay(oneShotStream);
+                previewAudioSource.Stop();
+                previewAudioPlaying = false;
             }
-            catch (Exception ex)
+        }
+        else
+        {
+            if (previewStreamHandle != 0 && bassInitialized)
             {
-                Debug.LogError("Exception creating BASS one-shot stream: " + ex.Message);
+                try { Bass.ChannelStop(previewStreamHandle); } catch { }
+                try { Bass.StreamFree(previewStreamHandle); } catch { }
+                previewStreamHandle = 0;
+                previewAudioPlaying = false;
             }
         }
     }
@@ -276,7 +424,18 @@ public class MusicPlayer : MonoBehaviour
     
     public void resumeAudio()
     {
-        if (bassInitialized)
+        if (useUnityAudio)
+        {
+            if (songAudioSource != null)
+            {
+                songAudioSource.UnPause();
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.UnPause();
+            }
+        }
+        if (!useUnityAudio && bassInitialized)
         {
             try
             {
@@ -285,6 +444,12 @@ public class MusicPlayer : MonoBehaviour
                     long pos = Bass.ChannelSeconds2Bytes(songStreamHandle, previousTime);
                     Bass.ChannelSetPosition(songStreamHandle, pos);
                     Bass.ChannelPlay(songStreamHandle);
+                }
+                if (guitarStreamHandle != 0)
+                {
+                    long gpos = Bass.ChannelSeconds2Bytes(guitarStreamHandle, previousTime);
+                    Bass.ChannelSetPosition(guitarStreamHandle, gpos);
+                    Bass.ChannelPlay(guitarStreamHandle);
                 }
             }
             catch (Exception ex)
@@ -310,6 +475,38 @@ public class MusicPlayer : MonoBehaviour
     }
     public void stopAudio()
     {
+        if (useUnityAudio)
+        {
+            if (songAudioSource != null)
+            {
+                songAudioSource.Stop();
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.Stop();
+            }
+            if (previewAudioSource != null)
+            {
+                previewAudioSource.Stop();
+            }
+            if (videoPlayer != null)
+            {
+                videoPlayer.Stop();
+            }
+            return;
+        }
+        //if (songAudioStream != null)
+        //{
+        //    previousTime = (float)songAudioStream.CurrentPositionSeconds;
+        //    songAudioStream.Stop();
+        //    songAudioStream.Dispose();
+        //}
+        //if (guitarAudioStream != null)
+        //{
+        //    previousTime = (float)guitarAudioStream.CurrentPositionSeconds;
+        //    guitarAudioStream.Stop();
+        //    guitarAudioStream.Dispose();
+        //}
         if (bassScheduledCoroutine != null)
         {
             StopCoroutine(bassScheduledCoroutine);
@@ -322,23 +519,87 @@ public class MusicPlayer : MonoBehaviour
             try { Bass.StreamFree(songStreamHandle); } catch { }
             songStreamHandle = 0;
         }
+        if (guitarStreamHandle != 0 && bassInitialized)
+        {
+            try { Bass.ChannelStop(guitarStreamHandle); } catch { }
+            try { Bass.StreamFree(guitarStreamHandle); } catch { }
+            guitarStreamHandle = 0;
+        }
         if (videoPlayer != null) videoPlayer.Stop();
-        try { Bass.Free(); } catch { }
+        try { AudioManager.Dispose(); } catch { }
         bassInitialized = false;
+    }
+    public void setPitch(float pitch)
+    {
+        if (useUnityAudio)
+        {
+            if (songAudioSource != null)
+            {
+                songAudioSource.pitch = pitch;
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.pitch = pitch;
+            }
+            return;
+        }
+    }
+    public void setVolume(float volume)
+    {
+        if (useUnityAudio)
+        {
+            if (songAudioSource != null)
+            {
+                songAudioSource.volume = volume;
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.volume = volume;
+            }
+            return;
+        }
+        /*if (bassInitialized)
+        {
+            if (songAudioStream != null)
+            {
+                AudioManager.SetAttribute(songAudioStream, AudioAttributes.Volume, volume);
+            }
+            if (guitarAudioStream != null)
+            {
+                AudioManager.SetAttribute(guitarAudioStream, AudioAttributes.Volume, volume);
+            }
+            
+        }*/
     }
     public void pauseAudio()
     { 
-        
-        if (videoPlayer != null) videoPlayer.Pause();
-        if (bassInitialized)
+        if (useUnityAudio)
         {
-            if (songStreamHandle != 0)
+            if (songAudioSource != null)
             {
-                try { previousTime = (float)Bass.ChannelBytes2Seconds(songStreamHandle, Bass.ChannelGetPosition(songStreamHandle)); } catch { }
-                try { Bass.ChannelPause(songStreamHandle); } catch { }
+                songAudioSource.Pause();
+            }
+            if (guitarAudioSource != null)
+            {
+                guitarAudioSource.Pause();
             }
         }
-        
+        else
+        {
+            if (videoPlayer != null) videoPlayer.Pause();
+            if (bassInitialized)
+            {
+                if (songStreamHandle != 0)
+                {
+                    try { previousTime = (float)Bass.ChannelBytes2Seconds(songStreamHandle, Bass.ChannelGetPosition(songStreamHandle)); } catch { }
+                    try { Bass.ChannelPause(songStreamHandle); } catch { }
+                }
+                if (guitarStreamHandle != 0)
+                {
+                    try { Bass.ChannelPause(guitarStreamHandle); } catch { }
+                }
+            }
+        }
 
         // record paused elapsed DSP time and stop visuals
         pausedElapsedDsp = GetElapsedTimeDsp();
@@ -363,28 +624,52 @@ public class MusicPlayer : MonoBehaviour
 
         if (noteSpawner != null)
         {
-            currentTime = GetElapsedTime();
-            
-            if (NSSonglength > 0 && currentTime >= GetSongLength())
+            if (bassInitialized)
             {
-                Debug.Log("Song ended.");
-                NSSonglength = 0;
-                stopAudio();
-                GlobalMoveY globalMoveY = FindFirstObjectByType<GlobalMoveY>();
-                if (globalMoveY != null)
+                //if (songAudioStream != null)
+                //{
+                //    currentTime = (float)songAudioStream.CurrentPositionSeconds;
+                //}
+            }
+            else
+            {
+                currentTime = 0f;
+            }
+
+            if (useUnityAudio)
+            {
+                if (songAudioSource != null)
                 {
-                    globalMoveY.isMoving = false;
+                    setPitch(Time.timeScale);
+                    currentTime = songAudioSource.time;
+                    currentTimeInSamples = songAudioSource.timeSamples;
+                    currentTimeInDSP = GetClampedElapsedTimeDsp();
+                    if (noteSpawner.songLengthInTicks > 0 && currentTime >= (noteSpawner.songLengthInTicks / 1000f))
+                    {
+                        Debug.Log("Song ended.");
+                        stopAudio();
+                        GlobalMoveY globalMoveY = FindFirstObjectByType<GlobalMoveY>();
+                        if (globalMoveY != null)
+                        {
+                            globalMoveY.isMoving = false;
+                        }
+                        GameManager gameManager = FindFirstObjectByType<GameManager>();
+                        if (gameManager != null)
+                        {
+                            gameManager.ResetAllValues();
+                        }
+                        LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
+                        if (loadingManager != null)
+                        {
+                            loadingManager.LoadScene("ScoreScreen", LoadSceneMode.Single, false);
+                        }
+                    }
                 }
-                GameManager gameManager = FindFirstObjectByType<GameManager>();
-                if (gameManager != null)
-                {
-                    gameManager.ResetAllValues();
-                }
-                LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
-                if (loadingManager != null)
-                {
-                    loadingManager.LoadScene("ScoreScreen", LoadSceneMode.Single, false);
-                }
+                return;
+            }
+            else
+            {
+                
             }
         }
 
@@ -419,6 +704,10 @@ public class MusicPlayer : MonoBehaviour
     }
     public float GetElapsedTime()
     {
+        if (useUnityAudio)
+        {
+            return songAudioSource != null ? songAudioSource.time : 0f;
+        }
         if (bassInitialized && songStreamHandle != 0)
         {
             try
@@ -430,33 +719,6 @@ public class MusicPlayer : MonoBehaviour
             catch { return 0f; }
         }
         return 0f;
-    }
-    public float GetSongLength()
-    {
-        if (bassInitialized && songStreamHandle != 0)
-        {
-            try
-            {
-                long length = Bass.ChannelGetLength(songStreamHandle);
-                double secs = Bass.ChannelBytes2Seconds(songStreamHandle, length);
-                return (float)secs;
-            }
-            catch { return 0f;}
-        }
-        return 0f;
-    }
-    public int GetSongAudioLevel()
-    {
-        if (bassInitialized && songStreamHandle != 0)
-        {
-            try
-            {
-                int level = Bass.ChannelGetLevel(songStreamHandle);
-                return level;
-            }
-            catch { return 0; }
-        }
-        return 0;
     }
     
     

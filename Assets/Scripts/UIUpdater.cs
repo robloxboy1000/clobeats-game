@@ -137,7 +137,7 @@ public class UIUpdater : MonoBehaviour
     public async Task UpdateCurrentEvent(string value)
     {
         currentEventText.text = $"GlobalEvent: {value}";
-        //Debug.Log("Current global event: " + value);
+        Debug.Log("Current global event: " + value);
         await Task.Yield();
     }
 
