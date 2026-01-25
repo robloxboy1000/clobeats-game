@@ -18,6 +18,7 @@ public class GeneralSettingsObject : MonoBehaviour
     Slider hpSlider;
     Toggle enableVenueToggle;
     Toggle enableTMToggle;
+    Slider fpsSlider;
 
     Button findServerButton;
     Button saveSettingsButton;
@@ -57,6 +58,10 @@ public class GeneralSettingsObject : MonoBehaviour
         gameObject.transform.Find("TMToggle").
         gameObject.GetComponent<Toggle>();
 
+        fpsSlider = transform.Find("FramerateSliderObject").
+        gameObject.transform.Find("FPSSlider").
+        gameObject.GetComponent<Slider>();
+
 
 
         findServerButton = transform.Find("FindServerButton").gameObject.GetComponent<Button>();
@@ -80,6 +85,7 @@ public class GeneralSettingsObject : MonoBehaviour
             PlayerPrefs.SetFloat("Hyperspeed", hpSlider.value);
             PlayerPrefs.SetInt("EnableVenue", enableVenueToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableBarBeats", enableTMToggle.isOn ? 1 : 0);
+            PlayerPrefs.SetInt("Framerate", (int)fpsSlider.value);
             PlayerPrefs.Save();
         });
     }
@@ -100,7 +106,7 @@ public class GeneralSettingsObject : MonoBehaviour
     {
         using (HttpClient client = new HttpClient())
         {
-            client.DefaultRequestHeaders.UserAgent.TryParseAdd("request CloBeats/0.0.1");
+            client.DefaultRequestHeaders.UserAgent.TryParseAdd("CloBeats/0.0.1");
             try
             {
                 var response = await client.GetStringAsync(addr);
@@ -141,6 +147,15 @@ public class GeneralSettingsObject : MonoBehaviour
             gameObject.GetComponent<TMPro.TextMeshProUGUI>();
 
             hpText.text = hpSlider.value.ToString();
+        }
+        if (fpsSlider != null)
+        {
+            TMPro.TextMeshProUGUI fpsText = transform.Find("FramerateSliderObject").
+            gameObject.transform.Find("NumericFPS").
+            gameObject.GetComponent<TMPro.TextMeshProUGUI>();
+
+            fpsText.text = fpsSlider.value.ToString();
+            UnityEngine.Application.targetFrameRate = (int)fpsSlider.value;
         }
         if (songDifficultyDropdown != null)
         {

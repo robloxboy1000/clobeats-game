@@ -4,6 +4,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEditor;
+using System.Threading.Tasks;
+using System;
+using System.IO;
 
 public class PlayerPrefsLoader : MonoBehaviour
 {
@@ -23,13 +26,16 @@ public class PlayerPrefsLoader : MonoBehaviour
     public bool serverMode = false;
 
     public GameObject blankImage;
+    public GameObject indefiniteLoadingScreen;
+    public List<string> songItemNames = new List<string>();
+    public string configFilePath = Application.dataPath + "/config.ini";
     // Start is called before the first frame update
     void Start()
     {
         
 
     }
-    void Awake()
+    async void Awake()
     {
         pathInputField = gameObject.transform.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
         if (pathInputField != null)
@@ -180,29 +186,80 @@ public class PlayerPrefsLoader : MonoBehaviour
 
         if (autoLoad)
         {
+            Debug.Log("Auto Load enabled.");
             if (blankImage != null)
             {
                 blankImage.SetActive(true);
             }
-            Shader.WarmupAllShaders();
-            ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
-            shaderOven.shaders.WarmUp();
-            LoadingManager loader = FindFirstObjectByType<LoadingManager>();
-            if (loader != null)
+            if (indefiniteLoadingScreen != null)
             {
-                loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
+                indefiniteLoadingScreen.SetActive(true);
             }
-            else
-            {
-                Debug.LogError("LoadingManager not found in scene!");
-            }
+            await LoadWholeGame();
         }
         else
         {
+            Debug.Log("Auto Load disabled.");
             if (blankImage != null)
             {
                 blankImage.SetActive(false);
             }
+            if (indefiniteLoadingScreen != null)
+            {
+                indefiniteLoadingScreen.SetActive(false);
+            }
+        }
+    }
+
+    public async Task LoadWholeGame()
+    {
+        Debug.Log("Loading game...");
+        
+        if (songItemNames.Count == 0)
+        {
+            try
+            {
+                string songFoldersPath = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
+                if (songFoldersPath != string.Empty)
+                {
+                    string[] directories = Directory.GetDirectories(songFoldersPath);
+                    foreach (string dir in directories)
+                    {
+                        Debug.Log("Folders added: " + songItemNames.Count);
+                        songItemNames.Add(dir);
+                        await Task.Yield();
+                    }
+                    GameManager gameManager = FindAnyObjectByType<GameManager>();
+                    gameManager.songFolders = songItemNames;
+                }
+                else
+                {
+                    Debug.LogError("PlayerPrefs 'SongsFolderPath' is empty");
+                }
+                
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Song listing failed: " + ex.Message);
+            }
+        }
+        else
+        {
+            return;
+        }
+        
+
+        Shader.WarmupAllShaders();
+        ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
+        shaderOven.shaders.WarmUp();
+        LoadingManager loader = FindFirstObjectByType<LoadingManager>();
+        if (loader != null)
+        {
+            loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
+        }
+        else
+        {
+            Debug.LogError("LoadingManager not found in scene!");
         }
     }
 

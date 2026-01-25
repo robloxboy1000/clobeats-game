@@ -3,9 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using System.Threading.Tasks; // Added namespace for Task support
+using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
 using System.Linq;
+using UnityEngine.Video;
+using Melanchall.DryWetMidi.Core;
 
 
 public class NoteSpawner : MonoBehaviour
@@ -16,18 +18,14 @@ public class NoteSpawner : MonoBehaviour
     public GameObject yellowNotePrefab;
     public GameObject blueNotePrefab;
     public GameObject orangeNotePrefab;
-
-
-
-
     // open
     public GameObject openNotePrefab; 
 
     public GameObject barPrefab; // Prefab for bars
     public GameObject beatPrefab; // Prefab for beats
 
-    public List<NoteInfo> notes = new List<NoteInfo>();
-    public List<SyncInfo> syncTrack = new List<SyncInfo>();
+    public Queue<NoteInfo> notes = new Queue<NoteInfo>();
+    public Queue<SyncInfo> syncTrack = new Queue<SyncInfo>();
 
     // map tick -> concatenated event string
     public Dictionary<int, string> events = new Dictionary<int, string>();
@@ -166,7 +164,6 @@ public class NoteSpawner : MonoBehaviour
     private SongFolderLoader songFolderLoader;
     private string chartFileData = "";
     private string audioClipPath = "";
-    private string guitarClipPath = "";
     private string desiredDifficultySingleThreaded = "Expert";
 
     public int hopoThreshold = 170; // ms threshold for HOPOs
@@ -177,6 +174,7 @@ public class NoteSpawner : MonoBehaviour
     public bool preSpawnOnParse = false;
 
     public Transform highwayTransform;
+    public RenderTexture venueDisplayImage; // venue display/jumbotron
 
     void Start()
     {
@@ -184,7 +182,7 @@ public class NoteSpawner : MonoBehaviour
         musicPlayer = FindFirstObjectByType<MusicPlayer>();
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-        
+        DontDestroyOnLoad(gameObject); // to cache notes for restarting
     }
     async void Awake()
     {
@@ -192,8 +190,7 @@ public class NoteSpawner : MonoBehaviour
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         desiredDifficultySingleThreaded = PlayerPrefs.GetString("SelectedDifficulty", "Expert");
         desiredHyperspeedSingleThreaded = PlayerPrefs.GetFloat("Hyperspeed", 5f);
-        CreatePools();
-        PrewarmNotePools();
+        
         if (uiUpdater != null)
         {
             uiUpdater.loadingOverlay.SetActive(true);
@@ -210,32 +207,41 @@ public class NoteSpawner : MonoBehaviour
         }
         if (songLoader != null && songLoader.songDataSet)
         {
-            await songLoader.LoadSongData((txtAsset, audioClip, guitarClip, videoClip) =>
+            await songLoader.LoadSongData((txtAsset, 
+            audioClip, 
+            videoClip) =>
             {
                 chartFileData = txtAsset;
                 audioClipPath = audioClip;
-                guitarClipPath = guitarClip;
                 videoClipPath = videoClip;
             });
             await songFolderLoader.LoadIniFile(System.IO.File.ReadAllText(songFolderLoader.songFolderPath + @"\song.ini"));
-            await musicPlayer.loadAudio(audioClipPath);
+            await musicPlayer.loadSongAudio(audioClipPath);
             musicPlayer.loadVideo(videoClipPath);
-            await musicPlayer.loadGuitarAudio(guitarClipPath);
+            if (syncTrack.Count == 0 && events.Count == 0 && notes.Count == 0)
+            {
+                await ParseChartFile(chartFileData);
+            }
+            else
+            {
+                Debug.Log("Using already parsed info");
+            }
             
-            
-            await ParseChartFile(chartFileData);
-            //preSpawnAheadSeconds = musicPlayer.CalculateSongEndTimeInMilliseconds() / 1000f + 5f; // extend ahead time to cover full song length plus buffer
-            //await System.Threading.Tasks.Task.Delay(1000);
+
+            CreatePools();
+            PrewarmNotePools();
             if (!string.IsNullOrEmpty(videoClipPath))
             {
                 Debug.Log("Loading video clip: " + videoClipPath);
                 LoadVideoVenue();
-                    
             }
 
             if (uiUpdater != null)
             {
                 Debug.Log("Song data loaded successfully.");
+                Debug.Log("SyncTrack count: " + syncTrack.Count);
+                Debug.Log("Events count: " + events.Count);
+                Debug.Log("Notes count: " + notes.Count);
                 await System.Threading.Tasks.Task.Delay(500);
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)
@@ -256,14 +262,12 @@ public class NoteSpawner : MonoBehaviour
     }
     private void LoadVideoVenue()
     {
-        SceneManager.LoadSceneAsync("Image_Video Venue", LoadSceneMode.Additive);
-        if (SceneManager.GetSceneByName("Blank").isLoaded)
+        if (!string.IsNullOrEmpty(videoClipPath))
         {
-            SceneManager.UnloadSceneAsync("Blank");
-        }
-        else if (SceneManager.GetSceneByName("3DVenue").isLoaded)
-        {
-            SceneManager.UnloadSceneAsync("3DVenue");
+            VideoPlayer videoPlayer = FindAnyObjectByType<VideoPlayer>();
+            videoPlayer.url = videoClipPath;
+            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            videoPlayer.targetTexture = venueDisplayImage;
         }
     }
 
@@ -311,7 +315,7 @@ public class NoteSpawner : MonoBehaviour
         catch (Exception) { }
 
         int firstBarTick = 0;
-        if (syncTrack != null && syncTrack.Count > 0) firstBarTick = (int)syncTrack[0].time;
+        if (syncTrack != null && syncTrack.Count > 0) firstBarTick = (int)syncTrack.ElementAt(0).time;
         float barTime = GetTimeInSecondsAtTick(firstBarTick);
         float currentSongSeconds = 0f;
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
@@ -603,14 +607,14 @@ public class NoteSpawner : MonoBehaviour
 
             if (inSyncTrackSection)
             {
-                Debug.Log("Parsing sync track...");
+                //Debug.Log("Parsing sync track...");
                 string[] parts = trimmedLine.Split('=');
                 if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int time))
                 {
                     string[] syncParts = parts[1].Trim().Split(' ');
                     if (syncParts.Length >= 2 && syncParts[0] == "B" && float.TryParse(syncParts[1], out float bpm))
                     {
-                        await Task.Run(() => syncTrack.Add(new SyncInfo
+                        await Task.Run(() => syncTrack.Enqueue(new SyncInfo
                         {
                             time = time,
                             bpm = bpm / 1000f, // converts from 120000 to 120.000 (example)
@@ -621,7 +625,7 @@ public class NoteSpawner : MonoBehaviour
                     {
                         if (syncTrack.Count > 0)
                         {
-                            syncTrack[syncTrack.Count - 1].timeSignature = syncParts[1];
+                            syncTrack.ElementAt(syncTrack.Count - 1).timeSignature = syncParts[1];
                         }
                     }
                 }
@@ -629,7 +633,7 @@ public class NoteSpawner : MonoBehaviour
 
             if (inEventsSection)
             {
-                Debug.Log("Parsing global events...");
+                //Debug.Log("Parsing global events...");
                 string[] parts = trimmedLine.Split(new[] { '=' }, 2);
                 if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int eventTime))
                 {
@@ -687,7 +691,7 @@ public class NoteSpawner : MonoBehaviour
 
             if (inDesiredSingleSection)
             {
-                Debug.Log("Parsing notes...");
+                //Debug.Log("Parsing notes...");
                 string[] parts = trimmedLine.Split('=');
                 if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int tickStart) && parts[1].Trim().StartsWith("N"))
                 {
@@ -715,7 +719,7 @@ public class NoteSpawner : MonoBehaviour
                                 length = lengthInTicks
                             };
                         }
-                        notes.Add(currentNote);
+                        notes.Enqueue(currentNote);
                         previousNote = currentNote; // Update the previous note
                         parsedNotesCount++;
 
@@ -727,7 +731,7 @@ public class NoteSpawner : MonoBehaviour
                             float timeSeconds = GetTimeInSecondsAtTick(tickStart);
                             if (musicPlayer != null)
                             {
-                                musicPlayer.currentTime = Mathf.Clamp(timeSeconds, 0, songLengthInTicks - 1);
+                                musicPlayer.currentTime = timeSeconds;
                             }
                             if (currentNote is OpenNoteInfo)
                             {
@@ -771,7 +775,7 @@ public class NoteSpawner : MonoBehaviour
         {
             Debug.LogWarning("ParseChartFile: sample failed lines (up to 20):\n" + string.Join("\n", failedSamples.ToArray()));
         }
-        syncTrack.Sort((a, b) => a.time.CompareTo(b.time));
+        //syncTrack.Sort((a, b) => a.time.CompareTo(b.time));
         if (musicPlayer != null)
         {
             musicPlayer.currentTime = 0f;
@@ -797,7 +801,7 @@ public class NoteSpawner : MonoBehaviour
             // If no notes present, fall back to the last sync point
             if (maxTick == 0 && syncTrack.Count > 0)
             {
-                maxTick = (int)syncTrack[syncTrack.Count - 1].time;
+                maxTick = (int)syncTrack.ElementAt(syncTrack.Count - 1).time;
             }
 
             // Ensure we have at least 1 tick to avoid zero-length loops
@@ -817,7 +821,7 @@ public class NoteSpawner : MonoBehaviour
     {
         try
         {
-            if (events != null && events.TryGetValue(tick, out string val)) return val ?? string.Empty;
+            if (events != null && events.TryGetValue(tick, out string val)) return val;
             return string.Empty;
         }
         catch
@@ -843,7 +847,7 @@ public class NoteSpawner : MonoBehaviour
             : strikeY + startingYPosition + startingYOffset + ((endSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
         // Position the sustain so its head aligns at startY; the sustain visual component should
         // handle scaling/length based on start/end seconds in Initialize.
-        //sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, startY, sustainInstance.transform.position.z);
+        //sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, currentSongSeconds, sustainInstance.transform.position.z);
         // Ensure there is a Sustain component to manage visual updates
         var sustainComp = sustainInstance.GetComponent<Sustain>();
         if (sustainComp == null) sustainComp = sustainInstance.AddComponent<Sustain>();
@@ -898,7 +902,7 @@ public class NoteSpawner : MonoBehaviour
         nextRuntimeSpawnIndex = 0;
         while (nextRuntimeSpawnIndex < notes.Count)
         {
-            float t = GetTimeInSecondsAtTick(notes[nextRuntimeSpawnIndex].spawnTime);
+            float t = GetTimeInSecondsAtTick(notes.ElementAt(nextRuntimeSpawnIndex).spawnTime);
             if (t - current > initialPreSpawnSeconds) break;
             nextRuntimeSpawnIndex++;
         }
@@ -912,7 +916,7 @@ public class NoteSpawner : MonoBehaviour
         float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", desiredHyperspeedSingleThreaded);
         for (int i = 0; i < notes.Count; i++)
         {
-            var n = notes[i];
+            var n = notes.ElementAt(i);
             if (n == null) continue;
             float t = GetTimeInSecondsAtTick(n.spawnTime);
             if (t < currentSeconds - 1f) continue; // skip past notes
@@ -933,7 +937,7 @@ public class NoteSpawner : MonoBehaviour
             // spawn all notes that have entered the lead window
             while (nextRuntimeSpawnIndex < notes.Count)
             {
-                var n = notes[nextRuntimeSpawnIndex];
+                var n = notes.ElementAt(nextRuntimeSpawnIndex);
                 if (n == null) { nextRuntimeSpawnIndex++; continue; }
                 float noteTime = GetTimeInSecondsAtTick(n.spawnTime);
                 if (noteTime - current <= lead)
@@ -953,7 +957,7 @@ public class NoteSpawner : MonoBehaviour
     private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
     {
         if (noteIndex < 0 || noteIndex >= notes.Count) return;
-        var n = notes[noteIndex];
+        var n = notes.ElementAt(noteIndex);
         if (n == null) return;
 
         int fret = n.fret;
@@ -998,12 +1002,14 @@ public class NoteSpawner : MonoBehaviour
         // sustain handling
         if (n.length > 0)
         {
+            var sust = inst.GetComponent<SustainedNote>();
+            if (sust == null) sust = inst.AddComponent<SustainedNote>();
+            sust.durationSeconds = GetTimeInSecondsAtTick(n.spawnTime + n.length);
             var sustainObj = inst.GetComponentInChildren<Sustain>()?.gameObject;
             if (sustainObj != null)
             {
+                sustainObj.transform.position = inst.transform.position;
                 SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor);
-                var sGate = sustainObj.GetComponent<VisibilityGate>(); if (sGate == null) sGate = sustainObj.AddComponent<VisibilityGate>();
-                sGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
                 sustainObj.SetActive(true);
             }
         }
@@ -1025,10 +1031,10 @@ public class NoteSpawner : MonoBehaviour
 
         float totalSeconds = 0f;
         float prevTick = 0;
-        float prevBpm = syncTrack[0].bpm;
+        float prevBpm = syncTrack.ElementAt(0).bpm;
         for (int i = 0; i < syncTrack.Count; i++)
         {
-            var sync = syncTrack[i];
+            var sync = syncTrack.ElementAt(i);
             float segEnd = Math.Min(sync.time, tick);
             float delta = segEnd - prevTick;
             if (delta > 0)
@@ -1063,11 +1069,11 @@ public class NoteSpawner : MonoBehaviour
 
         float accumulatedSeconds = 0f;
         int prevTick = 0;
-        float prevBpm = syncTrack[0].bpm;
+        float prevBpm = syncTrack.ElementAt(0).bpm;
 
         for (int i = 0; i < syncTrack.Count; i++)
         {
-            var entry = syncTrack[i];
+            var entry = syncTrack.ElementAt(i);
             int segEndTick = (int)entry.time;
             int segTicks = Math.Max(0, segEndTick - prevTick);
             float secPerTick = 60f / (prevBpm * resolution);
@@ -1078,7 +1084,7 @@ public class NoteSpawner : MonoBehaviour
                 float remaining = seconds - accumulatedSeconds;
                 float ticksIntoSeg = remaining / secPerTick;
                 float tickF = prevTick + ticksIntoSeg;
-                return roundToNearest ? Mathf.Clamp(Mathf.RoundToInt(tickF), 0, songLengthInTicks) : Mathf.Clamp(Mathf.FloorToInt(tickF), 0, songLengthInTicks);
+                return roundToNearest ? Mathf.RoundToInt(tickF) : Mathf.FloorToInt(tickF);
             }
 
             accumulatedSeconds += segSeconds;
@@ -1090,32 +1096,11 @@ public class NoteSpawner : MonoBehaviour
         float lastSecPerTick = 60f / (prevBpm * resolution);
         float ticksAfter = (seconds - accumulatedSeconds) / lastSecPerTick;
         float finalTickF = prevTick + ticksAfter;
-        return roundToNearest ? Mathf.Clamp(Mathf.RoundToInt(finalTickF), 0, songLengthInTicks) : Mathf.Clamp(Mathf.FloorToInt(finalTickF), 0, songLengthInTicks);
+        return roundToNearest ? Mathf.RoundToInt(finalTickF) : Mathf.FloorToInt(finalTickF);
     }
 
     // Returns seconds per tick at a specific tick (based on the most recent sync entry at or before that tick)
-    private float GetSecondsPerTickAtTick(int tick)
-    {
-        if (syncTrack == null || syncTrack.Count == 0)
-        {
-            return 60f / (currentBpm * resolution);
-        }
-
-        float bpm = currentBpm;
-        for (int i = 0; i < syncTrack.Count; i++)
-        {
-            if (syncTrack[i].time <= tick)
-            {
-                bpm = syncTrack[i].bpm;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        return 60f / (bpm * resolution);
-    }
+    
 
     // Coroutine: manages spawning bars and beats ahead of current playback time using pooling
     private IEnumerator ManageBarBeatSpawning()
@@ -1125,9 +1110,9 @@ public class NoteSpawner : MonoBehaviour
 
         // Start spawning from the first sync tick or 0
         int nextBarTick = 0;
-        if (syncTrack != null && syncTrack.Count > 0) nextBarTick = (int)syncTrack[0].time;
+        if (syncTrack != null && syncTrack.Count > 0) nextBarTick = (int)syncTrack.ElementAt(0).time;
 
-        bool firstBarTagged = false;
+        
 
         while (true)
         {
@@ -1150,11 +1135,11 @@ public class NoteSpawner : MonoBehaviour
                     float strikeY = GetStrikeLineY();
                     float secondsUntilBar = barTime - currentSongSeconds;
                     float barY = strikeY + startingYPosition + startingYOffset + (secondsUntilBar + spawnLeadSeconds) * spacingFactor;
-                bar.transform.position = new Vector3(0f, barY, 0f);
+                bar.transform.position = new Vector3(0f + noteSpawningXOffset, barY, 0f);
                 // ensure visibility gate is initialized with current reveal Z in case values changed since pooling
                 var bGate = bar.GetComponent<VisibilityGate>();
                 if (bGate == null) bGate = bar.AddComponent<VisibilityGate>();
-                bGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+                //bGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
                 bar.SetActive(true);
                 scheduledTimeByObject[bar] = barTime;
                 // add to GlobalMoveY so pooled bars are moved along with notes
@@ -1169,16 +1154,29 @@ public class NoteSpawner : MonoBehaviour
                 });
                 if (insertIndex >= 0) activeBars.Insert(insertIndex, bar); else activeBars.Add(bar);
 
-                if (!firstBarTagged)
-                {
-                    bar.tag = "FirstBar";
-                    firstBarTagged = true;
-                }
+                
 
                 // spawn beats within this bar
                 SyncInfo sync = FindSyncForTick(nextBarTick);
+                // Default to 4/4 (numerator=4, exponent=2 -> denominator = 2^2 = 4)
                 int ticksPerBeat = resolution;
-                int beatsPerBar = sync != null && sync.timeSignature == "2" ? 2 : 4;
+                int beatsPerBar = 4;
+                if (sync != null && !string.IsNullOrWhiteSpace(sync.timeSignature))
+                {
+                    // Support formats like "numerator exponent" (e.g. "6 3" -> 6/8)
+                    // or "numerator/denominator" (e.g. "6/8"). The exponent is the
+                    // power of two for the denominator (exponent=2 -> denom=4). Default exponent=2.
+                    string ts = sync.timeSignature.Trim();
+                    var parts = ts.Split(new[] { ' ', '/', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    int numerator = 4;
+                    int denomExp = 2; // exponent -> denominator = 2^denomExp
+                    if (parts.Length >= 1) int.TryParse(parts[0], out numerator);
+                    if (parts.Length >= 2) int.TryParse(parts[1], out denomExp);
+                    int denominator = 1 << Math.Max(0, denomExp);
+                    // ticksPerBeat corresponds to the denominator note (e.g., denom=4 -> quarter note)
+                    ticksPerBeat = Math.Max(1, resolution * 4 / denominator);
+                    beatsPerBar = Math.Max(1, numerator);
+                }
                 for (int beatIndex = 1; beatIndex < beatsPerBar; beatIndex++)
                 {
                     int beatTick = nextBarTick + (beatIndex * ticksPerBeat);
@@ -1188,10 +1186,10 @@ public class NoteSpawner : MonoBehaviour
                     float strikeY2 = GetStrikeLineY();
                     float secondsUntilBeat = beatTime - currentSongSeconds;
                     float beatY = strikeY2 + startingYPosition + startingYOffset + (secondsUntilBeat + spawnLeadSeconds) * spacingFactor;
-                    beatGO.transform.position = new Vector3(0f, beatY, 0f);
+                    beatGO.transform.position = new Vector3(0f + noteSpawningXOffset, beatY, 0f);
                     var gate = beatGO.GetComponent<VisibilityGate>();
                     if (gate == null) gate = beatGO.AddComponent<VisibilityGate>();
-                    gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+                    //gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
                     beatGO.SetActive(true);
                     scheduledTimeByObject[beatGO] = beatTime;
                     var bsched = beatGO.GetComponent<ScheduledTime>();
@@ -1209,7 +1207,8 @@ public class NoteSpawner : MonoBehaviour
                 }
 
                 // advance to next bar tick based on current sync's bar size
-                int barAdvance = resolution * (sync != null && sync.timeSignature == "2" ? 2 : 4);
+
+                int barAdvance = resolution;
                 nextBarTick += barAdvance;
             }
 
@@ -1271,9 +1270,9 @@ public class NoteSpawner : MonoBehaviour
         SyncInfo last = null;
         for (int i = 0; i < syncTrack.Count; i++)
         {
-            if (syncTrack[i].time <= tick) last = syncTrack[i]; else break;
+            if (syncTrack.ElementAt(i).time <= tick) last = syncTrack.ElementAt(i); else break;
         }
-        return last ?? (syncTrack.Count > 0 ? syncTrack[0] : null);
+        return last ?? (syncTrack.Count > 0 ? syncTrack.ElementAt(0) : null);
     }
 
     // Ensure there is only one currentTick variable
@@ -1288,7 +1287,7 @@ public class NoteSpawner : MonoBehaviour
         {
             // Use the tempo-aware conversion helper to map seconds -> ticks
             float tickF = GetTickAtTimeSeconds(songTimeSeconds, false);
-            currentTick = Mathf.Clamp((int)tickF, 0, songLengthInTicks);
+            currentTick = (int)tickF; // Don't use songLengthInTicks anymore
         }
         catch (Exception)
         {
@@ -1327,6 +1326,11 @@ public class NoteSpawner : MonoBehaviour
                 }
             }
         }
+        if (highwayTransform != null)
+        {
+            noteSpawningXOffset = highwayTransform.position.x;
+        }
+        
 
         
     }

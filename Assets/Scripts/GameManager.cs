@@ -10,6 +10,7 @@ using System.Text;
 
 public class GameManager : MonoBehaviour
 {
+    public List<string> songFolders;
 
     // Start is called before the first frame update
     void Start()
@@ -107,25 +108,6 @@ public class GameManager : MonoBehaviour
 
     public void ResetAllValues()
     {
-        NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
-        if (noteSpawner != null)
-        {
-            if (noteSpawner.notes.Count > 0)
-            {
-                noteSpawner.notes.Clear();
-            }
-            if (noteSpawner.syncTrack.Count > 0)
-            {
-                noteSpawner.syncTrack.Clear();
-            }
-            if (noteSpawner.events.Count > 0)
-            {
-                noteSpawner.events.Clear();
-            }
-            noteSpawner.songLengthInTicks = 0;
-            noteSpawner.currentTick = 0;
-        }
-
         GlobalMoveY globalMoveY = FindAnyObjectByType<GlobalMoveY>();
         if (globalMoveY != null)
         {
