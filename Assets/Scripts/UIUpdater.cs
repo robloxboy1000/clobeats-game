@@ -84,15 +84,6 @@ public class UIUpdater : MonoBehaviour
     }
     public void UpdateNotesHit()
     {
-        if (savednotesHit >= 30)
-        {
-            notesHitText.material.color = new Color(notesHitText.material.color.r, notesHitText.material.color.g, notesHitText.material.color.b, 1f);
-        }
-        else
-        {
-            float alpha = Mathf.Clamp01(savednotesHit / 30f);
-            notesHitText.material.color = new Color(notesHitText.material.color.r, notesHitText.material.color.g, notesHitText.material.color.b, alpha);
-        }
         savednotesHit += 1;
         notesHitText.text = savednotesHit.ToString();
     }

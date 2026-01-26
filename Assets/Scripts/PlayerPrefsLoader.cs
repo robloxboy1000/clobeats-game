@@ -7,6 +7,7 @@ using UnityEditor;
 using System.Threading.Tasks;
 using System;
 using System.IO;
+using System.Threading;
 
 public class PlayerPrefsLoader : MonoBehaviour
 {
@@ -84,11 +85,11 @@ public class PlayerPrefsLoader : MonoBehaviour
             if (savedQuality >= 0 && savedQuality < qualityDropdown.options.Count)
             {
                 qualityDropdown.value = savedQuality;
-                QualitySettings.SetQualityLevel(savedQuality);
+                //QualitySettings.SetQualityLevel(savedQuality);
             }
             qualityDropdown.onValueChanged.AddListener((index) =>
             {
-                QualitySettings.SetQualityLevel(index);
+                //QualitySettings.SetQualityLevel(index);
             });
         }
 
@@ -211,9 +212,11 @@ public class PlayerPrefsLoader : MonoBehaviour
         }
     }
 
-    public async Task LoadWholeGame()
+    public async Task LoadWholeGame(float timeout = 600000)
     {
         Debug.Log("Loading game...");
+
+        
         
         if (songItemNames.Count == 0)
         {
@@ -231,6 +234,18 @@ public class PlayerPrefsLoader : MonoBehaviour
                     }
                     GameManager gameManager = FindAnyObjectByType<GameManager>();
                     gameManager.songFolders = songItemNames;
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeout)))
+                    {
+                        try
+                        {
+                            await gameManager.CacheSongs(true);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw new Exception("Parsing timed out after " + timeout + " milliseconds.");
+                        }
+                    }
+                    
                 }
                 else
                 {

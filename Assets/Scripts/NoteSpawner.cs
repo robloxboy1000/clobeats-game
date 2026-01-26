@@ -24,12 +24,7 @@ public class NoteSpawner : MonoBehaviour
     public GameObject barPrefab; // Prefab for bars
     public GameObject beatPrefab; // Prefab for beats
 
-    public Queue<NoteInfo> notes = new Queue<NoteInfo>();
-    public Queue<SyncInfo> syncTrack = new Queue<SyncInfo>();
-
-    // map tick -> concatenated event string
-    public Dictionary<int, string> events = new Dictionary<int, string>();
-    
+    public GameManager gameManager;
 
     public class NoteInfo
     {
@@ -48,7 +43,7 @@ public class NoteSpawner : MonoBehaviour
             // count notes per fret and sustains
             int green = 0, red = 0, yellow = 0, blue = 0, orange = 0, open = 0;
 
-            foreach (var n in notes)
+            foreach (var n in gameManager.currentSongNotes)
             {
                 if (n == null) continue;
                 switch (n.fret)
@@ -101,6 +96,7 @@ public class NoteSpawner : MonoBehaviour
         catch (System.Exception ex)
         {
             Debug.LogWarning("PrewarmNotePools failed: " + ex.Message);
+            Debug.LogWarning(ex.StackTrace);
         }
     }
 
@@ -182,6 +178,7 @@ public class NoteSpawner : MonoBehaviour
         musicPlayer = FindFirstObjectByType<MusicPlayer>();
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+        gameManager =  FindAnyObjectByType<GameManager>();
         DontDestroyOnLoad(gameObject); // to cache notes for restarting
     }
     async void Awake()
@@ -215,18 +212,23 @@ public class NoteSpawner : MonoBehaviour
                 audioClipPath = audioClip;
                 videoClipPath = videoClip;
             });
-            await songFolderLoader.LoadIniFile(System.IO.File.ReadAllText(songFolderLoader.songFolderPath + @"\song.ini"));
+            await songFolderLoader.LoadIniFile(await System.IO.File.ReadAllTextAsync(songFolderLoader.songFolderPath + @"\song.ini"));
             await musicPlayer.loadSongAudio(audioClipPath);
             musicPlayer.loadVideo(videoClipPath);
-            if (syncTrack.Count == 0 && events.Count == 0 && notes.Count == 0)
+            try
             {
-                await ParseChartFile(chartFileData);
+                if (gameManager.cachedSongs[gameManager.currentSongID] == null)
+                {
+                    //await gameManager.CacheSingleSong(Path.GetDirectoryName(audioClipPath), gameManager.currentSongID, false);
+                }
             }
-            else
+            catch
             {
-                Debug.Log("Using already parsed info");
+                await gameManager.CacheSingleSong(Path.GetDirectoryName(audioClipPath), gameManager.currentSongID, false);
             }
             
+            
+            songLengthInTicks = gameManager.currentSongLengthInTicks;
 
             CreatePools();
             PrewarmNotePools();
@@ -239,9 +241,7 @@ public class NoteSpawner : MonoBehaviour
             if (uiUpdater != null)
             {
                 Debug.Log("Song data loaded successfully.");
-                Debug.Log("SyncTrack count: " + syncTrack.Count);
-                Debug.Log("Events count: " + events.Count);
-                Debug.Log("Notes count: " + notes.Count);
+                
                 await System.Threading.Tasks.Task.Delay(500);
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)
@@ -315,7 +315,7 @@ public class NoteSpawner : MonoBehaviour
         catch (Exception) { }
 
         int firstBarTick = 0;
-        if (syncTrack != null && syncTrack.Count > 0) firstBarTick = (int)syncTrack.ElementAt(0).time;
+        if (gameManager.currentSongSyncTrack != null && gameManager.currentSongSyncTrack.Count > 0) firstBarTick = (int)gameManager.currentSongSyncTrack.ElementAt(0).time;
         float barTime = GetTimeInSecondsAtTick(firstBarTick);
         float currentSongSeconds = 0f;
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
@@ -522,294 +522,7 @@ public class NoteSpawner : MonoBehaviour
         go.SetActive(false);
     }
 
-    private async Task ParseChartFile(string data)
-    {
-        Debug.Log("Parsing chart file...");
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        // Diagnostic counters
-        int parsedNotesCount = 0;
-        int failedNoteLines = 0;
-        List<string> failedSamples = new List<string>();
-
-        // Determine which Single section to parse: prefer PlayerPrefs-selected difficulty, else Expert, else first Single found.
-        string desiredDifficulty = desiredDifficultySingleThreaded; // PlayerPrefs can only be called on main thread.
-        string chosenSingleHeader = null; // e.g. "[ExpertSingle]"
-        List<string> singleHeaders = new List<string>();
-        foreach (string raw in lines)
-        {
-            string t = raw.Trim();
-            if (t.StartsWith("[") && t.EndsWith("]") && t.IndexOf("Single", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                singleHeaders.Add(t);
-            }
-        }
-
-        // Pick matching header if available
-        foreach (string hdr in singleHeaders)
-        {
-            // case-insensitive match
-            if (hdr.IndexOf(desiredDifficulty, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                chosenSingleHeader = hdr;
-                break;
-            }
-        }
-
-        if (chosenSingleHeader == null)
-        {
-            // prefer Expert if present
-            var expert = singleHeaders.Find(h => h.IndexOf("ExpertSingle", StringComparison.OrdinalIgnoreCase) >= 0);
-            if (expert != null) chosenSingleHeader = expert; else if (singleHeaders.Count > 0) chosenSingleHeader = singleHeaders[0];
-        }
-
-        bool inSongSection = false;
-        bool inEventsSection = false;
-        bool inDesiredSingleSection = false;
-        bool inSyncTrackSection = false;
-        NoteInfo previousNote = null; // Track the previous note
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string line = lines[i];
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
-            {
-                inSongSection = trimmedLine.Equals("[Song]", StringComparison.OrdinalIgnoreCase);
-                inEventsSection = trimmedLine.Equals("[Events]", StringComparison.OrdinalIgnoreCase);
-                inDesiredSingleSection = chosenSingleHeader != null && trimmedLine.Equals(chosenSingleHeader, StringComparison.OrdinalIgnoreCase);
-                inSyncTrackSection = trimmedLine.Equals("[SyncTrack]", StringComparison.OrdinalIgnoreCase);
-                continue;
-            }
-
-            if ((inSongSection || inDesiredSingleSection || inSyncTrackSection || inEventsSection) && trimmedLine.StartsWith("{"))
-            {
-                continue; // Skip opening brace
-            }
-
-            if ((inSongSection || inDesiredSingleSection || inSyncTrackSection || inEventsSection) && trimmedLine.StartsWith("}"))
-            {
-                if (inSongSection) inSongSection = false;
-                if (inSyncTrackSection) inSyncTrackSection = false;
-                if (inEventsSection) inEventsSection = false;
-                if (inDesiredSingleSection) inDesiredSingleSection = false;
-                continue;
-            }
-
-            if (inSongSection)
-            {
-                string[] parts = trimmedLine.Split('=');
-                if (parts.Length == 2 && parts[0].Trim().Equals("Resolution", StringComparison.OrdinalIgnoreCase) && int.TryParse(parts[1].Trim(), out int res))
-                {
-                    resolution = res;
-                }
-            }
-
-            if (inSyncTrackSection)
-            {
-                //Debug.Log("Parsing sync track...");
-                string[] parts = trimmedLine.Split('=');
-                if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int time))
-                {
-                    string[] syncParts = parts[1].Trim().Split(' ');
-                    if (syncParts.Length >= 2 && syncParts[0] == "B" && float.TryParse(syncParts[1], out float bpm))
-                    {
-                        await Task.Run(() => syncTrack.Enqueue(new SyncInfo
-                        {
-                            time = time,
-                            bpm = bpm / 1000f, // converts from 120000 to 120.000 (example)
-                            timeSignature = "4" // Default time signature; "4" = 4/4, "2" = 2/4, "3" = 3/4
-                        }));
-                    }
-                    else if (syncParts.Length >= 2 && syncParts[0] == "TS")
-                    {
-                        if (syncTrack.Count > 0)
-                        {
-                            syncTrack.ElementAt(syncTrack.Count - 1).timeSignature = syncParts[1];
-                        }
-                    }
-                }
-            }
-
-            if (inEventsSection)
-            {
-                //Debug.Log("Parsing global events...");
-                string[] parts = trimmedLine.Split(new[] { '=' }, 2);
-                if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int eventTime))
-                {
-                    string rhs = parts[1].Trim();
-                    string parsedEventString = string.Empty;
-
-                    // Expect formats like: E "string with spaces"  or E token
-                    if (rhs.StartsWith("E"))
-                    {
-                        string afterE = rhs.Substring(1).Trim();
-                        if (afterE.Length > 0 && (afterE[0] == '"' || afterE[0] == '\''))
-                        {
-                            char quote = afterE[0];
-                            int endIdx = afterE.IndexOf(quote, 1);
-                            if (endIdx > 0)
-                            {
-                                parsedEventString = afterE.Substring(1, endIdx - 1);
-                            }
-                            else
-                            {
-                                // unmatched quote: take remainder without the leading quote
-                                parsedEventString = afterE.TrimStart(quote).Trim();
-                            }
-                        }
-                        else
-                        {
-                            // no quotes -> take first token
-                            var toks = afterE.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (toks.Length > 0) parsedEventString = toks[0];
-                        }
-                    }
-                    else
-                    {
-                        // fallback: if rhs itself is quoted, strip quotes; else take rhs
-                        if ((rhs.StartsWith("\"") && rhs.EndsWith("\"")) || (rhs.StartsWith("'") && rhs.EndsWith("'")))
-                        {
-                            parsedEventString = rhs.Substring(1, rhs.Length - 2);
-                        }
-                        else parsedEventString = rhs;
-                    }
-
-                    // insert/append into dictionary keyed by tick
-                    if (events.ContainsKey(eventTime))
-                    {
-                        if (!string.IsNullOrEmpty(parsedEventString))
-                            events[eventTime] = string.IsNullOrEmpty(events[eventTime]) ? parsedEventString : events[eventTime] + "|" + parsedEventString;
-                    }
-                    else
-                    {
-                        events[eventTime] = parsedEventString;
-                    }
-                }
-                
-            }
-
-            if (inDesiredSingleSection)
-            {
-                //Debug.Log("Parsing notes...");
-                string[] parts = trimmedLine.Split('=');
-                if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int tickStart) && parts[1].Trim().StartsWith("N"))
-                {
-                    string[] noteParts = parts[1].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (noteParts.Length >= 3 && int.TryParse(noteParts[1], out int fret) && int.TryParse(noteParts[2], out int lengthInTicks))
-                    {
-                        NoteInfo currentNote;
-
-                        // Classify notes based on fret number
-                        if (fret == 7)
-                        {
-                            currentNote = new OpenNoteInfo
-                            {
-                                spawnTime = tickStart,
-                                fret = fret,
-                                length = lengthInTicks
-                            };
-                        }
-                        else
-                        {
-                            currentNote = new NoteInfo
-                            {
-                                spawnTime = tickStart,
-                                fret = fret,
-                                length = lengthInTicks
-                            };
-                        }
-                        notes.Enqueue(currentNote);
-                        previousNote = currentNote; // Update the previous note
-                        parsedNotesCount++;
-
-                        // Optionally pre-spawn the visual note immediately if we have enough sync data
-                        if (preSpawnOnParse && syncTrack != null && syncTrack.Count > 0)
-                        {
-                            
-                            float spacingFactor = desiredHyperspeedSingleThreaded;
-                            float timeSeconds = GetTimeInSecondsAtTick(tickStart);
-                            if (musicPlayer != null)
-                            {
-                                musicPlayer.currentTime = timeSeconds;
-                            }
-                            if (currentNote is OpenNoteInfo)
-                            {
-                                SpawnNoteInstance(7,timeSeconds,spacingFactor);
-                            }
-                            else
-                            {
-                                switch (fret)
-                                {
-                                    case 0: SpawnNoteInstance(0,timeSeconds,spacingFactor); break;
-                                    case 1: SpawnNoteInstance(1,timeSeconds,spacingFactor); break;
-                                    case 2: SpawnNoteInstance(2,timeSeconds,spacingFactor); break;
-                                    case 3: SpawnNoteInstance(3,timeSeconds,spacingFactor); break;
-                                    case 4: SpawnNoteInstance(4,timeSeconds,spacingFactor); break;
-                                    default: break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            
-                            
-                        }
-                    }
-                    else
-                    {
-                        failedNoteLines++;
-                        if (failedSamples.Count < 20) failedSamples.Add(trimmedLine);
-                    }
-                }
-            }
-            
-            
-            await Task.Yield(); // Yield to keep UI responsive during long parsing
-            
-        }
-
-        // Diagnostics summary
-        Debug.Log($"ParseChartFile: chosenSingle={chosenSingleHeader}, parsedNotes={parsedNotesCount}, failedNoteLines={failedNoteLines}, totalNotesArraySize(after)={notes.Count}");
-        if (failedSamples.Count > 0)
-        {
-            Debug.LogWarning("ParseChartFile: sample failed lines (up to 20):\n" + string.Join("\n", failedSamples.ToArray()));
-        }
-        //syncTrack.Sort((a, b) => a.time.CompareTo(b.time));
-        if (musicPlayer != null)
-        {
-            musicPlayer.currentTime = 0f;
-        }
-
-        
-
-        // If `songLengthInTicks` isn't provided, compute a sensible value from notes or the sync track.
-        // This prevents spawning bars/beats beyond the end of the song.
-        if (songLengthInTicks <= 0)
-        {
-            int maxTick = 0;
-
-            // Use notes (including sustain length) to determine the final tick
-            foreach (var n in notes)
-            {
-                int noteStart = (int)n.spawnTime;
-                int noteEnd = noteStart + n.length;
-                if (noteEnd > maxTick) maxTick = noteEnd;
-                if (noteStart > maxTick) maxTick = noteStart;
-            }
-
-            // If no notes present, fall back to the last sync point
-            if (maxTick == 0 && syncTrack.Count > 0)
-            {
-                maxTick = (int)syncTrack.ElementAt(syncTrack.Count - 1).time;
-            }
-
-            // Ensure we have at least 1 tick to avoid zero-length loops
-            songLengthInTicks = Math.Max(1, maxTick);
-        }
-
-        
-    }
+    
 
     private void ParseMidiFile(string filePath)
     {
@@ -821,7 +534,7 @@ public class NoteSpawner : MonoBehaviour
     {
         try
         {
-            if (events != null && events.TryGetValue(tick, out string val)) return val;
+            if (gameManager.currentSongEvents != null && gameManager.currentSongEvents.TryGetValue(tick, out string val)) return val;
             return string.Empty;
         }
         catch
@@ -847,7 +560,7 @@ public class NoteSpawner : MonoBehaviour
             : strikeY + startingYPosition + startingYOffset + ((endSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
         // Position the sustain so its head aligns at startY; the sustain visual component should
         // handle scaling/length based on start/end seconds in Initialize.
-        //sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, currentSongSeconds, sustainInstance.transform.position.z);
+        sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, sustainInstance.transform.position.y + startSeconds * spacingFactor, sustainInstance.transform.position.z);
         // Ensure there is a Sustain component to manage visual updates
         var sustainComp = sustainInstance.GetComponent<Sustain>();
         if (sustainComp == null) sustainComp = sustainInstance.AddComponent<Sustain>();
@@ -900,9 +613,9 @@ public class NoteSpawner : MonoBehaviour
 
         // Find the first not-yet-spawned note index
         nextRuntimeSpawnIndex = 0;
-        while (nextRuntimeSpawnIndex < notes.Count)
+        while (nextRuntimeSpawnIndex < gameManager.currentSongNotes.Count)
         {
-            float t = GetTimeInSecondsAtTick(notes.ElementAt(nextRuntimeSpawnIndex).spawnTime);
+            float t = GetTimeInSecondsAtTick(gameManager.currentSongNotes.ElementAt(nextRuntimeSpawnIndex).spawnTime);
             if (t - current > initialPreSpawnSeconds) break;
             nextRuntimeSpawnIndex++;
         }
@@ -914,9 +627,9 @@ public class NoteSpawner : MonoBehaviour
     private void PreSpawnWindow(float currentSeconds, float windowSeconds)
     {
         float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", desiredHyperspeedSingleThreaded);
-        for (int i = 0; i < notes.Count; i++)
+        for (int i = 0; i < gameManager.currentSongNotes.Count; i++)
         {
-            var n = notes.ElementAt(i);
+            var n = gameManager.currentSongNotes.ElementAt(i);
             if (n == null) continue;
             float t = GetTimeInSecondsAtTick(n.spawnTime);
             if (t < currentSeconds - 1f) continue; // skip past notes
@@ -930,14 +643,14 @@ public class NoteSpawner : MonoBehaviour
     private IEnumerator RuntimeSpawnLoop()
     {
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        while (nextRuntimeSpawnIndex < notes.Count)
+        while (nextRuntimeSpawnIndex < gameManager.currentSongNotes.Count)
         {
             float current = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
             float lead = runtimeSpawnLeadSeconds;
             // spawn all notes that have entered the lead window
-            while (nextRuntimeSpawnIndex < notes.Count)
+            while (nextRuntimeSpawnIndex < gameManager.currentSongNotes.Count)
             {
-                var n = notes.ElementAt(nextRuntimeSpawnIndex);
+                var n = gameManager.currentSongNotes.ElementAt(nextRuntimeSpawnIndex);
                 if (n == null) { nextRuntimeSpawnIndex++; continue; }
                 float noteTime = GetTimeInSecondsAtTick(n.spawnTime);
                 if (noteTime - current <= lead)
@@ -956,10 +669,10 @@ public class NoteSpawner : MonoBehaviour
     // Spawn a single note (pooled) with sustain handling and lane registration
     private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
     {
-        if (noteIndex < 0 || noteIndex >= notes.Count) return;
-        var n = notes.ElementAt(noteIndex);
+        if (noteIndex < 0 || noteIndex >= gameManager.currentSongNotes.Count) return;
+        var n = gameManager.currentSongNotes.ElementAt(noteIndex);
         if (n == null) return;
-
+        Debug.Log($"Spawning note [{n.spawnTime}, {n.fret}, {n.length}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with spacing factor " + spacingFactor);
         int fret = n.fret;
         float strikeY = GetStrikeLineY();
         float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
@@ -1015,7 +728,7 @@ public class NoteSpawner : MonoBehaviour
         }
     }
 
-    private class OpenNoteInfo : NoteInfo
+    public class OpenNoteInfo : NoteInfo
     {
         // Class to represent open notes
     }
@@ -1023,7 +736,7 @@ public class NoteSpawner : MonoBehaviour
     // Returns cumulative time in seconds from tick 0 up to the given tick, honoring tempo changes in syncTrack
     public float GetTimeInSecondsAtTick(float tick)
     {
-        if (syncTrack == null || syncTrack.Count == 0)
+        if (gameManager.currentSongSyncTrack == null || gameManager.currentSongSyncTrack.Count == 0)
         {
             float defaultSecondsPerTick = 60f / (currentBpm * resolution);
             return tick * defaultSecondsPerTick;
@@ -1031,10 +744,10 @@ public class NoteSpawner : MonoBehaviour
 
         float totalSeconds = 0f;
         float prevTick = 0;
-        float prevBpm = syncTrack.ElementAt(0).bpm;
-        for (int i = 0; i < syncTrack.Count; i++)
+        float prevBpm = gameManager.currentSongSyncTrack.ElementAt(0).bpm;
+        for (int i = 0; i < gameManager.currentSongSyncTrack.Count; i++)
         {
-            var sync = syncTrack.ElementAt(i);
+            var sync = gameManager.currentSongSyncTrack.ElementAt(i);
             float segEnd = Math.Min(sync.time, tick);
             float delta = segEnd - prevTick;
             if (delta > 0)
@@ -1060,7 +773,7 @@ public class NoteSpawner : MonoBehaviour
     public float GetTickAtTimeSeconds(float seconds, bool roundToNearest = false)
     {
         if (seconds <= 0f) return 0;
-        if (syncTrack == null || syncTrack.Count == 0)
+        if (gameManager.currentSongSyncTrack == null || gameManager.currentSongSyncTrack.Count == 0)
         {
             float sPerTick = 60f / (currentBpm * resolution);
             float ticksF = seconds / sPerTick;
@@ -1069,11 +782,11 @@ public class NoteSpawner : MonoBehaviour
 
         float accumulatedSeconds = 0f;
         int prevTick = 0;
-        float prevBpm = syncTrack.ElementAt(0).bpm;
+        float prevBpm = gameManager.currentSongSyncTrack.ElementAt(0).bpm;
 
-        for (int i = 0; i < syncTrack.Count; i++)
+        for (int i = 0; i < gameManager.currentSongSyncTrack.Count; i++)
         {
-            var entry = syncTrack.ElementAt(i);
+            var entry = gameManager.currentSongSyncTrack.ElementAt(i);
             int segEndTick = (int)entry.time;
             int segTicks = Math.Max(0, segEndTick - prevTick);
             float secPerTick = 60f / (prevBpm * resolution);
@@ -1110,7 +823,7 @@ public class NoteSpawner : MonoBehaviour
 
         // Start spawning from the first sync tick or 0
         int nextBarTick = 0;
-        if (syncTrack != null && syncTrack.Count > 0) nextBarTick = (int)syncTrack.ElementAt(0).time;
+        if (gameManager.currentSongSyncTrack != null && gameManager.currentSongSyncTrack.Count > 0) nextBarTick = (int)gameManager.currentSongSyncTrack.ElementAt(0).time;
 
         
 
@@ -1268,11 +981,19 @@ public class NoteSpawner : MonoBehaviour
     public SyncInfo FindSyncForTick(int tick)
     {
         SyncInfo last = null;
-        for (int i = 0; i < syncTrack.Count; i++)
+        try
         {
-            if (syncTrack.ElementAt(i).time <= tick) last = syncTrack.ElementAt(i); else break;
+            for (int i = 0; i < gameManager.currentSongSyncTrack.Count; i++)
+            {
+                if (gameManager.currentSongSyncTrack.ElementAt(i).time <= tick) last = gameManager.currentSongSyncTrack.ElementAt(i); else break;
+            }
+            return last ?? (gameManager.currentSongSyncTrack.Count > 0 ? gameManager.currentSongSyncTrack.ElementAt(0) : null);
         }
-        return last ?? (syncTrack.Count > 0 ? syncTrack.ElementAt(0) : null);
+        catch
+        {
+            return last;
+        }
+        
     }
 
     // Ensure there is only one currentTick variable

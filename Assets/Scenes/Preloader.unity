@@ -6664,7 +6664,7 @@ VideoPlayer:
   m_TargetMaterialRenderer: {fileID: 0}
   m_TargetMaterialProperty: <noninit>
   m_RenderMode: 2
-  m_AspectRatio: 2
+  m_AspectRatio: 5
   m_DataSource: 1
   m_TimeUpdateMode: 2
   m_PlaybackSpeed: 1
@@ -6673,7 +6673,7 @@ VideoPlayer:
   - {fileID: 0}
   m_DirectAudioVolumes:
   - 1
-  m_Url: C:\Users\Owner\Documents\CloBeats\songs\f25key\video.webm
+  m_Url: 
   m_EnabledAudioTracks: 01
   m_DirectAudioMutes: 00
   m_ControlledAudioTrackCount: 1
@@ -8913,7 +8913,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46eeacd32888e164f9aec598e64cbdf4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SustainManager
-  sustainPrefab: {fileID: 5594008442754938388, guid: d98c0eece0519b34da37885c447d03ed, type: 3}
+  sustainPrefab: {fileID: 7614337942803537439, guid: 0865be934d4d3fd4f85267bd00d978c8, type: 3}
   container: {fileID: 0}
   laneXPositions:
   - -2
@@ -9464,6 +9464,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   songFolders: []
+  ddst: 
+  songChartCount: 0
+  songEntryCount: 0
+  currentSongResolution: 192
+  currentSongLengthInTicks: 0
+  currentSongTitle: 
+  currentSongArtist: 
+  currentSongAlbum: 
+  currentSongYear: 0
+  currentSongLoadingPhrase: 
+  currentSongAuthor: 
+  currentSongLength: 0
+  currentSongAccentColor: 
+  currentSongPreviewStartTime: 0
+  currentSongID: 0
 --- !u!114 &2084514636
 MonoBehaviour:
   m_ObjectHideFlags: 0

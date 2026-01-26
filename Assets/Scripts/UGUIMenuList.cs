@@ -86,6 +86,7 @@ public class UGUIMenuList : MonoBehaviour
             Debug.Log("Item name: " + itemName);
             Debug.Log("Directory name: " + Path.GetFileName(itemName));
             if (Path.GetFileName(itemName).StartsWith("sub_")) continue;
+            if (!File.Exists(itemName + "/song.ogg")) continue;
             
             // Instantiate the prefab inside the specified container
             GameObject newItem = Instantiate(listItemPrefab, contentContainer);
@@ -100,14 +101,15 @@ public class UGUIMenuList : MonoBehaviour
             TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
 
             SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-            await songFolderLoader.LoadIniFile(File.ReadAllText(itemName + @"\song.ini"));
+            await songFolderLoader.LoadIniFile(await File.ReadAllTextAsync(itemName + @"\song.ini"));
 
             songArtistText.text = "(" + itemCount + ") " +songFolderLoader.songArtist;
             songTitleText.text = songFolderLoader.songName;
             Button button = newItem.GetComponent<Button>();
             if (button != null)
             {
-                button.onClick.AddListener(async () => await OnItemClicked(itemName));
+                button.name = itemCount.ToString();
+                button.onClick.AddListener(async () => await OnItemClicked(itemName, int.Parse(button.name)));
             }
 
             
@@ -127,7 +129,7 @@ public class UGUIMenuList : MonoBehaviour
     }
 
     
-    async Task OnItemClicked(string name)
+    async Task OnItemClicked(string name, int id)
     {
         Debug.Log("Clicked on: " + name);
         GameObject songInfoPanel = rootTransform.Find("SongInfoPanel").gameObject;
@@ -140,7 +142,7 @@ public class UGUIMenuList : MonoBehaviour
             TMPro.TextMeshProUGUI sipSongTitleText = sipSongTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
             RawImage albumTexture = albumImage.GetComponent<RawImage>();
             SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-            await songFolderLoader.LoadIniFile(File.ReadAllText(name + @"\song.ini"));
+            await songFolderLoader.LoadIniFile(await File.ReadAllTextAsync(name + @"\song.ini"));
             try
             {
                 Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(name + @"\album.jpg");
@@ -188,6 +190,7 @@ public class UGUIMenuList : MonoBehaviour
             if (menuManager != null)
             {
                 menuManager.currentPreviewingSongPath = name;
+                menuManager.currentPreviewingID = id;
             }
         }
     }

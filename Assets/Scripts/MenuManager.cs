@@ -39,6 +39,7 @@ public class MenuManager : MonoBehaviour
 
     public bool isOnline = false;
     public string currentPreviewingSongPath = string.Empty;
+    public int currentPreviewingID = 0;
     
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -64,8 +65,10 @@ public class MenuManager : MonoBehaviour
                 PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
                 PlayerPrefs.Save();
                 SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+                GameManager gameManager = FindAnyObjectByType<GameManager>();
                 if (songFolderLoader != null)
                 {
+                    gameManager.currentSongID = currentPreviewingID - 1;
                     songFolderLoader.songFolderPath = currentPreviewingSongPath;
                     await songFolderLoader.Load();
                 }
