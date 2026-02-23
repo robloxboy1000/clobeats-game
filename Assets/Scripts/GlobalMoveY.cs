@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using Octokit;
 using UnityEngine;
 
 public class GlobalMoveY : MonoBehaviour
@@ -107,6 +106,11 @@ public class GlobalMoveY : MonoBehaviour
                 NotePoolManager.Instance.Return(obj);
                 LaneManager.Instance.UnregisterNote(obj);
                 objectsToMove.RemoveAt(i);
+                var note = obj.GetComponent<PooledNote>();
+                if (note != null)
+                {
+                    sl.MissNote();
+                }
                 continue;
             }
 

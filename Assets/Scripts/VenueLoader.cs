@@ -14,7 +14,7 @@ public class VenueLoader : MonoBehaviour
     {
         if (PlayerPrefs.GetInt("EnableVenue") == 1)
         {
-            SceneManager.LoadSceneAsync("3DVenue", LoadSceneMode.Additive);
+            SceneManager.LoadSceneAsync(2, LoadSceneMode.Additive);
         }
         else
         {
@@ -25,12 +25,12 @@ public class VenueLoader : MonoBehaviour
             
             if (songFolderLoader != null && songFolderLoader.songVideoClipPathSet)
             {
-                SceneManager.LoadSceneAsync("Image_Video Venue", LoadSceneMode.Additive);
-                SceneManager.UnloadSceneAsync("Blank");
+                SceneManager.LoadSceneAsync(5, LoadSceneMode.Additive);
+                SceneManager.UnloadSceneAsync(4);
             }
             else
             {
-                SceneManager.LoadSceneAsync("Blank", LoadSceneMode.Additive);
+                SceneManager.LoadSceneAsync(4, LoadSceneMode.Additive);
             }
         }
         

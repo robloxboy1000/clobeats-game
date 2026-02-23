@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 // Enhanced input handler: shows a hit-window visual, supports strum/chords,
 // hits multiple notes in a lane within the window, and supports sustained notes.
@@ -25,20 +24,19 @@ public class LaneInputManager : MonoBehaviour
     ImprovedStrikeline strikeline;
 
     UIUpdater uiUpdater;
-    // Prevent OnStrum being processed multiple times in the same frame or too quickly.
-    int lastStrumFrame = -1;
-    float lastStrumTime = -999f;
-    [Tooltip("Minimum seconds between processed strums to prevent duplicate triggers")]
-    public float strumCooldownSeconds = 0.05f;
+    
 
     public bool autoPlayEnabled = false;
     public bool showHitWindow = false;
     GameObject note = null;
 
+    MusicPlayer mp;
+
 
     void Start()
     {
         spawner = FindAnyObjectByType<NoteSpawner>();
+        mp = FindAnyObjectByType<MusicPlayer>();
         if (hitWindowPrefab != null)
         {
             hitWindowInstance = Instantiate(hitWindowPrefab, transform);
@@ -108,7 +106,7 @@ public class LaneInputManager : MonoBehaviour
         if (autoPlayEnabled)
         {
             hitWindowSeconds = 0.05f; // center to strikeline
-            for (int i = 0; i <= 4; i++)
+            for (int i = 0; i <= 7; i++)
             {
                 TryHitLane(i, true);
             }
@@ -130,20 +128,18 @@ public class LaneInputManager : MonoBehaviour
     // Called when the player strums; will attempt to hit all currently held frets (chords)
     public void OnStrum()
     {
-        // One-shot guard: ignore additional calls in the same frame or within a short cooldown
-        if (Time.frameCount == lastStrumFrame) heldLanes.Clear();
-        if (Time.unscaledTime - lastStrumTime < strumCooldownSeconds) heldLanes.Clear();
-        lastStrumFrame = Time.frameCount;
-        lastStrumTime = Time.unscaledTime;
-
-        if (heldLanes.Count == 0) return;
+        if (heldLanes.Count == 0) TryHitLane(7);
         // Copy so TryHitLane can modify collections safely
         var lanes = new List<int>(heldLanes);
         foreach (var lane in lanes)
         {
             TryHitLane(lane);
         }
-        
+    }
+
+    public int GetHeldLanes()
+    {
+        return heldLanes.Count;
     }
 
     // Backwards-compatible single-fret hit (e.g., mapping a single key without a strum action)
@@ -172,7 +168,7 @@ public class LaneInputManager : MonoBehaviour
             float noteY = note.transform.position.y;
             // Prefer scheduled song time if available (more accurate and synced to audio DSP clock)
             var sched = note.GetComponent<ScheduledTime>();
-            var mp = FindAnyObjectByType<MusicPlayer>();
+            mp = FindAnyObjectByType<MusicPlayer>();
             float currentSongSeconds = mp != null ? (float)mp.GetElapsedTimeDsp() : Time.time;
             float secondsUntil;
             if (sched != null)
@@ -200,7 +196,7 @@ public class LaneInputManager : MonoBehaviour
                     activeSustains.Add(new ActiveSustain
                     {
                         note = note,
-                        endTime = Time.time + sustainComp.durationSeconds,
+                        endTime = (float)mp.GetElapsedTimeDsp() + sustainComp.durationSeconds,
                         lane = laneIndex
                     });
                     // Optionally: play sustain start FX / scoring events here
@@ -260,8 +256,9 @@ public class LaneInputManager : MonoBehaviour
             }
 
             // If sustain time elapsed, end it
-            if (Time.time >= s.endTime)
+            if ((float)mp.GetElapsedTimeDsp() >= s.endTime)
             {
+                Debug.Log(s.lane + " ended");
                 if (spawner != null)
                 {
                     spawner.ReturnObjectToPool(s.note);

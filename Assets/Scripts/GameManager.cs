@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.InputSystem;
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -10,6 +9,9 @@ using System.Text;
 using System.Linq;
 using System.IO;
 using System.Threading;
+using Melanchall.DryWetMidi.Core;
+using Melanchall.DryWetMidi.Interaction;
+
 
 public class GameManager : MonoBehaviour
 {
@@ -39,6 +41,7 @@ public class GameManager : MonoBehaviour
         public string songAccentColor;
         public int songPreviewStartTime;
         public int cachedSongID;
+        public string songPath;
     }
     public string ddst;
     public int songChartCount = 0;
@@ -59,6 +62,7 @@ public class GameManager : MonoBehaviour
     public int currentSongLength;
     public string currentSongAccentColor;
     public int currentSongPreviewStartTime;
+    public string currentSongPath;
 
     public int currentSongID = 0;
 
@@ -71,35 +75,42 @@ public class GameManager : MonoBehaviour
     {
         DontDestroyOnLoad(this.gameObject);
     }
-    void OnEnable()
+
+    public SongEntryInfo GetCachedSongEntry(int id)
     {
-        SceneManager.sceneLoaded += OnSceneLoaded;
-    }
-    void OnDisable()
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-    }
-    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        if (scene.name == "Gameplay") // Gameplay scene
+        try
         {
-            OldInputManager inputManager = FindAnyObjectByType<OldInputManager>();
-            if (inputManager != null)
-            {
-                inputManager.denyInput = false;
-            }
+            return cachedEntries[id];
+        }
+        catch
+        {
+            return null;
         }
     }
 
     public async Task CacheSongs(bool songEntryMode)
     {
-         
         Debug.Log("Caching songs");
         foreach (string folder in songFolders)
         {
             Debug.Log("Caching folder " + songChartCount + ": " + folder);
             // caches chart file and add to cached song dictionary
             if (!File.Exists(folder + "/notes.chart")) continue;
+            var songFolderFiles = await Task.Run(() => Directory.GetFiles(folder));
+            List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
+            var songMatch = songFolderFiles
+                .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
+            if (songMatch != null)
+            {
+                if (!File.Exists(songMatch.path)) continue;
+            }
+            else
+            {
+                continue;
+            }
+            
+            if (!File.Exists(folder + "/song.ini")) continue;
             if (!songEntryMode)
             {
                 await CacheChartFile(await File.ReadAllTextAsync(folder + "/notes.chart"), songChartCount);
@@ -122,8 +133,8 @@ public class GameManager : MonoBehaviour
             }
             else if (songEntryMode)
             {
-                if (!File.Exists(folder + "/song.ini")) continue;
                 await CacheIniFile(await File.ReadAllTextAsync(folder + "/song.ini"), songEntryCount);
+                currentSongPath = folder;
                 cachedEntries.Add(songEntryCount, new SongEntryInfo
                 {
                     songTitle = currentSongTitle,
@@ -135,7 +146,8 @@ public class GameManager : MonoBehaviour
                     songLength = currentSongLength,
                     songAccentColor = currentSongAccentColor,
                     songPreviewStartTime = currentSongPreviewStartTime,
-                    cachedSongID = songChartCount
+                    cachedSongID = songChartCount,
+                    songPath = currentSongPath
                 });
                 currentSongTitle = string.Empty;
                 currentSongArtist = string.Empty;
@@ -146,6 +158,7 @@ public class GameManager : MonoBehaviour
                 currentSongLength = 0;
                 currentSongAccentColor = string.Empty;
                 currentSongPreviewStartTime = 0;
+                currentSongPath = string.Empty;
                 songEntryCount++;
             }
             
@@ -185,7 +198,8 @@ public class GameManager : MonoBehaviour
                     songLength = currentSongLength,
                     songAccentColor = currentSongAccentColor,
                     songPreviewStartTime = currentSongPreviewStartTime,
-                    cachedSongID = songChartCount
+                    cachedSongID = songChartCount,
+                    songPath = currentSongPath
                 });
             }
     }
@@ -376,7 +390,7 @@ public class GameManager : MonoBehaviour
                             {
                                 spawnTime = tickStart,
                                 fret = fret,
-                                length = lengthInTicks
+                                length = 0
                             };
                         }
                         else
@@ -385,7 +399,7 @@ public class GameManager : MonoBehaviour
                             {
                                 spawnTime = tickStart,
                                 fret = fret,
-                                length = lengthInTicks
+                                length = 0
                             };
                         }
                         currentSongNotes.Enqueue(currentNote);
@@ -398,6 +412,10 @@ public class GameManager : MonoBehaviour
                         if (failedSamples.Count < 20) failedSamples.Add(trimmedLine);
                     }
                 }
+            }
+            if (!inDesiredSingleSection && parsedNotesCount > 0)
+            {
+                return;
             }
             
             
@@ -437,6 +455,20 @@ public class GameManager : MonoBehaviour
             currentSongLengthInTicks = Math.Max(1, maxTick);
         }
     }
+    public async Task ReadMidiFile(string path)
+    {
+        var midiFile = MidiFile.Read(path);
+        WriteTimedObjects(midiFile.GetTimedEvents());
+        await Task.Yield();
+    }
+    private static void WriteTimedObjects<TObject>(ICollection<TObject> timedObjects)
+            where TObject : ITimedObject
+    {
+        foreach (var timedObject in timedObjects)
+        {
+            Debug.Log($"[{timedObject.GetType().Name}] {timedObject} (time = {timedObject.Time})");
+        }
+    } 
 
     public async Task CacheIniFile(string data, int ID)
     {
@@ -501,38 +533,27 @@ public class GameManager : MonoBehaviour
 
     public IEnumerator PlaySong()
     {
+        GameObject venue = GameObject.Find("3DVenue_Camera");
         UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
-        GameObject highway = GameObject.Find("Highway");
-        GameObject strikeline = GameObject.Find("Strikeline");
+        GameObject gp = GameObject.Find("GuitarPlayer");
         if (uiUpdater != null)
         {
             uiUpdater.songInfoPanel.SetActive(true);
             uiUpdater.loadingOverlay.SetActive(false);
         }
-        if (highway != null)
+        if (gp != null)
         {
-            highway.transform.position = new Vector3(0, -6, 6);
-        }
-        if (strikeline != null)
-        {
-            strikeline.transform.position = new Vector3(0, -4, 0);
+            gp.transform.position = new Vector3(0, -6, 6);
         }
         
         yield return new WaitForSecondsRealtime(0.1f);
 
-        if (SceneManager.GetSceneByName("3DVenue").isLoaded)
+        if (SceneManager.GetSceneByBuildIndex(2).isLoaded)
         {
-            GameObject venue = GameObject.Find("3DVenue_Camera");
-            VenueAnimationManager venueAnimManager = FindAnyObjectByType<VenueAnimationManager>();
             if (venue != null)
             {
                 Animation venueAnim = venue.GetComponent<Animation>();
-                //venueAnim.Play("VenueEntry");
-                if (venueAnimManager != null)
-                {
-                    venueAnimManager.leftDoor.GetComponent<Animation>().Play("RightDoorOpen");
-                    venueAnimManager.rightDoor.GetComponent<Animation>().Play("LeftDoorOpen");
-                }
+                venueAnim.Play("VenueEntry");
                 yield return new WaitForSecondsRealtime(10f);
             }
         }
@@ -541,13 +562,9 @@ public class GameManager : MonoBehaviour
             uiUpdater.InitializeUI();
             uiUpdater.songInfoPanel.SetActive(false);
         }
-        if (strikeline != null)
+        if (gp != null)
         {
-            strikeline.transform.position = new Vector3(0, 0, 0);
-        }
-        if (highway != null)
-        {
-            Animation highwayAnim = highway.GetComponent<Animation>();
+            Animation highwayAnim = gp.GetComponent<Animation>();
             highwayAnim.Play("ShowHighway");
             yield return new WaitForSecondsRealtime(1f);
         }
@@ -561,6 +578,7 @@ public class GameManager : MonoBehaviour
         {
             noteSpawner.Play();
         }
+        venue.SetActive(false);
     }
 
     public void ResetAllValues()

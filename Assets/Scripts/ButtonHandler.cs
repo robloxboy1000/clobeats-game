@@ -3,45 +3,29 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Windows.Forms;
 using UnityEngine.SceneManagement;
 using System.IO;
-using SimpleFileBrowser;
 
 public class ButtonHandler : MonoBehaviour
 {
     public UnityEngine.UI.Button myButton; // Assign this in the Inspector
 
-        void Start()
+    void Start()
+    {
+        if (myButton != null)
         {
-            
-            if (myButton != null)
-            {
-                // Add a listener to the button's onClick event
-                myButton.onClick.AddListener(OnButtonClick);
-            }
+            // Add a listener to the button's onClick event
+            myButton.onClick.AddListener(OnButtonClick);
         }
+    }
+    public void PerformClick()
+    {
+        OnButtonClick();
+    }
     void OnButtonClick()
     {
         Debug.Log("Button clicked: " + myButton.name);
-        if (myButton.name == "SelectFolderButton")
-        {
-            FileBrowser.ShowLoadDialog( ( paths ) =>
-            {
-                Debug.Log( "Selected: " + paths[0] );
-                TMPro.TMP_InputField inputField = FindAnyObjectByType<TMPro.TMP_InputField>();
-                if (inputField != null)
-                {
-                    inputField.text = paths[0];
-                }
-            },
-			() => { 
-                Debug.Log( "Canceled" ); 
-            },
-				FileBrowser.PickMode.Folders, false, null, null, "Select Folder", "Select" );
-
-        }
-        else if (myButton.name == "LoadGameplaySceneButton")
+        if (myButton.name == "LoadGameplaySceneButton")
         {
             TMPro.TMP_InputField inputField = FindAnyObjectByType<TMPro.TMP_InputField>();
             if (inputField != null)
@@ -70,6 +54,14 @@ public class ButtonHandler : MonoBehaviour
         else if (myButton.name == "DismissButton")
         {
             GameObject exceptionPanel = GameObject.Find("ErrorMessage(Clone)");
+            if (exceptionPanel != null)
+            {
+                Destroy(exceptionPanel);
+            }
+        }
+        else if (myButton.name == "DismissButton2")
+        {
+            GameObject exceptionPanel = GameObject.Find("MessageBox(Clone)");
             if (exceptionPanel != null)
             {
                 Destroy(exceptionPanel);

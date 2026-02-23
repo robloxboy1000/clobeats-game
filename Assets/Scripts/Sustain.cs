@@ -73,7 +73,7 @@ public class Sustain : MonoBehaviour
             fillTransform.localScale = new Vector2(ls.x, newLocalY);
 
             // Place the root so its back edge aligns with startY: center = startY + desiredWorldLength/2
-            transform.position = new Vector2(transform.position.x, startY + (desiredWorldLength / 2f));
+            transform.position = new Vector3(transform.position.x, startY + (desiredWorldLength / 2f), -0.05f);
         }
         else
         {
@@ -83,7 +83,7 @@ public class Sustain : MonoBehaviour
 
             // Position the fill so its back aligns with the root (which should be at startY)
             // Local Y center = desiredWorldLength / 2
-            fillTransform.localPosition = new Vector2(fillTransform.localPosition.x, startY + desiredWorldLength / 2f);
+            fillTransform.localPosition = new Vector3(fillTransform.localPosition.x, startY + desiredWorldLength / 2f, -0.05f);
         }
 
         // Deactivate when finished

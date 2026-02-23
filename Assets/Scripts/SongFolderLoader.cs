@@ -23,6 +23,7 @@ public class SongFolderLoader : MonoBehaviour
     public bool songVideoClipPathSet = false;
     public UnityEngine.Color songAccentColor;
     public List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
+    public List<string> supportedVideos = new List<string> { "webm", "mp4", "avi", "ogv", "mpeg" };
     public string[] songFolderFiles;
 
     void Awake()
@@ -59,7 +60,7 @@ public class SongFolderLoader : MonoBehaviour
             try
             {
                 Debug.Log("Loading song folder: " + songFolderPath);
-                songFolderFiles = await Task.Run (() => Directory.GetFiles(songFolderPath));
+                songFolderFiles = await Task.Run(() => Directory.GetFiles(songFolderPath));
                 
 
                 SongLoader songLoader = FindFirstObjectByType<SongLoader>();
@@ -67,7 +68,7 @@ public class SongFolderLoader : MonoBehaviour
                 // Find a file named "song" with a supported extension and set the audio path
                 var songMatch = songFolderFiles
                     .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                    .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
+                    .FirstOrDefault(x => x.name == "song-mixed" && supportedFormats.Contains(x.ext));
 
                 if (songMatch != null)
                 {
@@ -83,10 +84,14 @@ public class SongFolderLoader : MonoBehaviour
                 {
                     VenueAnimationPlayer.Instance.cameraAnimationFile = songFolderPath + @"\venueAnim.json";
                 }
+
+                var videoMatch = songFolderFiles
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => x.name == "video" && supportedVideos.Contains(x.ext));
                 
-                if (File.Exists(songFolderPath + @"\video.webm"))
+                if (videoMatch != null)
                 {
-                    songLoader.songVideoClipPath = songFolderPath + @"\video.webm";
+                    songLoader.songVideoClipPath = videoMatch.path;
                     songVideoClipPathSet = true;
                 }
                 else

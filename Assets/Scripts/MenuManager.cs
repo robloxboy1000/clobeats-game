@@ -1,8 +1,6 @@
 using UnityEngine.UI;
 using UnityEngine;
 using System;
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Utilities;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using System.IO;
@@ -13,23 +11,22 @@ using System.Threading.Tasks;
 public class MenuManager : MonoBehaviour
 {
     public GameObject menuCanvas;
-    GameObject startPanel;
-    GameObject mainMenuPanel;
-    GameObject quickplayPanel;
-    GameObject exitgamePanel;
-    GameObject logoObject;
-    private IDisposable m_EventListener;
-    TMPro.TextMeshProUGUI hoverHelpText;
-    GameObject optionsPanel;
-    GameObject onlineIndicatorPanel;
+    public GameObject startPanel;
+    public GameObject mainMenuPanel;
+    public GameObject quickplayPanel;
+    public GameObject exitgamePanel;
+    public GameObject logoObject;
+    public TMPro.TextMeshProUGUI hoverHelpText;
+    public GameObject optionsPanel;
+    public GameObject onlineIndicatorPanel;
     string hoverHelpFilePath;
     public Dictionary<string, string> hoverHelpStrings;
     public Dictionary<string, GameObject> menuButtons;
     private GameObject UGUIListHelper;
 
-    Button playSongUIButton;
-    Button playSongOnlineUIButton;
-    GameObject songInfoPanel;
+    public Button playSongUIButton;
+    public Button playSongOnlineUIButton;
+    public GameObject songInfoPanel;
 
     public GameObject cbFeedPanel;
     public GameObject loadingPanel;
@@ -49,7 +46,6 @@ public class MenuManager : MonoBehaviour
     }
     async void Awake()
     {
-        m_EventListener = InputSystem.onAnyButtonPress.Call(OnButtonPressed);
         startPanel = menuCanvas.transform.Find("StartPanel").gameObject;
         mainMenuPanel = menuCanvas.transform.Find("MainMenuPanel").gameObject;
         quickplayPanel = menuCanvas.transform.Find("QuickPlayPanel").gameObject;
@@ -238,22 +234,30 @@ public class MenuManager : MonoBehaviour
         }
     }
 
-    void OnButtonPressed(InputControl button)
+    public async void Submit(int menuIndex = 0)
     {
-        var device = button.device;
-        if (device is Keyboard || device is Gamepad)
+        if (menuIndex == 1)
         {
-            Debug.Log(button.name + " pressed from MenuManager");
-            
-            if (button.name == "escape")
+            if (playSongUIButton.interactable)
             {
-                if (quickplayPanel.activeSelf)
+                LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
+                if (loadingManager != null)
                 {
-                    quickplayPanel.SetActive(false);
-                    mainMenuPanel.SetActive(true);
-                    logoObject.SetActive(true);
-                    accentColor = Color.blue;
-                    MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
+                    PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
+                    PlayerPrefs.Save();
+                    SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+                    GameManager gameManager = FindAnyObjectByType<GameManager>();
+                    if (songFolderLoader != null)
+                    {
+                        gameManager.currentSongID = currentPreviewingID - 1;
+                        songFolderLoader.songFolderPath = currentPreviewingSongPath;
+                        await songFolderLoader.Load();
+                    }
+                    else
+                    {
+                        Debug.LogError("SongFolderLoader not found in scene!");
+                    }
+                    MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
                     if (musicPlayer != null)
                     {
                         if (musicPlayer.previewAudioPlaying)
@@ -261,50 +265,63 @@ public class MenuManager : MonoBehaviour
                             musicPlayer.StopPreviewAudio();
                         }
                     }
-                }
-                else if (optionsPanel.activeSelf)
-                {
-                    optionsPanel.SetActive(false);
-                    mainMenuPanel.SetActive(true);
-                    logoObject.SetActive(true);
-                }
-                else if (mainMenuPanel.activeSelf)
-                {
-                    mainMenuPanel.SetActive(false);
-                    exitgamePanel.SetActive(true);
-                }
-                else if (exitgamePanel.activeSelf)
-                {
-                    #if UNITY_EDITOR
-                    UnityEditor.EditorApplication.isPlaying = false;
-                    #else
-                    UnityEngine.Application.Quit();
-                    #endif
+                    loadingManager.LoadScene("Gameplay");
                 }
             }
-            else
+        }
+        else
+        {
+            if (exitgamePanel.activeSelf)
             {
-                if (exitgamePanel.activeSelf)
+                exitgamePanel.SetActive(false);
+                mainMenuPanel.SetActive(true);
+            }
+            else if (startPanel.activeSelf)
+            {
+                startPanel.SetActive(false);
+                mainMenuPanel.SetActive(true);
+            }
+        }
+    }
+    public void Exit()
+    {
+        if (quickplayPanel.activeSelf)
+        {
+            quickplayPanel.SetActive(false);
+            mainMenuPanel.SetActive(true);
+            logoObject.SetActive(true);
+            accentColor = Color.blue;
+            MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
+            if (musicPlayer != null)
+            {
+                if (musicPlayer.previewAudioPlaying)
                 {
-                    exitgamePanel.SetActive(false);
-                    mainMenuPanel.SetActive(true);
-                }
-                else if (startPanel.activeSelf)
-                {
-                    startPanel.SetActive(false);
-                    mainMenuPanel.SetActive(true);
+                    musicPlayer.StopPreviewAudio();
                 }
             }
-            
+        }
+        else if (optionsPanel.activeSelf)
+        {
+            optionsPanel.SetActive(false);
+            mainMenuPanel.SetActive(true);
+            logoObject.SetActive(true);
+        }
+        else if (mainMenuPanel.activeSelf)
+        {
+            mainMenuPanel.SetActive(false);
+            exitgamePanel.SetActive(true);
+        }
+        else if (exitgamePanel.activeSelf)
+        {
+            #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+            #else
+            UnityEngine.Application.Quit();
+            #endif
         }
     }
     
 
-    void OnDisable()
-    {
-        if (m_EventListener != null)
-        m_EventListener.Dispose();
-    }
 
     public async Task<Dictionary<string, string>> ReadXmlToDictionary(string filePath)
     {

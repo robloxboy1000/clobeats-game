@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Octokit;
 using UnityEngine;
 
 // Generic pool manager keyed by prefab GameObject. Intended for notes and sustains.

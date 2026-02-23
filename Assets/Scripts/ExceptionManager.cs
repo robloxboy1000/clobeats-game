@@ -1,10 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class ExceptionManager : MonoBehaviour
 {
     public GameObject exceptionPanel; // UI panel to display exception messages
+    public TMPro.TMP_InputField debugLogField;
     void Awake()
     {
         Application.logMessageReceived += HandleLog;
@@ -18,6 +20,10 @@ public class ExceptionManager : MonoBehaviour
 
     void HandleLog(string logString, string stackTrace, LogType type)
     {
+        if (debugLogField != null)
+        {
+            debugLogField.text += $"[{Time.time}]: [{type}]: \"{logString}\"\r\n";
+        }
         if (type == LogType.Exception)
         {
             // This block will be executed whenever an unhandled exception occurs

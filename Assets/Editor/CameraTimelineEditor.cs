@@ -7,15 +7,29 @@ using System.Linq;
 public class CameraTimelineEditor : EditorWindow
 {
     [System.Serializable]
-    public class VecData { public float x; public float y; public float z; public Vector3 ToV3() => new Vector3(x, y, z); public static VecData FromV3(Vector3 v) => new VecData { x = v.x, y = v.y, z = v.z }; }
-    [System.Serializable]
-    public class PostProcData {}
+    public class VecData 
+    { 
+        public float x; 
+        public float y; 
+        public float z; 
+        public Vector3 ToV3() => new Vector3(x, y, z);
+        public static VecData FromV3(Vector3 v) => new VecData { x = v.x, y = v.y, z = v.z }; 
+    }
 
     [System.Serializable]
-    public class Keyframe { public float tick; public VecData position; public VecData rotation; public float focalLength; public PostProcData postProc;}
+    public class Keyframe
+    {
+        public float tick;
+        public VecData position;
+        public VecData rotation;
+        public float focalLength;
+    }
 
     [System.Serializable]
-    public class KeyframeCollection { public Keyframe[] keyframes; }
+    public class KeyframeCollection
+    {
+        public Keyframe[] keyframes;
+    }
 
     Camera targetCamera;
     List<Keyframe> frames = new List<Keyframe>();
@@ -34,9 +48,18 @@ public class CameraTimelineEditor : EditorWindow
     public int previewWidth = 640;
     public int previewHeight = 360;
     public bool livePreview = true;
+    
+    // Cue (pre-made clip) support
+    [System.Serializable]
+    public class ClipCue { public float tick; public string clipName; }
+    [System.Serializable]
+    public class ClipCueCollection { public ClipCue[] cues; }
+    public List<ClipCue> clipCues = new List<ClipCue>();
+    public GameObject clipTarget;
+    public string cueFilePath = "";
 
-    [MenuItem("Window/CloBeats/Venue/Camera Timeline Editor")]
-    public static void ShowWindow() { GetWindow<CameraTimelineEditor>("Camera Timeline"); }
+    [MenuItem("Window/CloBeats/Venue/Animation Timeline Editor")]
+    public static void ShowWindow() { GetWindow<CameraTimelineEditor>("Animation Timeline"); }
 
     void OnGUI()
     {
@@ -137,6 +160,33 @@ public class CameraTimelineEditor : EditorWindow
         else
         {
             EditorGUI.DrawRect(previewRect, Color.black);
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Clip Cues (pre-made animations)", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        clipTarget = (GameObject)EditorGUILayout.ObjectField("Clip Target", clipTarget, typeof(GameObject), true);
+        if (GUILayout.Button("Use Camera GameObject", GUILayout.Width(160))) { if (targetCamera != null) clipTarget = targetCamera.gameObject; }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        cueFilePath = EditorGUILayout.TextField("Cue Path", cueFilePath);
+        if (GUILayout.Button("Load Cues", GUILayout.Width(80))) LoadCuesFromDialog();
+        if (GUILayout.Button("Save Cues", GUILayout.Width(80))) SaveCuesToDialog();
+        EditorGUILayout.EndHorizontal();
+
+        if (GUILayout.Button("Add Cue at Scrub")) { clipCues.Add(new ClipCue { tick = scrubTick, clipName = "" }); }
+
+        // show cues list
+        for (int i = 0; i < clipCues.Count; i++)
+        {
+            var c = clipCues[i];
+            EditorGUILayout.BeginHorizontal("box");
+            c.tick = EditorGUILayout.FloatField("Tick", c.tick);
+            c.clipName = EditorGUILayout.TextField(c.clipName);
+            if (GUILayout.Button("Play", GUILayout.Width(50))) { PlayCueInEditor(c); }
+            if (GUILayout.Button("X", GUILayout.Width(24))) { clipCues.RemoveAt(i); EditorGUILayout.EndHorizontal(); continue; }
+            EditorGUILayout.EndHorizontal();
         }
 
         EditorGUILayout.EndVertical(); // end right column
@@ -298,6 +348,71 @@ public class CameraTimelineEditor : EditorWindow
 
         transientPreviewClip.SetData(data, 0);
         previewAudioSource.PlayOneShot(transientPreviewClip);
+    }
+
+    void LoadCuesFromDialog()
+    {
+        string path = EditorUtility.OpenFilePanel("Open Cue JSON", "", "json");
+        if (string.IsNullOrEmpty(path)) return;
+        cueFilePath = path;
+        LoadCues(path);
+    }
+
+    void SaveCuesToDialog()
+    {
+        var col = new ClipCueCollection { cues = clipCues.OrderBy(c => c.tick).ToArray() };
+        string json = JsonUtility.ToJson(col, true);
+        string path = EditorUtility.SaveFilePanel("Save Cues", "", "cues.json", "json");
+        if (string.IsNullOrEmpty(path)) return;
+        File.WriteAllText(path, json);
+        cueFilePath = path;
+        Debug.Log("Saved cues to " + path);
+    }
+
+    void LoadCues(string path)
+    {
+        if (!File.Exists(path)) return;
+        string json = File.ReadAllText(path);
+        try
+        {
+            var col = JsonUtility.FromJson<ClipCueCollection>(json);
+            clipCues = col != null && col.cues != null ? col.cues.ToList() : new List<ClipCue>();
+            Repaint();
+            Debug.Log("Loaded " + clipCues.Count + " cues from " + path);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError("Failed to load cues: " + ex.Message);
+        }
+    }
+
+    void PlayCueInEditor(ClipCue cue)
+    {
+        if (cue == null || string.IsNullOrEmpty(cue.clipName)) return;
+        if (clipTarget == null)
+        {
+            Debug.LogWarning("Clip target not set");
+            return;
+        }
+        var anim = clipTarget.GetComponent<Animation>();
+        if (anim == null)
+        {
+            anim = clipTarget.AddComponent<Animation>();
+            anim.playAutomatically = false;
+        }
+        AnimationClip clip = anim.GetClip(cue.clipName);
+        if (clip == null) clip = Resources.Load<AnimationClip>(cue.clipName);
+        if (clip != null)
+        {
+            if (anim.GetClip(cue.clipName) == null) anim.AddClip(clip, cue.clipName);
+            anim.Stop();
+            anim.Play(cue.clipName);
+            Debug.Log("Playing cue clip '" + cue.clipName + "'");
+        }
+        else
+        {
+            Debug.LogWarning("Clip '" + cue.clipName + "' not found on target or in Resources.");
+        }
     }
 
     void EnsurePreviewRT()

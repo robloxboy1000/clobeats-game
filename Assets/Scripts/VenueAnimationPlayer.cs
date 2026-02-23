@@ -41,11 +41,38 @@ public class VenueAnimationPlayer : MonoBehaviour
     // parsed and sorted keyframes
     List<Keyframe> parsedKeyframes = new List<Keyframe>();
 
+    public bool preMadeAnimMode = true;
+    [System.Serializable]
+    public class ClipCue
+    {
+        public float tick;
+        public string clipName;
+
+        // runtime
+        [System.NonSerialized]
+        public bool played = false;
+    }
+
+    [System.Serializable]
+    public class ClipCueCollection { public ClipCue[] cues; }
+
+    public List<ClipCue> clipCues = new List<ClipCue>();
+    public GameObject clipTarget;
+    public string cueFilePath;
+    float lastTick = 0f;
+
     void Start()
     {
         if (mainCamera == null) mainCamera = Camera.main;
         musicPlayer = FindAnyObjectByType<MusicPlayer>();
         SceneManager.sceneLoaded += OnSceneLoaded;
+        if (clipTarget == null && mainCamera != null) clipTarget = mainCamera.gameObject;
+        // try auto-load cues if a path was provided
+        if (!string.IsNullOrEmpty(cueFilePath))
+        {
+            string full = Path.GetFullPath(cueFilePath);
+            if (File.Exists(full)) LoadCues(full);
+        }
     }
 
     void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
@@ -117,17 +144,45 @@ public class VenueAnimationPlayer : MonoBehaviour
         Debug.LogError("VenueAnimationPlayer: Failed to parse keyframes. Make sure JSON uses the shape:\n{ \"keyframes\": [ { \"tick\": 0, \"position\": {\"x\":0,\"y\":0,\"z\":0}, \"rotation\": {\"x\":0,\"y\":0,\"z\":0} } ] }");
     }
 
-    async void Update()
+    public void LoadCues(string file)
+    {
+        if (!File.Exists(file))
+        {
+            Debug.LogError("VenueAnimationPlayer: cue file not found: " + file);
+            return;
+        }
+        string json = File.ReadAllText(file);
+        try
+        {
+            ClipCueCollection col = JsonUtility.FromJson<ClipCueCollection>(json);
+            if (col != null && col.cues != null)
+            {
+                clipCues = col.cues.ToList();
+                clipCues = clipCues.OrderBy(c => c.tick).ToList();
+                // reset runtime flags
+                foreach (var c in clipCues) c.played = false;
+                Debug.Log("VenueAnimationPlayer: loaded " + clipCues.Count + " clip cues from " + file);
+                return;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("VenueAnimationPlayer: cue parsing failed: " + ex.Message);
+        }
+
+        Debug.LogError("VenueAnimationPlayer: Failed to parse cues JSON. Expected { \"cues\": [ { \"tick\": 0, \"clipName\": \"name\" } ] }");
+    }
+
+    void Update()
     {
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        while (!mainCameraFound)
+        if (!mainCameraFound)
         {
             if (Camera.main != null)
             {
                 mainCamera = Camera.main;
                 mainCameraFound = true;
             }
-            await System.Threading.Tasks.Task.Delay(100);
         }
         if (musicPlayer != null)
         {
@@ -138,7 +193,28 @@ public class VenueAnimationPlayer : MonoBehaviour
             return;
         }
 
+        // detect rewind/seek backwards and reset played flags
+        if (currentTick < lastTick)
+        {
+            foreach (var c in clipCues) c.played = false;
+        }
+
         if (parsedKeyframes == null || parsedKeyframes.Count == 0) return;
+
+        if (preMadeAnimMode && clipCues != null && clipCues.Count > 0)
+        {
+            // play any cues that we've passed and haven't played yet
+            foreach (var cue in clipCues)
+            {
+                if (!cue.played && currentTick >= cue.tick)
+                {
+                    PlayClipCue(cue);
+                    cue.played = true;
+                }
+            }
+            lastTick = currentTick;
+            return;
+        }
 
         // before first keyframe
         if (currentTick <= parsedKeyframes[0].tick)
@@ -198,5 +274,46 @@ public class VenueAnimationPlayer : MonoBehaviour
         Quaternion r = k.rotation != null ? Quaternion.Euler(k.rotation.ToVector3()) : Quaternion.identity;
         mainCamera.transform.position = p;
         mainCamera.transform.rotation = r;
+    }
+
+    void PlayClipCue(ClipCue cue)
+    {
+        if (cue == null || string.IsNullOrEmpty(cue.clipName)) return;
+        if (clipTarget == null)
+        {
+            if (mainCamera != null) clipTarget = mainCamera.gameObject;
+            else return;
+        }
+
+        // use legacy Animation component for simplicity: play clip by name
+        var anim = clipTarget.GetComponent<Animation>();
+        if (anim == null)
+        {
+            anim = clipTarget.AddComponent<Animation>();
+            anim.playAutomatically = false;
+        }
+
+        // try to find clip on the Animation component
+        AnimationClip clip = anim.GetClip(cue.clipName);
+        if (clip == null)
+        {
+            // try to load from Resources (clip should be placed under a Resources folder)
+            clip = Resources.Load<AnimationClip>(cue.clipName);
+            if (clip != null)
+            {
+                anim.AddClip(clip, cue.clipName);
+            }
+        }
+
+        if (clip != null)
+        {
+            anim.Stop();
+            anim.Play(cue.clipName);
+            Debug.Log("VenueAnimationPlayer: Playing clip cue '" + cue.clipName + "' at tick " + cue.tick);
+        }
+        else
+        {
+            Debug.LogWarning("VenueAnimationPlayer: Clip '" + cue.clipName + "' not found on target and not in Resources.");
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -7,6 +8,7 @@ public class UIUpdater : MonoBehaviour
 {
     public TMPro.TMP_Text scoreText;
     public TMPro.TMP_Text comboText;
+    public TMPro.TMP_Text comboDotsText;
     public TMPro.TMP_Text notesHitText;
     public NewRockMeter rockMeterSlider;
     public GameObject loadingOverlay;
@@ -15,9 +17,11 @@ public class UIUpdater : MonoBehaviour
     public TMPro.TMP_Text currentTickText;
     public TMPro.TMP_Text currentEventText;
     private NoteSpawner noteSpawner;
+    private LaneInputManager lim;
 
     float savesscore = 0f;
     int savedcombo = 1;
+    int comboDotsCount = 0;
     int savednotesHit = 0;
     int rockMeter = 50;
     public float tempo = 120.000f;
@@ -34,15 +38,23 @@ public class UIUpdater : MonoBehaviour
     {
         scoreText.text = "0";
         comboText.text = "1x";
+        comboDotsText.text = "";
         notesHitText.text = "0";
         rockMeterSlider.value = rockMeter;
     }
     public void UpdateForNoteHit()
     {
-        UpdateScore();
-        UpdateCombo();
-        UpdateNotesHit();
-        UpdateRockMeter();
+        lim = FindAnyObjectByType<LaneInputManager>();
+        if (lim != null)
+        {
+            Debug.Log("Held lanes count: " + lim.GetHeldLanes());
+            UpdateScore();
+            UpdateCombo();
+            UpdateNotesHit();
+            UpdateRockMeter();
+            
+        }
+        
     }
     public void UpdateForNoteMiss()
     {
@@ -70,9 +82,11 @@ public class UIUpdater : MonoBehaviour
     }
     public void UpdateCombo()
     {
+
         if (savednotesHit % 10 == 0 && savednotesHit != 0)
         {
             savedcombo += 1; // Increase combo every 10 notes hit
+            comboDotsCount = 0;
         }
         
         if (savedcombo >= combolimit)
@@ -81,6 +95,8 @@ public class UIUpdater : MonoBehaviour
         }
         
         comboText.text = savedcombo.ToString() + "x";
+        comboDotsCount += 1;
+        comboDotsText.text = new string('.', comboDotsCount);
     }
     public void UpdateNotesHit()
     {
@@ -93,10 +109,23 @@ public class UIUpdater : MonoBehaviour
         {
             return;
         }
+        if (savednotesHit == 0)
+        {
+            return;
+        }
         else
         {
+            GameObject gp = GameObject.Find("GuitarPlayer");
+            if (gp != null)
+            {
+                Animation highwayAnim = gp.GetComponent<Animation>();
+                highwayAnim.Stop();
+                highwayAnim.Play("ComboLostShake");
+            }
             savedcombo = 1;
+            savednotesHit = 0;
             comboText.text = savedcombo.ToString() + "x";
+            notesHitText.text = savednotesHit.ToString();
         }
         
     }

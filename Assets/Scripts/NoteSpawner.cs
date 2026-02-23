@@ -12,6 +12,7 @@ using Melanchall.DryWetMidi.Core;
 
 public class NoteSpawner : MonoBehaviour
 {
+    public static NoteSpawner Instance;
     // strum
     public GameObject greenNotePrefab;
     public GameObject redNotePrefab;
@@ -179,10 +180,11 @@ public class NoteSpawner : MonoBehaviour
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         gameManager =  FindAnyObjectByType<GameManager>();
-        DontDestroyOnLoad(gameObject); // to cache notes for restarting
+        //DontDestroyOnLoad(gameObject); // to cache notes for restarting
     }
     async void Awake()
     {
+        if (Instance == null) Instance = this; else if (Instance != this) Destroy(gameObject);
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         desiredDifficultySingleThreaded = PlayerPrefs.GetString("SelectedDifficulty", "Expert");
@@ -195,13 +197,18 @@ public class NoteSpawner : MonoBehaviour
         }
         await Load();
     }
+
+
     
     private async Task Load()
     {
+        GameObject venue = GameObject.Find("3DVenue_Camera");
+        venue.SetActive(false);
         if (songLoader == null)
         {
             songLoader = FindAnyObjectByType<SongLoader>();
         }
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
         if (songLoader != null && songLoader.songDataSet)
         {
             await songLoader.LoadSongData((txtAsset, 
@@ -241,7 +248,7 @@ public class NoteSpawner : MonoBehaviour
             if (uiUpdater != null)
             {
                 Debug.Log("Song data loaded successfully.");
-                
+                venue.SetActive(true);
                 await System.Threading.Tasks.Task.Delay(500);
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)
@@ -544,27 +551,34 @@ public class NoteSpawner : MonoBehaviour
     }
 
     // Configure sustain prefab scale and position so its visual length matches the song duration
-    private void SetupSustain(GameObject sustainInstance, float startTick, int lengthTicks, float spacingFactor)
+    private void SetupSustain(GameObject sustainInstance, float startTick, int lengthTicks, float spacingFactor, Vector3 startPosition)
     {
         if (sustainInstance == null) return;
         float startSeconds = GetTimeInSecondsAtTick((int)startTick);
         float endSeconds = GetTimeInSecondsAtTick((int)(startTick + lengthTicks));
-        // Compute world Y positions for start/end using the same layout rules as notes
-        float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
-        float strikeY = GetStrikeLineY();
-        float startY = preSpawnLongPlane
-            ? strikeY + startingYPosition + startingYOffset + (startSeconds + spawnLeadSeconds) * spacingFactor
-            : strikeY + startingYPosition + startingYOffset + ((startSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
-        float endY = preSpawnLongPlane
-            ? strikeY + startingYPosition + startingYOffset + (endSeconds + spawnLeadSeconds) * spacingFactor
-            : strikeY + startingYPosition + startingYOffset + ((endSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
-        // Position the sustain so its head aligns at startY; the sustain visual component should
-        // handle scaling/length based on start/end seconds in Initialize.
-        sustainInstance.transform.position = new Vector3(sustainInstance.transform.position.x, sustainInstance.transform.position.y + startSeconds * spacingFactor, sustainInstance.transform.position.z);
-        // Ensure there is a Sustain component to manage visual updates
-        var sustainComp = sustainInstance.GetComponent<Sustain>();
-        if (sustainComp == null) sustainComp = sustainInstance.AddComponent<Sustain>();
-        sustainComp.Initialize(startSeconds, endSeconds, spacingFactor);
+        float lengthSeconds = Mathf.Max(0f, endSeconds - startSeconds);
+
+        // Desired world length along Z
+        float desiredWorldLength = lengthSeconds * spacingFactor;
+
+        // Determine a unit length of the prefab in world units (z size at current localScale)
+        float prefabUnitLength = 1f;
+        var rend = sustainInstance.GetComponentInChildren<Renderer>();
+        if (rend != null)
+        {
+            // bounds.size.z gives current world length; divide by localScale.z to get unit length
+            prefabUnitLength = rend.bounds.size.y / Mathf.Max(0.0001f, sustainInstance.transform.localScale.y);
+        }
+
+        // Compute required localScale.y to achieve desiredWorldLength
+        float newLocalY = prefabUnitLength > 0f ? desiredWorldLength / prefabUnitLength : desiredWorldLength;
+
+        Vector3 ls = sustainInstance.transform.localScale;
+        sustainInstance.transform.localScale = new Vector3(ls.x, Mathf.Max(0.001f, newLocalY), ls.z);
+
+        // Position the sustain so it starts at startPosition.z and extends forward by desiredWorldLength
+        float centerY = startPosition.y + (desiredWorldLength / 2f);
+        sustainInstance.transform.position = new Vector3(startPosition.x, centerY, startPosition.z);
     }
 
     private void AddObjectToGlobalMoveY(GameObject go)
@@ -672,7 +686,7 @@ public class NoteSpawner : MonoBehaviour
         if (noteIndex < 0 || noteIndex >= gameManager.currentSongNotes.Count) return;
         var n = gameManager.currentSongNotes.ElementAt(noteIndex);
         if (n == null) return;
-        Debug.Log($"Spawning note [{n.spawnTime}, {n.fret}, {n.length}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with spacing factor " + spacingFactor);
+        //Debug.Log($"Spawning note [{n.spawnTime}, {n.fret}, {n.length}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with spacing factor " + spacingFactor);
         int fret = n.fret;
         float strikeY = GetStrikeLineY();
         float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
@@ -722,7 +736,7 @@ public class NoteSpawner : MonoBehaviour
             if (sustainObj != null)
             {
                 sustainObj.transform.position = inst.transform.position;
-                SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor);
+                SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor, inst.transform.position);
                 sustainObj.SetActive(true);
             }
         }

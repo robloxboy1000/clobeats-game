@@ -19,7 +19,7 @@ public class ImprovedStrikeline : MonoBehaviour
     public GameObject yellowBase;
     public GameObject blueBase;
     public GameObject orangeBase;
-
+    int sustainIndex = 0;
     Dictionary<int, GameObject> activeSustainSparks;
 
     UIUpdater uiUpdater;
@@ -46,6 +46,8 @@ public class ImprovedStrikeline : MonoBehaviour
         {
             uiUpdater.UpdateForNoteMiss();
         }
+
+        
     }
 
     public void HitSustain(float xOffset = 0f)
@@ -145,6 +147,54 @@ public class ImprovedStrikeline : MonoBehaviour
                 }
             }
         }
+        else if (laneIndex == 7)
+        {
+            if (SLGreenTopPrefab != null)
+            {
+                Animation topAnim = SLGreenTopPrefab.GetComponent<Animation>();
+                if (topAnim != null)
+                {
+                    topAnim.Stop();
+                    topAnim.Play("TopHit0");
+                }
+            }
+            if (SLRedTopPrefab != null)
+            {
+                Animation topAnim = SLRedTopPrefab.GetComponent<Animation>();
+                if (topAnim != null)
+                {
+                    topAnim.Stop();
+                    topAnim.Play("TopHit1");
+                }
+            }
+            if (SLYellowTopPrefab != null)
+            {
+                Animation topAnim = SLYellowTopPrefab.GetComponent<Animation>();
+                if (topAnim != null)
+                {
+                    topAnim.Stop();
+                    topAnim.Play("TopHit2");
+                }
+            }
+            if (SLBlueTopPrefab != null)
+            {
+                Animation topAnim = SLBlueTopPrefab.GetComponent<Animation>();
+                if (topAnim != null)
+                {
+                    topAnim.Stop();
+                    topAnim.Play("TopHit3");
+                }
+            }
+            if (SLOrangeTopPrefab != null)
+            {
+                Animation topAnim = SLOrangeTopPrefab.GetComponent<Animation>();
+                if (topAnim != null)
+                {
+                    topAnim.Stop();
+                    topAnim.Play("TopHit4");
+                }
+            }
+        }
         else
         {
             Debug.LogWarning("Invalid fret lane index: " + laneIndex);
@@ -152,21 +202,22 @@ public class ImprovedStrikeline : MonoBehaviour
     }
     public void EnableSustainSparks(Vector3 fret)
     {
+        if (sustainSparksPrefab != null)
+        sustainIndex = (int)fret.x;
         try
         {
-            Quaternion rotation = Quaternion.Euler(90f, 0f, 0f);
-            activeSustainSparks.Add((int)fret.x, Instantiate(sustainSparksPrefab, fret, rotation));
+            Quaternion rotation = Quaternion.Euler(0f, 180f, 0f);
+            activeSustainSparks.Add(sustainIndex, Instantiate(sustainSparksPrefab, fret, rotation));
         }
         catch (System.Exception)
         {
-            Destroy(activeSustainSparks[(int)fret.x]);
-            activeSustainSparks.Remove((int)fret.x);
+            Destroy(activeSustainSparks[sustainIndex]);
+            activeSustainSparks.Remove(sustainIndex);
         }
-        
-        
     }
     public void DisableSustainSparks(int xOffset)
     {
+        if (sustainSparksPrefab != null)
         if (activeSustainSparks != null)
         {
             if (activeSustainSparks.ContainsKey(xOffset))

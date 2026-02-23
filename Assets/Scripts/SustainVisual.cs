@@ -11,11 +11,12 @@ public class SustainVisual : MonoBehaviour
     {
         this.laneIndex = laneIndex;
         float height = Mathf.Max(0.001f, duration * spacing);
-        transform.position = new Vector3(x, baseY + (height * 0.5f), transform.position.z);
+        transform.position = new Vector3(x, baseY + (height * 0.5f), transform.position.z + -0.05f);
         Vector3 s = transform.localScale;
         s.y = height;
         transform.localScale = s;
-        endTime = Time.time + duration;
+        var mp = FindAnyObjectByType<MusicPlayer>();
+        endTime = (float)mp.GetElapsedTimeDsp() + duration;
         gameObject.SetActive(true);
     }
 
@@ -27,7 +28,8 @@ public class SustainVisual : MonoBehaviour
 
     void Update()
     {
-        if (Time.time >= endTime)
+        var mp = FindAnyObjectByType<MusicPlayer>();
+        if ((float)mp.GetElapsedTimeDsp() >= endTime)
         {
             NotifyFinished();
         }

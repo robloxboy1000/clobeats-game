@@ -36,7 +36,7 @@ public class PlayerPrefsLoader : MonoBehaviour
         
 
     }
-    async void Awake()
+    void Awake()
     {
         pathInputField = gameObject.transform.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
         if (pathInputField != null)
@@ -194,9 +194,9 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
             if (indefiniteLoadingScreen != null)
             {
-                indefiniteLoadingScreen.SetActive(true);
+                indefiniteLoadingScreen.SetActive(false);
             }
-            await LoadWholeGame();
+            MessageBox.Instance.Show("Please re-map controls before continuing.");
         }
         else
         {
@@ -211,7 +211,14 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
         }
     }
-
+    public async void LoadGame()
+    {
+        if (indefiniteLoadingScreen != null)
+        {
+            indefiniteLoadingScreen.SetActive(true);
+        }
+        await LoadWholeGame();
+    }
     public async Task LoadWholeGame(float timeout = 600000)
     {
         Debug.Log("Loading game...");
@@ -222,15 +229,46 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             try
             {
-                string songFoldersPath = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
+                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                string songFoldersPath = documentsPath + "/CloBeats/songs";
                 if (songFoldersPath != string.Empty)
                 {
-                    string[] directories = Directory.GetDirectories(songFoldersPath);
-                    foreach (string dir in directories)
+                    if (!File.Exists(songFoldersPath))
                     {
-                        Debug.Log("Folders added: " + songItemNames.Count);
-                        songItemNames.Add(dir);
-                        await Task.Yield();
+                        Directory.CreateDirectory(songFoldersPath);
+                    }
+                    string[] directories = Directory.GetDirectories(songFoldersPath);
+                    string[] cachedSongsFile = File.ReadAllLines(documentsPath + "/CloBeats/cbfoldercache");
+                    if (cachedSongsFile != null)
+                    {
+                        if (directories == cachedSongsFile)
+                        {
+                            Debug.Log("Folders are equal to cache.");
+                            foreach (string dir in cachedSongsFile)
+                            {
+                                //Debug.Log("Cached folders added: " + songItemNames.Count);
+                                songItemNames.Add(dir);
+                                await Task.Yield();
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning("Folders are not equal to cache. Rebuilding...");
+                            using (StreamWriter streamWriter = new StreamWriter(documentsPath + "/CloBeats/cbfoldercache"))
+                            {
+                                foreach (string line in directories)
+                                {
+                                    streamWriter.WriteLine(line);
+                                }
+                                Debug.Log($"Cache rebuilded successfully to {documentsPath + "/CloBeats/cbfoldercache"}");
+                            }
+                            foreach (string dir in cachedSongsFile)
+                            {
+                                //Debug.Log("Cached folders added: " + songItemNames.Count);
+                                songItemNames.Add(dir);
+                                await Task.Yield();
+                            }
+                        }
                     }
                     GameManager gameManager = FindAnyObjectByType<GameManager>();
                     gameManager.songFolders = songItemNames;
@@ -267,10 +305,16 @@ public class PlayerPrefsLoader : MonoBehaviour
         Shader.WarmupAllShaders();
         ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
         shaderOven.shaders.WarmUp();
+        if (indefiniteLoadingScreen != null)
+        {
+            indefiniteLoadingScreen.SetActive(false);
+        }
         LoadingManager loader = FindFirstObjectByType<LoadingManager>();
         if (loader != null)
         {
             loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
+            await Task.Delay(6000);
+            loader.LoadScene("MainMenu", LoadSceneMode.Single, true);
         }
         else
         {

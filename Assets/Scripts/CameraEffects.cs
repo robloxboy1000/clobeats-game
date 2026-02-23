@@ -20,16 +20,15 @@ public class CameraEffects : MonoBehaviour
     }
 
     // Update is called once per frame
-    async void Update()
+    void Update()
     {
-        while (!mainCameraFound)
+        if (!mainCameraFound)
         {
             if (Camera.main != null)
             {
                 cameraToTweak = Camera.main;
                 mainCameraFound = true;
             }
-            await System.Threading.Tasks.Task.Delay(100);
         }
     }
     public void SetChromaticAberration(float intensity)

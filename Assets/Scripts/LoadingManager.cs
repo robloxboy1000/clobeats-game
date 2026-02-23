@@ -15,8 +15,11 @@ public class LoadingManager : MonoBehaviour
 
     void Start()
     {
-        invisibleColor = loadingImage.color;
-        invisibleColor.a = 0f;
+        if (loadingImage != null)
+        {
+            invisibleColor = loadingImage.color;
+            invisibleColor.a = 0f;
+        }
         if (loadingCanvas != null)
         {
             loadingCanvas.gameObject.SetActive(false); // Hide loading canvas initially
