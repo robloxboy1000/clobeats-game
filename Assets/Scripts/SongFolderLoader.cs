@@ -68,7 +68,7 @@ public class SongFolderLoader : MonoBehaviour
                 // Find a file named "song" with a supported extension and set the audio path
                 var songMatch = songFolderFiles
                     .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                    .FirstOrDefault(x => x.name == "song-mixed" && supportedFormats.Contains(x.ext));
+                    .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
 
                 if (songMatch != null)
                 {
@@ -76,9 +76,19 @@ public class SongFolderLoader : MonoBehaviour
                 }
 
 
+                List<string> supportedMidis = new List<string> { "mid", "midi" };
+                var midiMatch = songFolderFiles
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => supportedMidis.Contains(x.ext));
+
                 if (File.Exists(songFolderPath + @"\notes.chart"))
                 {
                     songLoader.chartFilePath = songFolderPath + @"\notes.chart";
+                }
+                else if (midiMatch != null)
+                {
+                    // use MIDI as chart source
+                    songLoader.chartFilePath = midiMatch.path;
                 }
                 if (File.Exists(songFolderPath + @"\venueAnim.json"))
                 {
@@ -214,7 +224,7 @@ public class SongFolderLoader : MonoBehaviour
 
                 UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
                 if (uiUpdater != null)
-                uiUpdater.UpdateSongInfo(songName, songArtist);
+                uiUpdater.UpdateSongInfo(songName, songArtist, songYear);
             }
             await Task.Yield();
         }

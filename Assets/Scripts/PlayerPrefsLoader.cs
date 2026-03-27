@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using System;
 using System.IO;
 using System.Threading;
+using System.Linq;
+using System.ComponentModel;
 
 public class PlayerPrefsLoader : MonoBehaviour
 {
@@ -219,81 +221,100 @@ public class PlayerPrefsLoader : MonoBehaviour
         }
         await LoadWholeGame();
     }
-    public async Task LoadWholeGame(float timeout = 600000)
+    public void RegenerateCacheFile()
+    {
+        Debug.Log("Regenerating cache");
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
+        string[] directories = Directory.GetDirectories(songFoldersPath);
+        int songCount = 0;
+        using (StreamWriter sw = new StreamWriter(documentsPath + @"\CloBeats\cbfoldercache"))
+        {
+            foreach (string dir in directories)
+            {
+                sw.WriteLine($"{songCount}={dir.GetHashCode()}={dir.Replace("/", @"\")}");
+                songCount++;
+            }
+        }
+        Debug.Log("Restart the game.");
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
+        UnityEngine.Application.Quit();
+    }
+    public void ListDirs()
+    {
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
+        string[] directories = Directory.GetDirectories(songFoldersPath);
+        string[] cachedSongsFile = File.ReadAllLines(documentsPath + @"\CloBeats\cbfoldercache");
+        foreach (string dir in directories)
+        {
+            Debug.Log("Directories: " + dir);
+        }
+        foreach (string dir in cachedSongsFile)
+        {
+            Debug.Log("Directories (cached): " + dir);
+        }
+    }
+    public async Task LoadWholeGame()
     {
         Debug.Log("Loading game...");
-
-        
-        
+        ListDirs();
         if (songItemNames.Count == 0)
         {
             try
             {
                 string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string songFoldersPath = documentsPath + "/CloBeats/songs";
+                string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
                 if (songFoldersPath != string.Empty)
                 {
+                    GameManager gameManager = FindAnyObjectByType<GameManager>();
                     if (!File.Exists(songFoldersPath))
                     {
                         Directory.CreateDirectory(songFoldersPath);
                     }
+                    gameManager.savePath = documentsPath + @"\CloBeats\save";
+                    if (!File.Exists(gameManager.savePath))
+                    {
+                        Directory.CreateDirectory(gameManager.savePath);
+                    }
                     string[] directories = Directory.GetDirectories(songFoldersPath);
-                    string[] cachedSongsFile = File.ReadAllLines(documentsPath + "/CloBeats/cbfoldercache");
+                    string[] cachedSongsFile = File.ReadAllLines(documentsPath + @"\CloBeats\cbfoldercache");
                     if (cachedSongsFile != null)
                     {
-                        if (directories == cachedSongsFile)
+                        foreach (string line in cachedSongsFile)
                         {
-                            Debug.Log("Folders are equal to cache.");
-                            foreach (string dir in cachedSongsFile)
+                            string[] hashandpath = line.Split('=', StringSplitOptions.None);
+                            int number = int.Parse(hashandpath[0]);
+                            int hash = int.Parse(hashandpath[1]);
+                            string path = hashandpath[2].Replace("/", @"\");
+                            string dir = directories[number];
+                            if (path == dir)
                             {
-                                //Debug.Log("Cached folders added: " + songItemNames.Count);
-                                songItemNames.Add(dir);
+                                Debug.Log(number + " '" + path + "' equals '" + dir + "'");
+                                gameManager.songFolders.Add(dir);
+                                await gameManager.CacheSingleSong(dir, hash, number);
                                 await Task.Yield();
                             }
-                        }
-                        else
-                        {
-                            Debug.LogWarning("Folders are not equal to cache. Rebuilding...");
-                            using (StreamWriter streamWriter = new StreamWriter(documentsPath + "/CloBeats/cbfoldercache"))
+                            else
                             {
-                                foreach (string line in directories)
-                                {
-                                    streamWriter.WriteLine(line);
-                                }
-                                Debug.Log($"Cache rebuilded successfully to {documentsPath + "/CloBeats/cbfoldercache"}");
+                                throw new Exception($"{number} '{path}' does not equal '{dir}'");
                             }
-                            foreach (string dir in cachedSongsFile)
-                            {
-                                //Debug.Log("Cached folders added: " + songItemNames.Count);
-                                songItemNames.Add(dir);
-                                await Task.Yield();
-                            }
+                            
                         }
                     }
-                    GameManager gameManager = FindAnyObjectByType<GameManager>();
-                    gameManager.songFolders = songItemNames;
-                    using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeout)))
-                    {
-                        try
-                        {
-                            await gameManager.CacheSongs(true);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw new Exception("Parsing timed out after " + timeout + " milliseconds.");
-                        }
-                    }
-                    
                 }
                 else
                 {
-                    Debug.LogError("PlayerPrefs 'SongsFolderPath' is empty");
+                    
                 }
                 
             }
             catch (Exception ex)
             {
-                Debug.LogError("Song listing failed: " + ex.Message);
+                Debug.LogError("Song listing failed: " + ex);
+                RegenerateCacheFile();
             }
         }
         else

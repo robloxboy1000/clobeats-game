@@ -21,7 +21,6 @@ public class UGUIMenuList : MonoBehaviour
     List<GameObject> instantiatedListItems = new List<GameObject>();
 
     public Button regenerateItemsButton;
-    public int itemCount = 0;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -33,7 +32,13 @@ public class UGUIMenuList : MonoBehaviour
         GameManager gameManager = FindAnyObjectByType<GameManager>();
         await ClearItemObjects();
         itemNames.Clear();
-        await GenerateList(gameManager.songFolders);
+        // cachedEntries is a Dictionary<int, SongEntryInfo> — iterate values to list entries
+        foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
+        {
+            await GenerateList(entry.Value);
+        }
+        SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+        songFolderLoader.ClearValues();
     }
 
     void Awake()
@@ -45,7 +50,12 @@ public class UGUIMenuList : MonoBehaviour
                 GameManager gameManager = FindAnyObjectByType<GameManager>();
                 await ClearItemObjects();
                 itemNames.Clear();
-                await GenerateList(gameManager.songFolders);
+                foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
+                {
+                    await GenerateList(entry.Value);
+                }
+                SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+                songFolderLoader.ClearValues();
             });
         }
     }
@@ -62,15 +72,16 @@ public class UGUIMenuList : MonoBehaviour
         {
             try
             {
-                foreach (GameObject obj in instantiatedListItems)
+                // Iterate over a copy to allow safe removal
+                foreach (GameObject obj in instantiatedListItems.ToList())
                 {
                     if (obj != null)
                     {
                         Destroy(obj);
-                        instantiatedListItems.Remove(obj);
-                        await Task.Yield();
                     }
+                    await Task.Yield();
                 }
+                instantiatedListItems.Clear();
             }
             catch
             {
@@ -78,78 +89,63 @@ public class UGUIMenuList : MonoBehaviour
             }
         }
     }
-    async Task GenerateList(List<string> items)
+    async Task GenerateList(GameManager.SongEntryInfo item)
     {
         MenuManager menuManager = FindAnyObjectByType<MenuManager>();
         // Instantiate a new item for each entry in the data list
-        foreach (string itemName in items)
+        if (Path.GetFileName(item.songPath).StartsWith("sub_")) return;
+        var songFolderFiles = await Task.Run(() => Directory.GetFiles(item.songPath));
+        List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
+        var songMatch = songFolderFiles
+            .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+            .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
+        if (songMatch != null)
+        if (!File.Exists(songMatch.path)) return;
+            
+        // Instantiate the prefab inside the specified container
+        GameObject newItem = Instantiate(listItemPrefab, contentContainer);
+        instantiatedListItems.Add(newItem);
+            
+        // Find the text component within the new item and set its value
+        // (You might need a dedicated script for complex prefabs)
+        GameObject songArtistTextObject = newItem.transform.Find("SongArtistText").gameObject;
+        GameObject songTitleTextObject = newItem.transform.Find("SongTitleText").gameObject;
+
+        TMPro.TextMeshProUGUI songArtistText = songArtistTextObject.GetComponent<TMPro.TextMeshProUGUI>();
+        TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
+
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+
+        GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(item.cachedSongID);
+        if (songEntry != null)
         {
-            Debug.Log("Item name: " + itemName);
-            Debug.Log("Directory name: " + Path.GetFileName(itemName));
-            if (Path.GetFileName(itemName).StartsWith("sub_")) continue;
-            var songFolderFiles = await Task.Run(() => Directory.GetFiles(itemName));
-            List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
-            var songMatch = songFolderFiles
-                .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                .FirstOrDefault(x => x.name == "song-mixed" && supportedFormats.Contains(x.ext));
-            if (songMatch != null)
-            if (!File.Exists(songMatch.path)) continue;
-            
-            // Instantiate the prefab inside the specified container
-            GameObject newItem = Instantiate(listItemPrefab, contentContainer);
-            instantiatedListItems.Add(newItem);
-            itemCount++;
-            // Find the text component within the new item and set its value
-            // (You might need a dedicated script for complex prefabs)
-            GameObject songArtistTextObject = newItem.transform.Find("SongArtistText").gameObject;
-            GameObject songTitleTextObject = newItem.transform.Find("SongTitleText").gameObject;
-
-            TMPro.TextMeshProUGUI songArtistText = songArtistTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-            TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-
-            GameManager gameManager = FindAnyObjectByType<GameManager>();
-
-            GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(itemCount - 1);
-            if (songEntry != null)
+            if (songArtistText != null)
             {
-                if (songArtistText != null)
-                {
-                    songArtistText.text = "(" + itemCount + ") " + songEntry.songArtist;
-                }
-                if (songTitleText != null)
-                {
-                    songTitleText.text = songEntry.songTitle;
-                }
+                songArtistText.text = "(" + songEntry.songNumber + ") " + songEntry.songArtist;
             }
-            
-            
-            Button button = newItem.GetComponent<Button>();
-            if (button != null)
+            if (songTitleText != null)
             {
-                button.name = itemCount.ToString();
-                button.onClick.AddListener(async () => await OnItemClicked(itemName, int.Parse(button.name)));
+                songTitleText.text = songEntry.songTitle;
             }
-
-            
-            if (menuManager != null)
-            {
-                menuManager.loadingPanel.SetActive(true);
-            }
-            await Task.Yield();
         }
-        
-        if (menuManager != null)
+  
+        Button button = newItem.GetComponent<Button>();
+        if (button != null)
         {
-            menuManager.loadingPanel.SetActive(false);
-            SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-            songFolderLoader.ClearValues();
-        }
+            button.name = item.cachedSongID.ToString();
+            button.onClick.AddListener(async () => 
+            { 
+                await OnItemClicked(item.songPath, int.Parse(button.name), int.Parse(EventSystem.current.currentSelectedGameObject.name)); 
+                button.gameObject.transform.Find("highlight").gameObject.SetActive(true);
+            });
+        } 
+        await Task.Yield();
     }
 
     
-    async Task OnItemClicked(string name, int id)
+    async Task OnItemClicked(string name, int id, int lastID)
     {
-        Debug.Log("Clicked on: " + name);
+        Debug.Log($"Clicked on: {name}, {id}, {lastID}");
         GameObject songInfoPanel = rootTransform.Find("SongInfoPanel").gameObject;
         if (songInfoPanel != null)
         {
@@ -162,23 +158,30 @@ public class UGUIMenuList : MonoBehaviour
             GameManager gameManager = FindAnyObjectByType<GameManager>();
             try
             {
-                Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(name + @"\album.jpg");
-                if (loadedTexture != null)
+                string[] detectedImages = Directory.GetFiles(name);
+                List<string> supportedImages = new List<string> { "jpg","jpeg","png","dds" };
+                var imageMatch = detectedImages
+                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+                    .FirstOrDefault(x => supportedImages.Contains(x.ext));
+                if (imageMatch != null)
                 {
-                    albumTexture.texture = loadedTexture;
+                    Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(imageMatch.path);
+                    if (loadedTexture != null)
+                    {
+                        albumTexture.texture = loadedTexture;
+                    }
+                    else
+                    {
+                        albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
+                    }
                 }
-                else
-                {
-                    albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
-                }
-                
             }
             catch (Exception ex)
             {
                 Debug.LogError("Fallback to placeholder album because: " + ex.Message);
                 albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
             }
-            GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(id - 1);
+            GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(id);
             if (songEntry != null)
             {
                 if (name != songEntry.songPath) return;
@@ -189,7 +192,7 @@ public class UGUIMenuList : MonoBehaviour
                 List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
                 var songMatch = songFolderFiles
                     .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                    .FirstOrDefault(x => x.name == "song-mixed" && supportedFormats.Contains(x.ext));
+                    .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
 
                 MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
                 if (musicPlayer != null)
@@ -197,10 +200,11 @@ public class UGUIMenuList : MonoBehaviour
                     if (musicPlayer.previewAudioPlaying)
                     {
                         musicPlayer.StopPreviewAudio();
+                        await Task.Delay(1000);
                         if (songMatch != null)
                         if (File.Exists(songMatch.path))
                         {
-                            await musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime);
+                            StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
                         }
                     }
                     else
@@ -208,13 +212,11 @@ public class UGUIMenuList : MonoBehaviour
                         if (songMatch != null)
                         if (File.Exists(songMatch.path))
                         {
-                            await musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime);
+                            StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
                         }
                     }
                 }
             }
-            
-
             MenuManager menuManager = FindAnyObjectByType<MenuManager>();
             if (menuManager != null)
             {

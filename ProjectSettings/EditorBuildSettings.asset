@@ -12,7 +12,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Gameplay.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
-    path: Assets/Scenes/3DVenue.unity
+    path: Assets/Scenes/v_PaddedRoom_JT.unity
     guid: 4b03177ffa84cfe4a986c84fd547bc7f
   - enabled: 1
     path: Assets/Scenes/ScoreScreen.unity
@@ -37,4 +37,3 @@ EditorBuildSettings:
     com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 3dbf434c4d599db4d9435deca71f60e1, type: 2}
     com.unity.input.settings: {fileID: 11400000, guid: ef1e7338b09c64348b958be186dee0c0, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 0228af52115f055429396a9525c66b32, type: 3}
-  m_UseUCBPForAssetBundles: 0

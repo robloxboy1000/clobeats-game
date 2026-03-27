@@ -4,8 +4,8 @@ using System.Linq;
 
 public class AudioLevelMeter : MonoBehaviour
 {
-    public int audioLevel; // This float will hold the current audio level (0 to 1)
-    public int unclampedAudioLevel;
+    public float audioLevel; // This float will hold the current audio level (0 to 1)
+    public short unclampedAudioLevel;
 
 
 
@@ -21,7 +21,7 @@ public class AudioLevelMeter : MonoBehaviour
         try
         {
             MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            unclampedAudioLevel = musicPlayer.GetSongAudioLevel(); // 0 to 32768
+            unclampedAudioLevel = (short)musicPlayer.GetSongAudioLevel(); // 0 to 32768
             
         }
         catch (Exception ex)

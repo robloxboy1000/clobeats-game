@@ -47,7 +47,7 @@ public class Sustain : MonoBehaviour
         var indicator = GetComponent<SustainedNote>();
         if (indicator != null)
         {
-            indicator.SetDuration(endSeconds - startSeconds);
+            indicator.SetDuration(startSeconds + endSeconds);
         }
 
         // Set initial visual according to startSeconds (no consumption yet)

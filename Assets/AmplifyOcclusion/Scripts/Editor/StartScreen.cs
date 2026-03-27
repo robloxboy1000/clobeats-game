@@ -31,8 +31,8 @@ namespace AmplifyOcclusion
 		private static readonly string IconGUID = "13ffadb74e0cf6248ac0430224ad2090";
 		private static readonly string BannerGUID = "a4949af6361c47942902cebcc0089340";
 
-		public static readonly string BannerInfoURL = "http://amplify.pt/Banner/AOInfo.json";
-		public static readonly string PackageRefURL = "http://amplify.pt/Banner/PackageRef.json";
+		public static readonly string BannerInfoURL = "https://amplify.pt/Banner/AOInfo.json";
+		public static readonly string PackageRefURL = "https://amplify.pt/Banner/PackageRef.json";
 
 		private static readonly string WikiURL = "http://wiki.amplify.pt/index.php?title=Unity_Products:Amplify_Occlusion";
 

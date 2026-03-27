@@ -5,7 +5,7 @@ using UnityEngine;
 public class SustainedNote : MonoBehaviour
 {
     [Tooltip("Duration of the sustain in seconds (from the moment the note is hit)")]
-    public float durationSeconds = 1.0f;
+    public float durationSeconds = 0;
     // Set the duration of the sustain
     public void SetDuration(float duration)
     {

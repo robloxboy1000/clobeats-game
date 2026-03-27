@@ -94,7 +94,7 @@ public class OldInputManager : MonoBehaviour
         }
         else if (inMainMenu)
         {
-            Debug.Log("In MainMenu");
+            //Debug.Log("In MainMenu");
             MenuManager menuManager = FindAnyObjectByType<MenuManager>();
             if (menuManager != null)
             {
@@ -148,6 +148,7 @@ public class OldInputManager : MonoBehaviour
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
         if (isPaused)
         {
+
             if (musicPlayer != null)
             {
                 musicPlayer.resumeAudio();
@@ -156,6 +157,11 @@ public class OldInputManager : MonoBehaviour
             if (pauseMenu != null)
             {
                 pauseMenu.SetActive(false);
+            }
+            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+            if (strikeline != null)
+            {
+                strikeline.ResetAnims();
             }
             isPaused = false;
         }
@@ -169,6 +175,11 @@ public class OldInputManager : MonoBehaviour
             if (pauseMenu != null)
             {
                 pauseMenu.SetActive(true);
+            }
+            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+            if (strikeline != null)
+            {
+                strikeline.ResetAnims();
             }
             isPaused = true;
         }

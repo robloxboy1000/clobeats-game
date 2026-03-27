@@ -4,7 +4,13 @@ using UnityEngine;
 
 public class ImprovedStrikeline : MonoBehaviour
 {
-    public GameObject flamePrefab;
+    public GameObject greenFlamePrefab;
+    public GameObject redFlamePrefab;
+    public GameObject yellowFlamePrefab;
+    public GameObject blueFlamePrefab;
+    public GameObject orangeFlamePrefab;
+    public GameObject purpleFlamePrefab;
+    
     public GameObject SustainFlamePrefab;
     public GameObject sustainSparksPrefab;
 
@@ -19,7 +25,6 @@ public class ImprovedStrikeline : MonoBehaviour
     public GameObject yellowBase;
     public GameObject blueBase;
     public GameObject orangeBase;
-    int sustainIndex = 0;
     Dictionary<int, GameObject> activeSustainSparks;
 
     UIUpdater uiUpdater;
@@ -33,7 +38,7 @@ public class ImprovedStrikeline : MonoBehaviour
     public void HitNote(float xOffset = 0f)
     {
         Vector3 flamePosition = new Vector3(xOffset, gameObject.transform.position.y, gameObject.transform.position.z);
-        StartCoroutine(NoteFlame(flamePosition, 0.2f));
+        StartCoroutine(NoteFlame(flamePosition, 0.5f));
         if (uiUpdater != null)
         {
             uiUpdater.UpdateForNoteHit();
@@ -53,25 +58,105 @@ public class ImprovedStrikeline : MonoBehaviour
     public void HitSustain(float xOffset = 0f)
     {
         Vector3 flamePosition = new Vector3(xOffset, gameObject.transform.position.y, gameObject.transform.position.z);
-        StartCoroutine(SustainFlame(flamePosition, 0.2f));
+        StartCoroutine(SustainFlame(flamePosition, 0.5f));
         EnableSustainSparks(flamePosition);
     }
 
     // co-routines
-    public IEnumerator NoteFlame(Vector3 fret, float duration = 0.1f)
+    public IEnumerator NoteFlame(Vector3 fret, float duration = 0.5f)
     {
-        if (flamePrefab != null)
+        if (fret.x == -2)
         {
-            GameObject flame = Instantiate(flamePrefab, fret, Quaternion.identity);
-            yield return new WaitForSeconds(duration);
-            Destroy(flame);
+            if (greenFlamePrefab != null)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(greenFlamePrefab, fret, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        else if (fret.x == -1)
+        {
+            if (redFlamePrefab != null)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(redFlamePrefab, fret, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        else if (fret.x == 0)
+        {
+            if (yellowFlamePrefab != null)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(yellowFlamePrefab, fret, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        else if (fret.x == 1)
+        {
+            if (blueFlamePrefab != null)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(blueFlamePrefab, fret, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        else if (fret.x == 2)
+        {
+            if (orangeFlamePrefab != null)
+            {
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(orangeFlamePrefab, fret, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        else if (fret.x == 7)
+        {
+            if (purpleFlamePrefab != null)
+            {
+                Vector3 openPos = new Vector3(0, 0, 0);
+                Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
+                GameObject flame = Instantiate(purpleFlamePrefab, openPos, rotation);
+                yield return new WaitForSeconds(duration);
+                Destroy(flame);
+            }
+            else
+            {
+                yield return null;
+            }
         }
         else
         {
-            yield return null;
+            Debug.LogWarning("invalid fret index: " + fret.x);
         }
+        
     }
-    public IEnumerator SustainFlame(Vector3 fret, float duration = 0.2f)
+    public IEnumerator SustainFlame(Vector3 fret, float duration = 0.5f)
     {
         if (SustainFlamePrefab != null)
         {
@@ -82,6 +167,83 @@ public class ImprovedStrikeline : MonoBehaviour
         else
         {
             yield return null;
+        }
+    }
+
+    public void ResetAnims()
+    {
+        GameObject gp = GameObject.Find("GuitarPlayer");
+        if (gp != null)
+        {
+            gp.transform.position = new Vector3(0,0,0);
+        }
+        transform.position = new Vector3(0,0,0);
+        for (int i = 0; i == 4; i++)
+        {
+            if (i == 0)
+            {
+                if (SLGreenTopPrefab != null)
+                {
+                    Animation topAnim = SLGreenTopPrefab.GetComponent<Animation>();
+                    if (topAnim != null)
+                    {
+                        topAnim.Stop();
+                    }
+                    SLGreenTopPrefab.transform.position = new Vector3(-2, 0, 0);
+                }
+            }
+            else if (i == 1)
+            {
+                if (SLRedTopPrefab != null)
+                {
+                    Animation topAnim = SLRedTopPrefab.GetComponent<Animation>();
+                    if (topAnim != null)
+                    {
+                        topAnim.Stop();
+                    }
+                    SLRedTopPrefab.transform.position = new Vector3(-1, 0, 0);
+                }
+            }
+            else if (i == 2)
+            {
+                if (SLYellowTopPrefab != null)
+                {
+                    Animation topAnim = SLYellowTopPrefab.GetComponent<Animation>();
+                    if (topAnim != null)
+                    {
+                        topAnim.Stop();
+                    }
+                    SLYellowTopPrefab.transform.position = new Vector3(0, 0, 0);
+                }
+            }
+            else if (i == 3)
+            {
+                if (SLBlueTopPrefab != null)
+                {
+                    Animation topAnim = SLBlueTopPrefab.GetComponent<Animation>();
+                    if (topAnim != null)
+                    {
+                        topAnim.Stop();
+                    }
+                    SLBlueTopPrefab.transform.position = new Vector3(1, 0, 0);
+                }
+            }
+            else if (i == 4)
+            {
+                if (SLOrangeTopPrefab != null)
+                {
+                    Animation topAnim = SLOrangeTopPrefab.GetComponent<Animation>();
+                    if (topAnim != null)
+                    {
+                        topAnim.Stop();
+                    }
+                    SLOrangeTopPrefab.transform.position = new Vector3(2, 0, 0);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("Invalid fret lane index: " + i);
+            }
         }
     }
 
@@ -203,16 +365,20 @@ public class ImprovedStrikeline : MonoBehaviour
     public void EnableSustainSparks(Vector3 fret)
     {
         if (sustainSparksPrefab != null)
-        sustainIndex = (int)fret.x;
+
         try
         {
             Quaternion rotation = Quaternion.Euler(0f, 180f, 0f);
-            activeSustainSparks.Add(sustainIndex, Instantiate(sustainSparksPrefab, fret, rotation));
+            activeSustainSparks.Add((int)fret.x, Instantiate(sustainSparksPrefab, fret, rotation));
         }
         catch (System.Exception)
         {
-            Destroy(activeSustainSparks[sustainIndex]);
-            activeSustainSparks.Remove(sustainIndex);
+            if (activeSustainSparks.TryGetValue((int)fret.x, out GameObject spark))
+            {
+                Destroy(spark);
+                activeSustainSparks.Remove((int)fret.x);
+            }
+            
         }
     }
     public void DisableSustainSparks(int xOffset)
@@ -220,9 +386,9 @@ public class ImprovedStrikeline : MonoBehaviour
         if (sustainSparksPrefab != null)
         if (activeSustainSparks != null)
         {
-            if (activeSustainSparks.ContainsKey(xOffset))
+            if (activeSustainSparks.TryGetValue(xOffset, out GameObject spark))
             {
-                Destroy(activeSustainSparks[xOffset]);
+                Destroy(spark);
                 activeSustainSparks.Remove(xOffset);
             }
         }

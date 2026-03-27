@@ -47,12 +47,10 @@ public class UIUpdater : MonoBehaviour
         lim = FindAnyObjectByType<LaneInputManager>();
         if (lim != null)
         {
-            Debug.Log("Held lanes count: " + lim.GetHeldLanes());
             UpdateScore();
             UpdateCombo();
             UpdateNotesHit();
             UpdateRockMeter();
-            
         }
         
     }
@@ -73,16 +71,25 @@ public class UIUpdater : MonoBehaviour
     public void UpdateScore()
     {
         savesscore += 50f * savedcombo;
+        Scoring scoring = FindAnyObjectByType<Scoring>();
+        if (scoring != null)
+        {
+            scoring.currentScore += 50 * savedcombo;
+        }
         scoreText.text = savesscore.ToString("F0");
     }
     public void UpdateScoreSustain(float amount)
     {
         savesscore += amount;
+        Scoring scoring = FindAnyObjectByType<Scoring>();
+        if (scoring != null)
+        {
+            scoring.currentScore += (int)amount;
+        }
         scoreText.text = savesscore.ToString("F0");
     }
     public void UpdateCombo()
     {
-
         if (savednotesHit % 10 == 0 && savednotesHit != 0)
         {
             savedcombo += 1; // Increase combo every 10 notes hit
@@ -92,19 +99,51 @@ public class UIUpdater : MonoBehaviour
         if (savedcombo >= combolimit)
         {
             savedcombo = combolimit; // Limit combo to 4x
+            comboDotsCount = 10;
         }
         
         comboText.text = savedcombo.ToString() + "x";
         comboDotsCount += 1;
         comboDotsText.text = new string('.', comboDotsCount);
+
+        if (savedcombo == 2)
+        {
+            comboText.color = new Color(1f, 0.5f, 0f);
+            comboDotsText.color = new Color(1f, 0.5f, 0f);
+        }
+        else if (savedcombo == 3)
+        {
+            comboText.color = Color.green;
+            comboDotsText.color = Color.green;
+        }
+        else if (savedcombo == 4)
+        {
+            comboText.color = new Color(1f, 0f, 1f);
+            comboDotsText.color = new Color(1f, 0f, 1f);
+        }
+        else
+        {
+            comboText.color = Color.white;
+            comboDotsText.color = Color.white;
+        }
     }
     public void UpdateNotesHit()
     {
         savednotesHit += 1;
+        Scoring scoring = FindAnyObjectByType<Scoring>();
+        if (scoring != null)
+        {
+            scoring.currentNotesHit += 1;
+        }
         notesHitText.text = savednotesHit.ToString();
     }
     public void ResetCombo()
     {
+        Scoring scoring = FindAnyObjectByType<Scoring>();
+        if (scoring != null)
+        {
+            scoring.currentNotesMissed += 1;
+        }
         if (savedcombo == 1)
         {
             return;
@@ -116,6 +155,8 @@ public class UIUpdater : MonoBehaviour
         else
         {
             GameObject gp = GameObject.Find("GuitarPlayer");
+            SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
+            sFXPlayer.PlayComboLostClip();
             if (gp != null)
             {
                 Animation highwayAnim = gp.GetComponent<Animation>();
@@ -127,7 +168,6 @@ public class UIUpdater : MonoBehaviour
             comboText.text = savedcombo.ToString() + "x";
             notesHitText.text = savednotesHit.ToString();
         }
-        
     }
     public void DecreaseRockMeter()
     {
@@ -135,10 +175,10 @@ public class UIUpdater : MonoBehaviour
         rockMeterSlider.value = rockMeter;
     }
     
-    public void UpdateSongInfo(string title, string artist)
+    public void UpdateSongInfo(string title, string artist, int year)
     {
         songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().text = title;
-        songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().text = "by " + artist;
+        songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().text = "by " + artist + ", " + year.ToString();
     }
     public void UpdateBPM(double bpm)
     {
@@ -157,7 +197,7 @@ public class UIUpdater : MonoBehaviour
     public async Task UpdateCurrentEvent(string value)
     {
         currentEventText.text = $"GlobalEvent: {value}";
-        //Debug.Log("Current global event: " + value);
+        Debug.Log("Current MIDI text event: " + value);
         await Task.Yield();
     }
 

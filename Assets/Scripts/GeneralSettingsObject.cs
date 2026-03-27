@@ -5,6 +5,7 @@ using System.Net.Http;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using TMPro;
 
 public class GeneralSettingsObject : MonoBehaviour
 {
@@ -14,7 +15,7 @@ public class GeneralSettingsObject : MonoBehaviour
     public string serverAddress = "clobeats.pixlplaya5.xyz:8090";
 
     //TMPro.TMP_InputField songsFolderPathInputField;
-    TMPro.TMP_Dropdown songDifficultyDropdown;
+    TMPro.TMP_InputField songDifficultyDropdown;
     TMPro.TMP_InputField usernameInputField;
     TMPro.TMP_InputField serverAddressInputField;
     Slider hpSlider;
@@ -27,11 +28,12 @@ public class GeneralSettingsObject : MonoBehaviour
 
     Button findServerButton;
     Button saveSettingsButton;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         songsFolderPath = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
-        songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty", "Easy");
+        songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty");
         username = PlayerPrefs.GetString("Username", string.Empty);
         serverAddress = PlayerPrefs.GetString("ServerAddress", string.Empty);
 
@@ -40,8 +42,8 @@ public class GeneralSettingsObject : MonoBehaviour
         //gameObject.GetComponent<TMPro.TMP_InputField>();
 
         songDifficultyDropdown = transform.Find("SongDifficultyObject").
-        gameObject.transform.Find("DifficultyDropdownOptions").
-        gameObject.GetComponent<TMPro.TMP_Dropdown>();
+        gameObject.transform.Find("DifficultyInputField").
+        gameObject.GetComponent<TMPro.TMP_InputField>();
 
         usernameInputField = transform.Find("UsernameObject").
         gameObject.transform.Find("UsernameInputField").
@@ -193,20 +195,12 @@ public class GeneralSettingsObject : MonoBehaviour
         }
         if (songDifficultyDropdown != null)
         {
-            int savedDifficulty = PlayerPrefs.GetString("SelectedDifficulty") switch
-            {
-                "Easy" => 0,
-                "Medium" => 1,
-                "Hard" => 2,
-                "Expert" => 3,
-                _ => 0,
-            };
-            if (savedDifficulty >= 0 && savedDifficulty < songDifficultyDropdown.options.Count)
-            {
-                songDifficultyDropdown.value = savedDifficulty;
-                songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty"); 
-                PlayerPrefs.SetString("SelectedDifficulty", songDifficultyString);
-            }
+            songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty");
+            songDifficultyDropdown.onValueChanged.AddListener(SDD_OnValueChanged);
         }
+    }
+    void SDD_OnValueChanged(string value)
+    {
+        PlayerPrefs.SetString("SelectedDifficulty", value);
     }
 }

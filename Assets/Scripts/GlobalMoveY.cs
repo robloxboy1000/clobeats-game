@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Experimental.GlobalIllumination;
 
 public class GlobalMoveY : MonoBehaviour
 {
@@ -14,6 +15,7 @@ public class GlobalMoveY : MonoBehaviour
     MusicPlayer mp;
     NoteDeletor nd;
     NoteSpawner ns;
+    LaneInputManager lim;
     float cachedSpeed;
     float prefsPollInterval = 0.5f; // seconds between PlayerPrefs polls
     float lastPrefsCheckTime = 0f;
@@ -26,6 +28,7 @@ public class GlobalMoveY : MonoBehaviour
         mp = FindAnyObjectByType<MusicPlayer>();
         nd = FindAnyObjectByType<NoteDeletor>();
         ns = FindAnyObjectByType<NoteSpawner>();
+        lim = FindAnyObjectByType<LaneInputManager>();
     }
 
     void Awake()
@@ -61,13 +64,14 @@ public class GlobalMoveY : MonoBehaviour
         if (mp == null) mp = FindAnyObjectByType<MusicPlayer>();
         if (nd == null) nd = FindAnyObjectByType<NoteDeletor>();
         if (ns == null) ns = FindAnyObjectByType<NoteSpawner>();
+        if (lim == null) lim = FindAnyObjectByType<LaneInputManager>();
 
         // Iterate backwards so we can remove destroyed/null entries safely
         // Prefer DSP-derived elapsed time (allows negative lead before audio starts).
         float currentSongSeconds = 0f;
         if (mp != null)
         {
-            currentSongSeconds = (float)mp.GetElapsedTimeDsp();
+            currentSongSeconds = (float)mp.GetElapsedTime();
         }
         else if (ns != null)
         {
@@ -100,8 +104,9 @@ public class GlobalMoveY : MonoBehaviour
             {
                 t.Translate(0f, -speed * Time.deltaTime, 0f, Space.World);
             }
+            
 
-            if (t.position.y < -1f)
+            if (lim.secondsUntil == -lim.hitWindowSeconds)
             {
                 NotePoolManager.Instance.Return(obj);
                 LaneManager.Instance.UnregisterNote(obj);

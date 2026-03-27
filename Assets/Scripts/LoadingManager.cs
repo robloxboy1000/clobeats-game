@@ -107,7 +107,7 @@ public class LoadingManager : MonoBehaviour
                 
                 if (loadingText != null)
                 {
-                    loadingText.text = "Loading: " + (progress * 100).ToString("F0") + "%";
+                    //loadingText.text = "Loading: " + (progress * 100).ToString("F0") + "%";
                 }
                 else
                 {
@@ -119,7 +119,7 @@ public class LoadingManager : MonoBehaviour
                 {
                     if (loadingText != null)
                     {
-                        loadingText.text = "Loading: 100%";
+                        //loadingText.text = "Loading: 100%";
                         loadingText.enabled = false; // Hide loading textS
                     }
                     asyncLoad.allowSceneActivation = true;

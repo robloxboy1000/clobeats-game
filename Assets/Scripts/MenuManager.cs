@@ -208,11 +208,6 @@ public class MenuManager : MonoBehaviour
                 }
             }
         }
-        if (accentColor != null)
-        {
-            Camera camera = Camera.main;
-            camera.backgroundColor = accentColor;
-        }
     }
 
     void OnEnable()
@@ -318,6 +313,14 @@ public class MenuManager : MonoBehaviour
             #else
             UnityEngine.Application.Quit();
             #endif
+        }
+    }
+
+    public void ScrollSongListDown()
+    {
+        UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
+        {
+            
         }
     }
     

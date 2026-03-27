@@ -45,6 +45,7 @@ public class ButtonHandler : MonoBehaviour
             if (gameManager != null)
             {
                 gameManager.ResetAllValues();
+                gameManager.inSong = false;
             }
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -71,6 +72,7 @@ public class ButtonHandler : MonoBehaviour
         {
             OldInputManager inputManager = FindAnyObjectByType<OldInputManager>();
             GameObject pauseMenu = inputManager.pauseMenu;
+            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
             if (pauseMenu != null)
             {
                 pauseMenu.SetActive(false);
@@ -78,14 +80,34 @@ public class ButtonHandler : MonoBehaviour
                 MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
                 musicPlayer.resumeAudio();
                 inputManager.isPaused = false;
+                if (strikeline != null)
+                {
+                    strikeline.ResetAnims();
+                }
             }
         }
         else if (myButton.name == "RestartButton")
         {
+            OldInputManager inputManager = FindAnyObjectByType<OldInputManager>();
+            GameObject pauseMenu = inputManager.pauseMenu;
+            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+            if (pauseMenu != null)
+            {
+                pauseMenu.SetActive(false);
+                Time.timeScale = 1f; // Resume the game
+                MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+                musicPlayer.stopAudio();
+                inputManager.isPaused = false;
+                if (strikeline != null)
+                {
+                    strikeline.ResetAnims();
+                }
+            }
             GameManager gameManager = FindAnyObjectByType<GameManager>();
             if (gameManager != null)
             {
                 gameManager.ResetAllValues();
+                gameManager.inSong = false;
             }
             Time.timeScale = 1f; // Ensure time scale is reset
             LoadingManager loader = FindAnyObjectByType<LoadingManager>();
@@ -96,10 +118,26 @@ public class ButtonHandler : MonoBehaviour
         }
         else if (myButton.name == "ExitToPreloaderButton")
         {
+            OldInputManager inputManager = FindAnyObjectByType<OldInputManager>();
+            GameObject pauseMenu = inputManager.pauseMenu;
+            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+            if (pauseMenu != null)
+            {
+                pauseMenu.SetActive(false);
+                Time.timeScale = 1f; // Resume the game
+                MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+                musicPlayer.stopAudio();
+                inputManager.isPaused = false;
+                if (strikeline != null)
+                {
+                    strikeline.ResetAnims();
+                }
+            }
             GameManager gameManager = FindAnyObjectByType<GameManager>();
             if (gameManager != null)
             {
                 gameManager.ResetAllValues();
+                gameManager.inSong = false;
             }
             Time.timeScale = 1f; // Ensure time scale is reset
             LoadingManager loader = FindAnyObjectByType<LoadingManager>();
@@ -114,6 +152,7 @@ public class ButtonHandler : MonoBehaviour
             if (gameManager != null)
             {
                 gameManager.ResetAllValues();
+                gameManager.inSong = false;
             }
             MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
             if (musicPlayer != null)
@@ -144,6 +183,26 @@ public class ButtonHandler : MonoBehaviour
             UnityEditor.EditorApplication.isPlaying = false;
 #endif
             UnityEngine.Application.Quit();
+        }
+        else if (myButton.name == "Quality0")
+        {
+            QualitySettings.SetQualityLevel(0);
+        }
+        else if (myButton.name == "Quality1")
+        {
+            QualitySettings.SetQualityLevel(1);
+        }
+        else if (myButton.name == "Quality2")
+        {
+            QualitySettings.SetQualityLevel(2);
+        }
+        else if (myButton.name == "Quality3")
+        {
+            QualitySettings.SetQualityLevel(3);
+        }
+        else if (myButton.name == "Quality4")
+        {
+            QualitySettings.SetQualityLevel(4);
         }
     }
 }

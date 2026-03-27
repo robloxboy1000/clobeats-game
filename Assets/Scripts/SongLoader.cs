@@ -53,7 +53,24 @@ public class SongLoader : MonoBehaviour
 
         try
         {
-            textAsset = System.IO.File.ReadAllText(System.IO.Path.GetFullPath(chartFilePath));
+            string path = System.IO.Path.GetFullPath(chartFilePath ?? string.Empty);
+            // If chartFilePath is a MIDI, delegate to GameManager MIDI reader
+            string ext = string.IsNullOrEmpty(path) ? string.Empty : System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+            if (ext == "mid" || ext == "midi")
+            {
+                // Ensure GameManager exists and parse the MIDI into the game's caches
+                var gm = FindAnyObjectByType<GameManager>();
+                if (gm != null)
+                {
+                    await gm.ReadMidiFile(path);
+                }
+                // leave textAsset empty (system will use GameManager's caches)
+                textAsset = string.Empty;
+            }
+            else
+            {
+                textAsset = System.IO.File.ReadAllText(path);
+            }
         }
         catch
         {

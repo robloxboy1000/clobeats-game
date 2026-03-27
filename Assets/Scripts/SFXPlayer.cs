@@ -3,8 +3,14 @@ using UnityEngine;
 public class SFXPlayer : MonoBehaviour
 {
     public AudioSource audioSource;
-    public string OverstrumsFolderPath = "Audio/Overstrums";
-    private AudioClip[] availableClips;
+    public AudioSource surroundSoundAudioSource;
+    public AudioClip[] overstrumClips;
+    public AudioClip comboLostClip;
+    public AudioClip highwayRiseClip;
+    public AudioClip fretRippleUpClip;
+    public AudioClip songFailClip;
+
+    public bool useSurroundSound = false;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -18,28 +24,48 @@ public class SFXPlayer : MonoBehaviour
                 return;
             }
         }
-
-        // Load audio clips from the specified path within a Resources folder
-        // If your audio clips are not in a Resources folder, you'll need a different loading method (e.g., drag and drop)
-        availableClips = Resources.LoadAll<AudioClip>(OverstrumsFolderPath);
-
-        if (availableClips.Length == 0)
-        {
-            Debug.LogWarning($"No audio clips found in Resources folder at path: {OverstrumsFolderPath}");
-        }
     }
     public void PlayOverstrumClip()
+    {
+        if (overstrumClips != null && overstrumClips.Length > 0)
         {
-            if (availableClips != null && availableClips.Length > 0)
-            {
-                int randomIndex = Random.Range(0, availableClips.Length);
-                audioSource.PlayOneShot(availableClips[randomIndex]); // Use PlayOneShot to avoid cutting off current sounds
-            }
-            else
-            {
-                Debug.LogWarning("No audio clips available to play.");
-            }
+            int randomIndex = Random.Range(0, overstrumClips.Length);
+            audioSource.PlayOneShot(overstrumClips[randomIndex]); // Use PlayOneShot to avoid cutting off current sounds
         }
+        else
+        {
+            Debug.LogWarning("No overstrum audio clips available to play.");
+        }
+    }
+    public void PlayComboLostClip()
+    {
+        if (comboLostClip != null)
+        {
+            audioSource.PlayOneShot(comboLostClip);
+        }
+    }
+    public void PlayHighwayRiseClip()
+    {
+        if (highwayRiseClip != null)
+        {
+            audioSource.PlayOneShot(highwayRiseClip);
+        }
+    }
+    public void PlayFretRippleUpClip()
+    {
+        if (fretRippleUpClip != null)
+        {
+            audioSource.PlayOneShot(fretRippleUpClip);
+        }
+    }
+    public void PlaySongFailedClip()
+    {
+        if (songFailClip != null)
+        {
+            audioSource.PlayOneShot(songFailClip);
+        }
+    }
+
 
     // Update is called once per frame
     void Update()

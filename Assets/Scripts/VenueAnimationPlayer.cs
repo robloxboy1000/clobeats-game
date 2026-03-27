@@ -78,6 +78,24 @@ public class VenueAnimationPlayer : MonoBehaviour
     void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
     {
         mainCameraFound = false;
+        if (scene.buildIndex == 2)
+        {
+            StartCoroutine(ToggleCamera(false));
+        }
+    }
+    public System.Collections.IEnumerator ToggleCamera(bool toggle)
+    {
+        while (mainCamera == null)
+        {
+            yield return null;
+            mainCamera = Camera.main;
+            mainCamera.gameObject.SetActive(toggle);
+        }
+        if (mainCamera != null)
+        {
+            mainCamera.gameObject.SetActive(toggle);
+            yield break;
+        }
     }
 
     public void Load()

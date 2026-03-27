@@ -344,7 +344,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 74.7
+  m_fontSize: 74.6
   m_fontSizeBase: 50.3
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -603,7 +603,7 @@ GameObject:
   - component: {fileID: 1927189672}
   m_Layer: 0
   m_Name: Main Camera
-  m_TagString: MainCamera
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

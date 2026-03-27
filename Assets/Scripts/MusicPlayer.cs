@@ -1,56 +1,34 @@
 using UnityEngine;
-using UnityEngine.Analytics;
 using System;
 using UnityEngine.SceneManagement;
 using System.IO;
-using System.Runtime.InteropServices;
 using UnityEngine.Video;
-
-using System.Collections.Generic;
 using ManagedBass;
-
 using System.Threading.Tasks;
+using System.Collections;
+using UnityEngine.Networking;
 
 public class MusicPlayer : MonoBehaviour
 {
 
     public VideoPlayer videoPlayer;
-
-
     public bool previewAudioPlaying = false;
-
     public double dspSongStart = 0.0;
     public bool isPaused = false;
     public double pausedElapsedDsp = 0.0;
-
     private Coroutine bassScheduledCoroutine = null;
-
     string videoURL;
     NoteSpawner noteSpawner;
     bool bassInitialized = false;
-
     // ManagedBass stream handles
-
-
     private int songStreamHandle = 0;
-    private int previewStreamHandle = 0;
-
-    private int menuMusicHandle = 0;
-
-
+    public AudioSource previewAudioStream;
     public float currentTime = 0f;
     public float previousTime = 0f;
     public float NSSonglength = 0;
-
-    private GameManager gameManager1;
-    public string[] songFilePaths;
-    public bool menuMusicPlaying = false;
-
     float[] spectrumData = new float[512];
     int reverbFX = 0;
 
-
-    
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -170,80 +148,32 @@ public class MusicPlayer : MonoBehaviour
         
     }
 
-        private System.Collections.IEnumerator StartBASSAt(double dspStart)
-        {
-            // wait until the system DSP clock reaches the start time
-            while (AudioSettings.dspTime < dspStart)
-            {
-                yield return null;
-            }
-            // start BASS streams synchronized
-            if (bassInitialized)
-            {
-                try
-                {
-                    if (songStreamHandle != 0)
-                    {
-                        Bass.ChannelPlay(songStreamHandle);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError("Failed to start BASS streams at scheduled time: " + ex.Message);
-                }
-            }
-            bassScheduledCoroutine = null;
-            yield break;
-        }
-    public System.Collections.IEnumerator MenuMusic()
+    private System.Collections.IEnumerator StartBASSAt(double dspStart)
     {
-        if (menuMusicPlaying)
+        // wait until the system DSP clock reaches the start time
+        while (AudioSettings.dspTime < dspStart)
         {
             yield return null;
         }
-        else
+        // start BASS streams synchronized
+        if (bassInitialized)
         {
-            yield return LoadMenuMusic(GetRandomMenuClip());
-        }
-    }
-
-    public string GetRandomMenuClip()
-    {
-        return songFilePaths[UnityEngine.Random.Range(0, songFilePaths.Length)];
-    }
-
-    public async Task LoadMenuMusic(string audioClipPath)
-    {
-        if (audioClipPath != null)
-        {
-            if (Path.GetFileName(audioClipPath).Contains("song-mixed", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                if (!bassInitialized) InitBASS();
-                if (bassInitialized)
+                if (songStreamHandle != 0)
                 {
-                    Debug.Log("Loading menu music audio (ManagedBass) from path: " + audioClipPath);
-                    try
-                    {
-                        await Task.Yield();
-                        if (menuMusicHandle != 0) { Bass.StreamFree(menuMusicHandle); menuMusicHandle = 0; }
-                        // Create stream for file path
-                        menuMusicHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Default);
-                        Bass.ChannelPlay(menuMusicHandle);
-                        menuMusicPlaying = true;
-                        if (menuMusicHandle == 0) Debug.LogError("Failed to create BASS stream: " + Bass.LastError);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError("Exception creating BASS stream: " + ex.Message);
-                    }
+                    Bass.ChannelPlay(songStreamHandle);
                 }
             }
+            catch (Exception ex)
+            {
+                Debug.LogError("Failed to start BASS streams at scheduled time: " + ex.Message);
+            }
         }
-        else
-        {
-            Debug.LogError("No AudioClip provided to LoadMenuMusic.");
-        }
+        bassScheduledCoroutine = null;
+        yield break;
     }
+    
 
     // Return elapsed song time in seconds according to the DSP clock.
     // If audio hasn't started yet this returns a negative time until dspSongStart.
@@ -259,69 +189,81 @@ public class MusicPlayer : MonoBehaviour
         return Math.Max(0.0, GetElapsedTimeDsp());
     }
 
-    public async Task PlayPreviewAudio(string filePath, float startPoint = 0)
+    public IEnumerator PlayPreviewAudio(string filePath, float startPoint = 0, AudioType audioType = AudioType.OGGVORBIS)
     {
-        if (!bassInitialized) InitBASS();
-        if (bassInitialized)
+        string uriPath = new System.Uri(filePath).AbsoluteUri;
+        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(uriPath, audioType))
         {
-            MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-            menuManager.loadingPreviewImage.SetActive(true);
-            Debug.Log("Loading preview (ManagedBass) from path: " + filePath);
-            try
+            yield return uwr.SendWebRequest(); // Wait for the request to complete
+            yield return Task.Yield();
+            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
             {
-                if (previewStreamHandle != 0) { Bass.StreamFree(previewStreamHandle); previewStreamHandle = 0; }
-                long previewStartBytePosition = Bass.ChannelSeconds2Bytes(previewStreamHandle, (double)(startPoint / 1000f));
-                previewStreamHandle = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
-                Bass.ChannelPlay(previewStreamHandle);
-                await Task.Yield();
-                menuManager.loadingPreviewImage.SetActive(false);
-                previewAudioPlaying = true;
-                Bass.ChannelSetPosition(previewStreamHandle, previewStartBytePosition);
-                if (previewStreamHandle == 0) Debug.LogError("Failed to create BASS preview stream: " + Bass.LastError);
+                Debug.LogError("Error loading audio clip: " + uwr.error);
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogError("Exception creating BASS preview stream: " + ex.Message);
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
+                if (clip != null)
+                {
+                    previewAudioStream.clip = clip;
+                    previewAudioStream.time = startPoint / 1000;
+                    previewAudioStream.volume = 0;
+                    
+                    StartCoroutine(FadeInCoroutine());
+                    previewAudioPlaying = true;
+                }
             }
         }
     }
     public void StopPreviewAudio()
     {
-        if (previewStreamHandle != 0 && bassInitialized)
+        if (previewAudioStream != null)
         {
-            try { Bass.ChannelStop(previewStreamHandle); } catch { }
-            try { Bass.StreamFree(previewStreamHandle); } catch { }
-            previewStreamHandle = 0;
-            previewAudioPlaying = false;
+            StartCoroutine(FadeOutCoroutine());
         }
     }
-
-    public void PlayOneShotAudio(string filePath)
+    IEnumerator FadeOutCoroutine()
     {
-        if (!bassInitialized) InitBASS();
-        if (bassInitialized)
+        float duration = 1f; // Duration for the fill animation
+        float elapsed = 0f;
+
+        while (elapsed < duration)
         {
-            int oneShotStream = 0;
-            Debug.Log("Loading one-shot (ManagedBass) from path: " + filePath);
-            try
+            elapsed += Time.deltaTime;
+            float fillAmount = Mathf.Lerp(1f, 0f, elapsed / duration);
+            if (previewAudioStream != null)
             {
-                if (oneShotStream != 0)
-                {
-                    Bass.StreamFree(oneShotStream);
-                    oneShotStream = 0;
-                }
-                oneShotStream = Bass.CreateStream(filePath, 0, 0, BassFlags.Default);
-                Bass.ChannelPlay(oneShotStream);
+                previewAudioStream.volume = fillAmount;
             }
-            catch (Exception ex)
+            if (fillAmount == 0)
             {
-                Debug.LogError("Exception creating BASS one-shot stream: " + ex.Message);
+                yield return null;
+                previewAudioStream.Stop();
+                previewAudioStream.clip = null;
+                previewAudioStream.time = 0;
+                previewAudioPlaying = false;
             }
+        }
+        
+    }
+    IEnumerator FadeInCoroutine()
+    {
+        float duration = 1f; // Duration for the fill animation
+        float elapsed = 0f;
+        
+        previewAudioStream.Play();
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float fillAmount = Mathf.Lerp(0f, 1f, elapsed / duration);
+            if (previewAudioStream != null)
+            {
+                previewAudioStream.volume = fillAmount;
+            }
+            yield return null;
         }
     }
 
-
-    
     public void resumeAudio()
     {
         if (bassInitialized)
@@ -417,25 +359,10 @@ public class MusicPlayer : MonoBehaviour
         {
             currentTime = GetElapsedTime();
             
-            if (gameManager.currentSongLengthInTicks > 0 && currentTime >= GetSongLength())
+            if (gameManager.inSong && currentTime >= GetSongLength())
             {
-                Debug.Log("Song ended.");
-                gameManager.currentSongLengthInTicks = 0;
-                stopAudio(false);
-                GlobalMoveY globalMoveY = FindFirstObjectByType<GlobalMoveY>();
-                if (globalMoveY != null)
-                {
-                    globalMoveY.isMoving = false;
-                }
-                if (gameManager != null)
-                {
-                    //gameManager.ResetAllValues();
-                }
-                LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
-                if (loadingManager != null)
-                {
-                    loadingManager.LoadScene("ScoreScreen", LoadSceneMode.Single, false);
-                }
+                Debug.Log("song ended");
+                StartCoroutine(EndSong());
             }
         }
 
@@ -460,6 +387,47 @@ public class MusicPlayer : MonoBehaviour
             videoPlayer.time = currentTime;
             videoPlayer.Play();
         }
+    }
+    public IEnumerator EndSong()
+    {
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        Debug.Log("Song ended. (called manually)");
+        gameManager.inSong = false;
+        gameManager.currentSongLengthInTicks = 0;
+        stopAudio(false);
+        GlobalMoveY globalMoveY = FindFirstObjectByType<GlobalMoveY>();
+        Scoring scoring = FindAnyObjectByType<Scoring>();
+        if (scoring != null)
+        {
+            scoring.Save(gameManager.savePath);
+        }
+        if (globalMoveY != null)
+        {
+            globalMoveY.isMoving = false;
+        }
+        if (gameManager != null)
+        {
+            gameManager.ResetAllValues();
+        }
+        GameObject gp = GameObject.Find("GuitarPlayer");
+        if (gp != null)
+        {
+            Animation highwayAnim = gp.GetComponent<Animation>();
+            highwayAnim.Play("HideHighway");
+            yield return new WaitForSecondsRealtime(1f);
+            highwayAnim.Stop();
+        }
+        ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+        if (strikeline != null)
+        {
+            strikeline.ResetAnims();
+        }
+        LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
+        if (loadingManager != null)
+        {
+            loadingManager.LoadScene("ScoreScreen", LoadSceneMode.Single, false);
+        }
+        yield return null;
     }
     public float GetElapsedTime()
     {

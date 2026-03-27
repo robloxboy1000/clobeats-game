@@ -47,7 +47,7 @@ public class NotePoolManager : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            var inst = Instantiate(prefab, ns.highwayTransform);
+            var inst = Instantiate(prefab);
             var pn = inst.GetComponent<PooledNote>();
             if (pn == null) pn = inst.AddComponent<PooledNote>();
             pn.prefab = prefab;
