@@ -348,7 +348,6 @@ public class GameManager : MonoBehaviour
                     spawnTimeMs = (float)(startSeconds * 1000.0),
                     value = eve.Text
                 });
-                Debug.Log("Text event Added: " + eve.Text);
             }
 
             // If you expect only one matching track, break here.
@@ -435,80 +434,9 @@ public class GameManager : MonoBehaviour
             await Task.Yield();
         }
     }
-    public async Task<string> GetSongTitle(string iniPath)
+    public string GetCurrentSongTitle()
     {
-        string data = await File.ReadAllTextAsync(iniPath);
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        bool inSongSection = false;
-
-        foreach (string line in lines)
-        {
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
-            {
-                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
-                continue;
-            }
-
-            if (inSongSection)
-            {
-                string[] parts = trimmedLine.Split('=');
-                    
-                if (parts.Length == 2 && parts[0].Trim() == "name" && parts[1].Trim() is string name)
-                {
-                    return name.Trim();
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
-            else
-            {
-                return string.Empty;
-            }
-        }
-
-        return null; 
-    }
-
-    public async Task<string> GetSongLoadingPhrase(string iniPath)
-    {
-        string data = await File.ReadAllTextAsync(iniPath);
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        bool inSongSection = false;
-
-        foreach (string line in lines)
-        {
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
-            {
-                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
-                continue;
-            }
-
-            if (inSongSection)
-            {
-                string[] parts = trimmedLine.Split('=');
-                    
-                if (parts.Length == 2 && parts[0].Trim() == "loading_phrase" && parts[1].Trim() is string name)
-                {
-                    return name.Trim();
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
-            else
-            {
-                return string.Empty;
-            }
-        }
-
-        return null; 
+        return currentSongTitle != string.Empty ? currentSongTitle : string.Empty;
     }
 
     public IEnumerator PlaySong()
@@ -551,14 +479,6 @@ public class GameManager : MonoBehaviour
             highwayAnim.Play("ShowHighway");
             sFXPlayer.PlayHighwayRiseClip();
             yield return new WaitForSecondsRealtime(1f);
-            var sl = gp.transform.Find("Strikeline").GetComponent<ImprovedStrikeline>();
-            if (sl != null)
-            {
-                sl.RippleAnim();
-                sFXPlayer.PlayFretRippleUpClip();
-                yield return new WaitForSecondsRealtime(1f);
-            }
-            highwayAnim.Stop();
         }
         VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
         if (venueAnimationPlayer != null)
@@ -605,19 +525,18 @@ public class GameManager : MonoBehaviour
         currentSongLengthInTicks = 0;
     }
 
-    public static async Task<string> GetStringFromAddr(string addr)
+    public static async Task GetStringFromAddr(string addr)
     {
         using (HttpClient client = new HttpClient())
         {
             client.DefaultRequestHeaders.UserAgent.TryParseAdd("CloBeats/0.0.1");
             try
             {
-                return await client.GetStringAsync(addr);
+                await client.GetStringAsync(addr);
             }
             catch (Exception ex)
             {
                 Debug.LogError("Server error occoured: " + ex.Message);
-                return null;
             }
         }
     }

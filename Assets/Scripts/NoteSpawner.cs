@@ -242,7 +242,7 @@ public class NoteSpawner : MonoBehaviour
                 Debug.Log("Song data loaded successfully.");
                 CreatePools();
                 PrewarmNotePools();
-                await System.Threading.Tasks.Task.Delay(6000); // delay to let loading phrase be visible
+                await System.Threading.Tasks.Task.Delay(500);
                 StartCoroutine(VenueAnimationPlayer.Instance.ToggleCamera(true));
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)

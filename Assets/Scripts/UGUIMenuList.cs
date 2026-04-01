@@ -172,14 +172,14 @@ public class UGUIMenuList : MonoBehaviour
                     }
                     else
                     {
-                        albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
+                        albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
                     }
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogError("Fallback to placeholder album because: " + ex.Message);
-                albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
+                albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
             }
             GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(id);
             if (songEntry != null)

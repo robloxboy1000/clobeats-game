@@ -59,7 +59,6 @@ public class VenueAnimationPlayer : MonoBehaviour
     public List<ClipCue> clipCues = new List<ClipCue>();
     public GameObject clipTarget;
     public string cueFilePath;
-    public bool randomMode = true;
     float lastTick = 0f;
 
     void Start()

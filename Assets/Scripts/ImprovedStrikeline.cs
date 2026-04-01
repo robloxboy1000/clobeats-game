@@ -176,10 +176,9 @@ public class ImprovedStrikeline : MonoBehaviour
         if (gp != null)
         {
             gp.transform.position = new Vector3(0,0,0);
-
         }
         transform.position = new Vector3(0,0,0);
-        for (int i = 0; i >= 4; i++)
+        for (int i = 0; i == 4; i++)
         {
             if (i == 0)
             {
@@ -246,16 +245,6 @@ public class ImprovedStrikeline : MonoBehaviour
                 Debug.LogWarning("Invalid fret lane index: " + i);
             }
         }
-    }
-
-    public IEnumerator RippleAnim()
-    {
-        for (int i = 0; i >= 4; i++)
-        {
-            SLTopHit(i);
-            yield return new WaitForSeconds(0.5f);
-        }
-        ResetAnims();
     }
 
     public void SLTopHit(float laneIndex)
