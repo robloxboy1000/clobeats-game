@@ -33,6 +33,7 @@ public class MusicPlayer : MonoBehaviour
     void Start()
     {
         DontDestroyOnLoad(this.gameObject);
+        Debug.Log("Using BASS AudioManager for playback.");
     }
 
     
@@ -225,26 +226,25 @@ public class MusicPlayer : MonoBehaviour
     {
         float duration = 1f; // Duration for the fill animation
         float elapsed = 0f;
-        float fillAmount = 1f;
 
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            fillAmount = Mathf.Lerp(1f, 0f, elapsed / duration);
+            float fillAmount = Mathf.Lerp(1f, 0f, elapsed / duration);
             if (previewAudioStream != null)
             {
                 previewAudioStream.volume = fillAmount;
             }
-            
+            if (fillAmount == 0)
+            {
+                yield return null;
+                previewAudioStream.Stop();
+                previewAudioStream.clip = null;
+                previewAudioStream.time = 0;
+                previewAudioPlaying = false;
+            }
         }
-        if (fillAmount == 0)
-        {
-            yield return null;
-            previewAudioStream.Stop();
-            previewAudioStream.clip = null;
-            previewAudioStream.time = 0;
-            previewAudioPlaying = false;
-        }
+        
     }
     IEnumerator FadeInCoroutine()
     {
@@ -339,20 +339,6 @@ public class MusicPlayer : MonoBehaviour
         GlobalMoveY gm = FindAnyObjectByType<GlobalMoveY>();
         if (gm != null) gm.isMoving = false;
     }
-    public void RestartAt(double time)
-    {
-        if (isPaused) return;
-        if (bassInitialized)
-        {
-            if (songStreamHandle != 0)
-            {
-                long restartPos = Bass.ChannelSeconds2Bytes(songStreamHandle, time);
-                Bass.ChannelStop(songStreamHandle);
-                Bass.ChannelSetPosition(songStreamHandle, restartPos);
-                Bass.ChannelPlay(songStreamHandle);
-            }
-        }
-    }
     
     // Update is called once per frame
     void Update()
@@ -373,24 +359,18 @@ public class MusicPlayer : MonoBehaviour
         {
             currentTime = GetElapsedTime();
             
-            if (gameManager.inSong && (currentTime * 1000) >= noteSpawner.songLengthInTicks)
+            if (gameManager.inSong && currentTime >= GetSongLength())
             {
                 Debug.Log("song ended");
                 StartCoroutine(EndSong());
             }
         }
 
-        // "audio buffer" vsync must be on or FPS must be over 60
-        //if (gameManager.inSong && GetElapsedTimeDsp() != noteSpawner.currentTick && !isPaused)
-        //{
-        //    RestartAt(GetElapsedTimeDsp());
-        //}
-
 
         videoPlayer = FindFirstObjectByType<VideoPlayer>();
 
         // Start video playback exactly when the DSP start time is reached
-        if (videoPlayer != null && !videoPlayer.isPlaying && dspSongStart > 0.0 && AudioSettings.dspTime >= dspSongStart && !isPaused)
+        if (videoPlayer != null && !videoPlayer.isPlaying && dspSongStart > 0.0 && AudioSettings.dspTime >= dspSongStart)
         {
             try
             {
@@ -401,7 +381,7 @@ public class MusicPlayer : MonoBehaviour
             }
             catch { }
         }
-        if (videoPlayer != null && !videoPlayer.isPlaying && videoPlayer.isPrepared && currentTime > previousTime && !isPaused)
+        if (videoPlayer != null && !videoPlayer.isPlaying && videoPlayer.isPrepared && currentTime > previousTime)
         {
             Debug.Log("Syncing video to audio at time: " + currentTime);
             videoPlayer.time = currentTime;
@@ -414,15 +394,7 @@ public class MusicPlayer : MonoBehaviour
         Debug.Log("Song ended. (called manually)");
         gameManager.inSong = false;
         gameManager.currentSongLengthInTicks = 0;
-        if (noteSpawner != null)
-        {
-            noteSpawner.songLengthInTicks = 0;
-        }
         stopAudio(false);
-        if (videoPlayer != null)
-        {
-            videoPlayer.Stop();
-        }
         GlobalMoveY globalMoveY = FindFirstObjectByType<GlobalMoveY>();
         Scoring scoring = FindAnyObjectByType<Scoring>();
         if (scoring != null)
@@ -437,11 +409,6 @@ public class MusicPlayer : MonoBehaviour
         {
             gameManager.ResetAllValues();
         }
-        ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
-        if (strikeline != null)
-        {
-            strikeline.ResetAnims();
-        }
         GameObject gp = GameObject.Find("GuitarPlayer");
         if (gp != null)
         {
@@ -449,9 +416,12 @@ public class MusicPlayer : MonoBehaviour
             highwayAnim.Play("HideHighway");
             yield return new WaitForSecondsRealtime(1f);
             highwayAnim.Stop();
-            gp.SetActive(false);
         }
-        
+        ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+        if (strikeline != null)
+        {
+            strikeline.ResetAnims();
+        }
         LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
         if (loadingManager != null)
         {
@@ -487,13 +457,13 @@ public class MusicPlayer : MonoBehaviour
         }
         return 0f;
     }
-    public short GetSongAudioLevel()
+    public int GetSongAudioLevel()
     {
         if (bassInitialized && songStreamHandle != 0)
         {
             try
             {
-                short level = (short)Bass.ChannelGetLevel(songStreamHandle);
+                int level = Bass.ChannelGetLevel(songStreamHandle);
                 return level;
             }
             catch { return 0; }

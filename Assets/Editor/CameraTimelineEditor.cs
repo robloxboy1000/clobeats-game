@@ -7,16 +7,6 @@ using System.Linq;
 public class CameraTimelineEditor : EditorWindow
 {
     [System.Serializable]
-    public enum KeyframeType
-    {
-        Unknown = 0,
-        Transform = 1,
-        Sprite = 2,
-        UIElement = 3,
-        Model = 4
-    }
-
-    [System.Serializable]
     public class VecData 
     { 
         public float x; 
@@ -33,9 +23,6 @@ public class CameraTimelineEditor : EditorWindow
         public VecData position;
         public VecData rotation;
         public float focalLength;
-        public string trackId; // id of the track/target this keyframe affects
-        public KeyframeType type = KeyframeType.Transform;
-        public string assetPath; // optional asset/sprite/prefab path for non-transform keyframes
     }
 
     [System.Serializable]
@@ -46,13 +33,6 @@ public class CameraTimelineEditor : EditorWindow
 
     Camera targetCamera;
     List<Keyframe> frames = new List<Keyframe>();
-    
-    // Tracks / hierarchy-like menu
-    [System.Serializable]
-    public class TrackItem { public string id; public string name; public UnityEngine.Object asset; public bool expanded = true; }
-    List<TrackItem> tracks = new List<TrackItem>();
-    int selectedTrackIndex = -1;
-    
     Vector2 scroll;
     float scrubTick = 0f;
     public AudioClip audioClip;
@@ -60,12 +40,6 @@ public class CameraTimelineEditor : EditorWindow
     bool isPlaying = false;
     double lastEditorTime = 0.0;
     public float ticksPerSecond = 1000f;
-    public float animLength = 1000f;
-    public float pixelsPerMs = 0.2f;
-    Vector2 timelineScroll = Vector2.zero;
-    Texture2D keyIcon = null;
-    bool isDraggingKey = false;
-    int draggingKeyIndex = -1;
     AudioClip transientPreviewClip = null;
     int previewChannels = 0;
     int previewFrequency = 0;
@@ -75,6 +49,14 @@ public class CameraTimelineEditor : EditorWindow
     public int previewHeight = 360;
     public bool livePreview = true;
     
+    // Cue (pre-made clip) support
+    [System.Serializable]
+    public class ClipCue { public float tick; public string clipName; }
+    [System.Serializable]
+    public class ClipCueCollection { public ClipCue[] cues; }
+    public List<ClipCue> clipCues = new List<ClipCue>();
+    public GameObject clipTarget;
+    public string cueFilePath = "";
 
     [MenuItem("Window/CloBeats/Venue/Animation Timeline Editor")]
     public static void ShowWindow() { GetWindow<CameraTimelineEditor>("Animation Timeline"); }
@@ -87,7 +69,8 @@ public class CameraTimelineEditor : EditorWindow
         // Left column: main timeline/editor UI
         EditorGUILayout.BeginVertical(GUILayout.Width(position.width * 0.58f));
         EditorGUILayout.BeginHorizontal();
-        
+        targetCamera = (Camera)EditorGUILayout.ObjectField("Camera", targetCamera, typeof(Camera), true);
+        if (GUILayout.Button("Use Scene Camera", GUILayout.Width(120))) { if (SceneView.lastActiveSceneView != null) targetCamera = SceneView.lastActiveSceneView.camera; Repaint(); }
         if (GUILayout.Button("Load", GUILayout.Width(60))) Load();
         if (GUILayout.Button("Save", GUILayout.Width(60))) Save();
         EditorGUILayout.EndHorizontal();
@@ -97,11 +80,7 @@ public class CameraTimelineEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
-        ticksPerSecond = EditorGUILayout.FloatField("ms/sec", ticksPerSecond);
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        animLength = EditorGUILayout.FloatField("Length (ms)", animLength);
+        ticksPerSecond = EditorGUILayout.FloatField("Ticks/sec", ticksPerSecond);
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space();
@@ -111,50 +90,18 @@ public class CameraTimelineEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space();
-        // Tracks / hierarchy-like menu
-        EditorGUILayout.LabelField("Tracks", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Add Selected GameObject")) AddTrackFromSelection();
-        if (GUILayout.Button("Add Prefab...", GUILayout.Width(120)))
-        { 
-            string path = EditorUtility.OpenFilePanel("Select Prefab", "", "prefab");
-            if (!string.IsNullOrEmpty(path))
-            {
-                string rel = path.Contains("Assets") ? path.Substring(path.IndexOf("Assets")) : path;
-                var go = (UnityEngine.GameObject)AssetDatabase.LoadAssetAtPath(rel, typeof(UnityEngine.GameObject));
-                if (go != null) AddTrack(go);
-            }
-        }
-        if (GUILayout.Button("Import FBX...", GUILayout.Width(120)))
-        { 
-            string path = EditorUtility.OpenFilePanel("Select Prefab", "", "fbx");
-            if (!string.IsNullOrEmpty(path))
-            {
-                string rel = path.Contains("Assets") ? path.Substring(path.IndexOf("Assets")) : path;
-                var go = (UnityEngine.GameObject)AssetDatabase.LoadAssetAtPath(rel, typeof(UnityEngine.GameObject));
-                if (go != null) AddTrack(go);
-            }
-        }
-        EditorGUILayout.EndHorizontal();
-        for (int ti = 0; ti < tracks.Count; ti++)
-        {
-            var tr = tracks[ti];
-            EditorGUILayout.BeginHorizontal("box");
-            tr.expanded = EditorGUILayout.Foldout(tr.expanded, tr.name);
-            if (GUILayout.Button("Select", GUILayout.Width(60))) { Selection.activeObject = tr.asset; }
-            if (GUILayout.Button("X", GUILayout.Width(24))) { tracks.RemoveAt(ti); if (selectedTrackIndex == ti) selectedTrackIndex = -1; EditorGUILayout.EndHorizontal(); continue; }
-            EditorGUILayout.EndHorizontal();
-            if (tr.expanded)
-            {
-                EditorGUILayout.ObjectField("Asset", tr.asset, typeof(UnityEngine.Object), true);
-            }
-        }
-
-        EditorGUILayout.Space();
         float minTick = frames.Count > 0 ? frames.Min(f => f.tick) : 0f;
-        float maxTick = frames.Count > 0 ? frames.Max(f => f.tick) : animLength;
-
-        
+        float maxTick = frames.Count > 0 ? frames.Max(f => f.tick) : 1000f;
+        EditorGUI.BeginChangeCheck();
+        scrubTick = EditorGUILayout.Slider("Scrub Tick", scrubTick, minTick, maxTick);
+        if (EditorGUI.EndChangeCheck())
+        {
+            ApplyTickToCamera(scrubTick);
+            // play a tiny PCM preview at the scrub position
+            PlayScrubPreview(scrubTick);
+            if (livePreview) RenderCameraPreview();
+            Repaint();
+        }
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button(isPlaying ? "Pause" : "Play", GUILayout.Width(80)))
@@ -167,14 +114,13 @@ public class CameraTimelineEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
         EditorGUILayout.Space();
 
-        scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.Height(240));
+        scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.Height(340));
         for (int i = 0; i < frames.Count; i++)
         {
             var k = frames[i];
             EditorGUILayout.BeginVertical("box");
             EditorGUILayout.BeginHorizontal();
-            k.trackId = EditorGUILayout.TextField("Track ID", k.trackId);
-            k.tick = EditorGUILayout.FloatField("Position in ms", k.tick);
+            k.tick = EditorGUILayout.FloatField("Tick", k.tick);
             if (GUILayout.Button("Set From Camera", GUILayout.Width(110))) SetKeyframeFromCamera(k);
             if (GUILayout.Button("Apply", GUILayout.Width(60))) ApplyKeyframeToCamera(k);
             if (GUILayout.Button("X", GUILayout.Width(24))) { frames.RemoveAt(i); EditorGUILayout.EndHorizontal(); EditorGUILayout.EndVertical(); continue; }
@@ -185,12 +131,11 @@ public class CameraTimelineEditor : EditorWindow
             k.position = VecData.FromV3(pos);
             k.rotation = VecData.FromV3(rot);
             k.focalLength = EditorGUILayout.FloatField("Zoom", k.focalLength);
-            
             EditorGUILayout.EndVertical();
         }
         EditorGUILayout.EndScrollView();
 
-        if (GUILayout.Button("Sort by ms value")) frames = frames.OrderBy(f => f.tick).ToList();
+        if (GUILayout.Button("Sort by Tick")) frames = frames.OrderBy(f => f.tick).ToList();
 
         EditorGUILayout.EndVertical(); // end left column
 
@@ -218,105 +163,35 @@ public class CameraTimelineEditor : EditorWindow
         }
 
         EditorGUILayout.Space();
-        
+        EditorGUILayout.LabelField("Clip Cues (pre-made animations)", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        clipTarget = (GameObject)EditorGUILayout.ObjectField("Clip Target", clipTarget, typeof(GameObject), true);
+        if (GUILayout.Button("Use Camera GameObject", GUILayout.Width(160))) { if (targetCamera != null) clipTarget = targetCamera.gameObject; }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        cueFilePath = EditorGUILayout.TextField("Cue Path", cueFilePath);
+        if (GUILayout.Button("Load Cues", GUILayout.Width(80))) LoadCuesFromDialog();
+        if (GUILayout.Button("Save Cues", GUILayout.Width(80))) SaveCuesToDialog();
+        EditorGUILayout.EndHorizontal();
+
+        if (GUILayout.Button("Add Cue at Scrub")) { clipCues.Add(new ClipCue { tick = scrubTick, clipName = "" }); }
+
+        // show cues list
+        for (int i = 0; i < clipCues.Count; i++)
+        {
+            var c = clipCues[i];
+            EditorGUILayout.BeginHorizontal("box");
+            c.tick = EditorGUILayout.FloatField("Tick", c.tick);
+            c.clipName = EditorGUILayout.TextField(c.clipName);
+            if (GUILayout.Button("Play", GUILayout.Width(50))) { PlayCueInEditor(c); }
+            if (GUILayout.Button("X", GUILayout.Width(24))) { clipCues.RemoveAt(i); EditorGUILayout.EndHorizontal(); continue; }
+            EditorGUILayout.EndHorizontal();
+        }
 
         EditorGUILayout.EndVertical(); // end right column
         EditorGUILayout.EndHorizontal(); // end main split
 
-        // Timeline horizontal area
-        float timelineHeight = 240f;
-        float innerWidth = Mathf.Max(animLength * pixelsPerMs, position.width * 0.5f);
-        Rect outerRect = GUILayoutUtility.GetRect(Mathf.Min(position.width * 0.58f - 20, innerWidth), timelineHeight, GUILayout.ExpandWidth(true));
-        Rect innerRect = new Rect(0, 0, innerWidth, timelineHeight);
-        timelineScroll = GUI.BeginScrollView(outerRect, timelineScroll, innerRect, true, false);
-        // background
-        EditorGUI.DrawRect(new Rect(0, 0, innerRect.width, innerRect.height), new Color(0.12f, 0.12f, 0.12f));
-
-        // draw time grid
-        float gridMs = 100f; // grid every 100ms
-        for (float g = 0; g <= animLength; g += gridMs)
-        {
-            float gx = g * pixelsPerMs;
-            EditorGUI.DrawRect(new Rect(gx, 0, 1, innerRect.height), new Color(0.18f, 0.18f, 0.18f));
-        }
-
-        // load key icon
-        if (keyIcon == null) keyIcon = (Texture2D)Resources.Load("keyframe_icon");
-        float rowHeight = 22f;
-        int rows = Mathf.Max(1, tracks.Count);
-
-        // draw track rows
-        for (int r = 0; r < rows; r++)
-        {
-            EditorGUI.DrawRect(new Rect(0, r * rowHeight, innerRect.width, rowHeight), new Color(0, 0, 0, 0.06f));
-            if (r < tracks.Count)
-            {
-                var tr = tracks[r];
-                GUI.Label(new Rect(4, r * rowHeight + 2, 200, 18), tr.name, EditorStyles.label);
-            }
-        }
-
-        // draw keyframes as icons
-        for (int i = 0; i < frames.Count; i++)
-        {
-            var k = frames[i];
-            int row = 0;
-            if (!string.IsNullOrEmpty(k.trackId))
-            {
-                int idx = tracks.FindIndex(t => t.id == k.trackId);
-                if (idx >= 0) row = idx;
-            }
-            float x = k.tick * pixelsPerMs;
-            float iconSize = 14f;
-            float y = row * rowHeight + (rowHeight - iconSize) * 0.5f;
-            Rect iconRect = new Rect(x - iconSize * 0.5f, y, iconSize, iconSize);
-            if (keyIcon != null)
-            {
-                if (GUI.Button(iconRect, new GUIContent(keyIcon), GUIStyle.none))
-                {
-                    scrubTick = k.tick;
-                    ApplyTickToCamera(scrubTick);
-                    PlayScrubPreview(scrubTick);
-                    if (livePreview) RenderCameraPreview();
-                    Repaint();
-                }
-            }
-            else
-            {
-                if (GUI.Button(iconRect, "o", GUIStyle.none))
-                {
-                    scrubTick = k.tick;
-                    ApplyTickToCamera(scrubTick);
-                    PlayScrubPreview(scrubTick);
-                    if (livePreview) RenderCameraPreview();
-                    Repaint();
-                }
-            }
-
-            // handle dragging
-            Event e = Event.current;
-            if (e.type == EventType.MouseDown && iconRect.Contains(e.mousePosition))
-            {
-                isDraggingKey = true;
-                draggingKeyIndex = i;
-                e.Use();
-            }
-            if (isDraggingKey && draggingKeyIndex == i && e.type == EventType.MouseDrag)
-            {
-                float newTick = (e.mousePosition.x + timelineScroll.x) / pixelsPerMs;
-                frames[i].tick = Mathf.Clamp(newTick, 0f, animLength);
-                Repaint();
-                e.Use();
-            }
-            if (e.type == EventType.MouseUp && isDraggingKey && draggingKeyIndex == i)
-            {
-                isDraggingKey = false;
-                draggingKeyIndex = -1;
-                e.Use();
-            }
-        }
-
-        GUI.EndScrollView();
         
     }
 
@@ -475,6 +350,71 @@ public class CameraTimelineEditor : EditorWindow
         previewAudioSource.PlayOneShot(transientPreviewClip);
     }
 
+    void LoadCuesFromDialog()
+    {
+        string path = EditorUtility.OpenFilePanel("Open Cue JSON", "", "json");
+        if (string.IsNullOrEmpty(path)) return;
+        cueFilePath = path;
+        LoadCues(path);
+    }
+
+    void SaveCuesToDialog()
+    {
+        var col = new ClipCueCollection { cues = clipCues.OrderBy(c => c.tick).ToArray() };
+        string json = JsonUtility.ToJson(col, true);
+        string path = EditorUtility.SaveFilePanel("Save Cues", "", "cues.json", "json");
+        if (string.IsNullOrEmpty(path)) return;
+        File.WriteAllText(path, json);
+        cueFilePath = path;
+        Debug.Log("Saved cues to " + path);
+    }
+
+    void LoadCues(string path)
+    {
+        if (!File.Exists(path)) return;
+        string json = File.ReadAllText(path);
+        try
+        {
+            var col = JsonUtility.FromJson<ClipCueCollection>(json);
+            clipCues = col != null && col.cues != null ? col.cues.ToList() : new List<ClipCue>();
+            Repaint();
+            Debug.Log("Loaded " + clipCues.Count + " cues from " + path);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError("Failed to load cues: " + ex.Message);
+        }
+    }
+
+    void PlayCueInEditor(ClipCue cue)
+    {
+        if (cue == null || string.IsNullOrEmpty(cue.clipName)) return;
+        if (clipTarget == null)
+        {
+            Debug.LogWarning("Clip target not set");
+            return;
+        }
+        var anim = clipTarget.GetComponent<Animation>();
+        if (anim == null)
+        {
+            anim = clipTarget.AddComponent<Animation>();
+            anim.playAutomatically = false;
+        }
+        AnimationClip clip = anim.GetClip(cue.clipName);
+        if (clip == null) clip = Resources.Load<AnimationClip>(cue.clipName);
+        if (clip != null)
+        {
+            if (anim.GetClip(cue.clipName) == null) anim.AddClip(clip, cue.clipName);
+            anim.Stop();
+            anim.Play(cue.clipName);
+            Debug.Log("Playing cue clip '" + cue.clipName + "'");
+        }
+        else
+        {
+            Debug.LogWarning("Clip '" + cue.clipName + "' not found on target or in Resources.");
+        }
+    }
+
     void EnsurePreviewRT()
     {
         if (previewWidth <= 0) previewWidth = 640;
@@ -507,77 +447,6 @@ public class CameraTimelineEditor : EditorWindow
             targetCamera.targetTexture = prevRT;
         }
         Repaint();
-    }
-
-    // Tracks helpers
-    void AddTrackFromSelection()
-    {
-        if (Selection.activeGameObject == null) return;
-        var go = Selection.activeGameObject;
-        AddTrack(go);
-    }
-
-    void AddTrack(UnityEngine.Object asset)
-    {
-        if (asset == null) return;
-        TrackItem ti = new TrackItem { id = System.Guid.NewGuid().ToString(), name = asset.name, asset = asset, expanded = true };
-        tracks.Add(ti);
-    }
-
-    TrackItem FindTrackById(string id)
-    {
-        return tracks.Find(t => t.id == id);
-    }
-
-    // Apply a keyframe to a target asset (simple cases)
-    void ApplyKeyframeToTarget(Keyframe k)
-    {
-        if (k == null) return;
-        if (string.IsNullOrEmpty(k.trackId)) return;
-        var tr = FindTrackById(k.trackId);
-        if (tr == null) return;
-        var obj = tr.asset as GameObject;
-        if (obj == null) return;
-
-        switch (k.type)
-        {
-            case KeyframeType.Transform:
-                Undo.RecordObject(obj.transform, "Apply Keyframe");
-                obj.transform.position = k.position != null ? k.position.ToV3() : obj.transform.position;
-                obj.transform.rotation = Quaternion.Euler(k.rotation != null ? k.rotation.ToV3() : obj.transform.eulerAngles);
-                EditorUtility.SetDirty(obj.transform);
-                break;
-            case KeyframeType.Sprite:
-                var sr = obj.GetComponent<SpriteRenderer>();
-                if (sr != null)
-                {
-                    var sp = Resources.Load<Sprite>(k.assetPath);
-                    if (sp != null) { Undo.RecordObject(sr, "Apply Sprite Keyframe"); sr.sprite = sp; EditorUtility.SetDirty(sr); }
-                }
-                break;
-            case KeyframeType.UIElement:
-                var img = obj.GetComponent<UnityEngine.UI.Image>();
-                if (img != null)
-                {
-                    var sp = Resources.Load<Sprite>(k.assetPath);
-                    if (sp != null) { Undo.RecordObject(img, "Apply UI Sprite"); img.sprite = sp; EditorUtility.SetDirty(img); }
-                }
-                break;
-            case KeyframeType.Model:
-                // If a prefab was assigned, replace first child with prefab instance
-                if (!string.IsNullOrEmpty(k.assetPath))
-                {
-                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(k.assetPath);
-                    if (prefab != null)
-                    {
-                        // remove existing children
-                        while (obj.transform.childCount > 0) { var c = obj.transform.GetChild(0); Undo.DestroyObjectImmediate(c.gameObject); }
-                        var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                        if (inst != null) { Undo.RegisterCreatedObjectUndo(inst, "Instantiate Model"); inst.transform.SetParent(obj.transform, false); }
-                    }
-                }
-                break;
-        }
     }
 
     void AddFromCamera()

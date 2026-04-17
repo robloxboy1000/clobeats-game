@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public class HoverEventSender : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, ISelectHandler, IDeselectHandler
+public class HoverEventSender : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     public bool isHovering = false;
     public static event EventHandler<bool> onItemHovered;
@@ -26,14 +26,6 @@ public class HoverEventSender : MonoBehaviour, IPointerEnterHandler, IPointerExi
     {
         //Debug.Log("Pointer exited from " + gameObject.name);
         EventSystem.current.SetSelectedGameObject(null);
-        isHovering = false;
-    }
-    public void OnSelect(BaseEventData data)
-    {
-        isHovering = true;
-    }
-    public void OnDeselect(BaseEventData data)
-    {
         isHovering = false;
     }
     

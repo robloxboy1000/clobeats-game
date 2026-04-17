@@ -229,7 +229,7 @@ public class NoteSpawner : MonoBehaviour
             await songFolderLoader.LoadIniFile(await System.IO.File.ReadAllTextAsync(songFolderLoader.songFolderPath + @"\song.ini"));
             await musicPlayer.loadSongAudio(audioClipPath);
             musicPlayer.loadVideo(videoClipPath);
-            //songLengthInTicks = gameManager.currentSongLengthInTicks;
+            songLengthInTicks = gameManager.currentSongLengthInTicks;
             
             if (!string.IsNullOrEmpty(videoClipPath))
             {
@@ -242,8 +242,8 @@ public class NoteSpawner : MonoBehaviour
                 Debug.Log("Song data loaded successfully.");
                 CreatePools();
                 PrewarmNotePools();
-                await System.Threading.Tasks.Task.Delay(6000); // delay to let loading phrase be visible
-                VenueAnimationPlayer.Instance.ToggleCamera(true);
+                await System.Threading.Tasks.Task.Delay(500);
+                StartCoroutine(VenueAnimationPlayer.Instance.ToggleCamera(true));
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)
                 {
@@ -527,7 +527,7 @@ public class NoteSpawner : MonoBehaviour
     {
         try
         {
-            if (gameManager.currentSongEvents != null && gameManager.currentSongEvents.TryGetValue(tick, out var val)) return val.value;
+            if (gameManager.currentSongEvents != null && gameManager.currentSongEvents.TryDequeue(out var val) && val.spawnTime == tick) return val.value;
             return string.Empty;
         }
         catch
@@ -673,7 +673,7 @@ public class NoteSpawner : MonoBehaviour
         if (noteIndex < 0 || noteIndex >= gameManager.currentSongNotes.Count) return;
         var n = gameManager.currentSongNotes.ElementAt(noteIndex);
         if (n == null) return;
-        //Debug.Log($"Spawning note [spawnTime={n.spawnTime}, spawnTimeMs={n.spawnTimeMs}, fret={n.fret}, length={n.length}, lengthMs={n.lengthMs}, isHopo={n.isHopo}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with hyperspeed " + spacingFactor);
+        Debug.Log($"Spawning note [spawnTime={n.spawnTime}, spawnTimeMs={n.spawnTimeMs}, fret={n.fret}, length={n.length}, lengthMs={n.lengthMs}, isHopo={n.isHopo}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with hyperspeed " + spacingFactor);
         int fret = n.fret;
         float strikeY = GetStrikeLineY();
         float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
@@ -714,7 +714,7 @@ public class NoteSpawner : MonoBehaviour
         AddObjectToGlobalMoveY(inst);
 
         // sustain handling
-        if (n.length > 240 && n.lengthMs > 240)
+        if (n.length > 24 && n.lengthMs > 94)
         {
             var sust = inst.GetComponent<SustainedNote>();
             if (sust == null) sust = inst.AddComponent<SustainedNote>();

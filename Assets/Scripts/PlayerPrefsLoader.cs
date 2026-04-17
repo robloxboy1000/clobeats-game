@@ -23,7 +23,6 @@ public class PlayerPrefsLoader : MonoBehaviour
     private Button mainMenuButton;
     private Toggle enableBarBeatsToggle;
     private Toggle autoplayToggle;
-    private Toggle enableThirtyFPSCapToggle;
     private TMPro.TMP_Dropdown qualityDropdown;
     private TMPro.TextMeshProUGUI resolutionText;
     public bool autoLoad = false;
@@ -39,9 +38,8 @@ public class PlayerPrefsLoader : MonoBehaviour
         
 
     }
-    async void Awake()
+    void Awake()
     {
-        
         pathInputField = gameObject.transform.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
         if (pathInputField != null)
         {
@@ -63,12 +61,6 @@ public class PlayerPrefsLoader : MonoBehaviour
         if (venueToggle != null)
         {
             venueToggle.isOn = PlayerPrefs.GetInt("EnableVenue", 1) == 1;
-        }
-
-        enableThirtyFPSCapToggle = gameObject.transform.Find("enableThirtyFPSCapToggle").GetComponent<Toggle>();
-        if (enableThirtyFPSCapToggle != null)
-        {
-            enableThirtyFPSCapToggle.isOn = PlayerPrefs.GetInt("ThirtyFPSCap", 0) == 1;
         }
 
         difficultyDropdown = gameObject.transform.Find("DifficultyDropdown").GetComponent<TMPro.TMP_Dropdown>();
@@ -118,9 +110,6 @@ public class PlayerPrefsLoader : MonoBehaviour
         if (autoplayToggle != null)
         {
             autoplayToggle.isOn = PlayerPrefs.GetInt("EnableAutoplay", 0) == 1;
-            LaneInputManager laneInputManager = FindAnyObjectByType<LaneInputManager>();
-            laneInputManager.autoPlayEnabled = autoplayToggle.isOn;
-            
         }
 
         clearSettingsButton = gameObject.transform.Find("ClearSettingsButton").GetComponent<Button>();
@@ -149,7 +138,6 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty);
             PlayerPrefs.SetInt("EnableBarBeats", enableBarBeatsToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableAutoplay", autoplayToggle.isOn ? 1 : 0);
-            PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("GraphicsQuality", qualityDropdown.value);
             PlayerPrefs.Save();
 
@@ -164,12 +152,6 @@ public class PlayerPrefsLoader : MonoBehaviour
                 Debug.LogError("SongFolderLoader not found in scene!");
             }
 
-            GameManager gameManager = FindAnyObjectByType<GameManager>();
-            if (gameManager != null)
-            {
-                gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
-            }
-
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
             if (loader != null)
             {
@@ -182,7 +164,7 @@ public class PlayerPrefsLoader : MonoBehaviour
         });
         
         mainMenuButton = gameObject.transform.Find("LoadMainMenuButton").GetComponent<Button>();
-        mainMenuButton.onClick.AddListener(async () =>
+        mainMenuButton.onClick.AddListener(() =>
         {
             PlayerPrefs.SetString("SelectedFolderPath", pathInputField.text);
             PlayerPrefs.SetFloat("Hyperspeed", speedInputField.value);
@@ -191,32 +173,19 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty);
             PlayerPrefs.SetInt("EnableBarBeats", enableBarBeatsToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableAutoplay", autoplayToggle.isOn ? 1 : 0);
-            PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("GraphicsQuality", qualityDropdown.value);
             PlayerPrefs.Save();
 
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
             if (loader != null)
             {
-                if (await LoadGame(false))
-                {
-                    loader.LoadScene("MainMenu");
-                }
-                
+                loader.LoadScene("MainMenu");
             }
             else
             {
                 Debug.LogError("LoadingManager not found in scene!");
             }
         });
-
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
-        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        gameManager.savePath = documentsPath + @"\CloBeats\save";
-        if (!File.Exists(gameManager.savePath))
-        {
-            Directory.CreateDirectory(gameManager.savePath);
-        }
 
         if (autoLoad)
         {
@@ -229,7 +198,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 indefiniteLoadingScreen.SetActive(false);
             }
-            await LoadGame();
+            MessageBox.Instance.Show("Please re-map controls before continuing.");
         }
         else
         {
@@ -244,24 +213,13 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
         }
     }
-    public async Task<bool> LoadGame(bool loadMainMenu = true)
+    public async void LoadGame()
     {
         if (indefiniteLoadingScreen != null)
         {
             indefiniteLoadingScreen.SetActive(true);
         }
-        if (blankImage != null)
-        {
-            blankImage.SetActive(true);
-        }
-        if (await LoadWholeGame(loadMainMenu))
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        await LoadWholeGame();
     }
     public void RegenerateCacheFile()
     {
@@ -299,7 +257,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             Debug.Log("Directories (cached): " + dir);
         }
     }
-    public async Task<bool> LoadWholeGame(bool loadMainMenu = true)
+    public async Task LoadWholeGame()
     {
         Debug.Log("Loading game...");
         ListDirs();
@@ -316,7 +274,11 @@ public class PlayerPrefsLoader : MonoBehaviour
                     {
                         Directory.CreateDirectory(songFoldersPath);
                     }
-                    
+                    gameManager.savePath = documentsPath + @"\CloBeats\save";
+                    if (!File.Exists(gameManager.savePath))
+                    {
+                        Directory.CreateDirectory(gameManager.savePath);
+                    }
                     string[] directories = Directory.GetDirectories(songFoldersPath);
                     string[] cachedSongsFile = File.ReadAllLines(documentsPath + @"\CloBeats\cbfoldercache");
                     if (cachedSongsFile != null)
@@ -353,12 +315,11 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 Debug.LogError("Song listing failed: " + ex);
                 RegenerateCacheFile();
-                return false;
             }
         }
         else
         {
-            return false;
+            return;
         }
         
 
@@ -369,27 +330,17 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             indefiniteLoadingScreen.SetActive(false);
         }
-        if (loadMainMenu)
+        LoadingManager loader = FindFirstObjectByType<LoadingManager>();
+        if (loader != null)
         {
-            LoadingManager loader = FindFirstObjectByType<LoadingManager>();
-            if (loader != null)
-            {
-                loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
-                await Task.Delay(6000);
-                loader.LoadScene("MainMenu", LoadSceneMode.Single, true);
-                return true;
-            }
-            else
-            {
-                Debug.LogError("LoadingManager not found in scene!");
-                return false;
-            }
+            loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
+            await Task.Delay(6000);
+            loader.LoadScene("MainMenu", LoadSceneMode.Single, true);
         }
         else
         {
-            return true;
+            Debug.LogError("LoadingManager not found in scene!");
         }
-        
     }
 
     // Update is called once per frame
@@ -429,11 +380,6 @@ public class PlayerPrefsLoader : MonoBehaviour
         if (resolutionText != null)
         {
             resolutionText.text = Display.displays[0].renderingWidth + " x " + Display.displays[0].renderingHeight + " @ " + Screen.currentResolution.refreshRateRatio + "Hz";
-        }
-        if (autoplayToggle != null)
-        {
-            LaneInputManager laneInputManager = FindAnyObjectByType<LaneInputManager>();
-            laneInputManager.autoPlayEnabled = autoplayToggle.isOn;
         }
     }
 }

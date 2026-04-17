@@ -186,8 +186,6 @@ public class SongFolderLoader : MonoBehaviour
                 {
                     songLength = length;
                     // don't rely on this anymore, for metadata only
-                    NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
-                    noteSpawner.songLengthInTicks = length;
                 }
                 else if (parts.Length == 2 && parts[0].Trim() == "back_color" && parts[1].Trim() is string hex)
                 {

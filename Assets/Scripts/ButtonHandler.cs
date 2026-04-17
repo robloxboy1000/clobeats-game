@@ -5,7 +5,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.IO;
-using System.Windows.Forms;
 
 public class ButtonHandler : MonoBehaviour
 {
@@ -204,21 +203,6 @@ public class ButtonHandler : MonoBehaviour
         else if (myButton.name == "Quality4")
         {
             QualitySettings.SetQualityLevel(4);
-        }
-        else if (myButton.name == "SelectFolderButton")
-        {
-
-            Ookii.Dialogs.VistaFolderBrowserDialog folderBrowserDialog = new Ookii.Dialogs.VistaFolderBrowserDialog
-            {
-                SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\CloBeats\songs\local"
-            };
-            if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
-            {
-                TMPro.TMP_InputField sfpField = GameObject.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
-                sfpField.text = folderBrowserDialog.SelectedPath;
-                Debug.Log("Folder selected: '" + folderBrowserDialog.SelectedPath + "'");
-            }
-
         }
     }
 }

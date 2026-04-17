@@ -6,7 +6,7 @@ QualitySettings:
   serializedVersion: 5
   m_CurrentQuality: 2
   m_QualitySettings:
-  - serializedVersion: 3
+  - serializedVersion: 5
     name: Potato
     pixelLightCount: 0
     shadows: 0
@@ -31,9 +31,13 @@ QualitySettings:
     realtimeReflectionProbes: 0
     billboardsFaceCameraPosition: 0
     useLegacyDetailDistribution: 0
+    adaptiveVsync: 0
     vSyncCount: 0
     realtimeGICPUUsage: 100
+    adaptiveVsyncExtraA: 0
+    adaptiveVsyncExtraB: 0
     lodBias: 0.01
+    meshLodThreshold: 1
     maximumLODLevel: 0
     enableLODCrossFade: 0
     streamingMipmapsActive: 0
@@ -61,7 +65,7 @@ QualitySettings:
     - Android
     - iPhone
     - Windows Store Apps
-  - serializedVersion: 3
+  - serializedVersion: 5
     name: Low
     pixelLightCount: 1
     shadows: 0
@@ -86,9 +90,13 @@ QualitySettings:
     realtimeReflectionProbes: 0
     billboardsFaceCameraPosition: 1
     useLegacyDetailDistribution: 1
+    adaptiveVsync: 0
     vSyncCount: 0
     realtimeGICPUUsage: 100
+    adaptiveVsyncExtraA: 0
+    adaptiveVsyncExtraB: 0
     lodBias: 2
+    meshLodThreshold: 1
     maximumLODLevel: 0
     enableLODCrossFade: 1
     streamingMipmapsActive: 0
@@ -116,7 +124,7 @@ QualitySettings:
     - Android
     - iPhone
     - Windows Store Apps
-  - serializedVersion: 3
+  - serializedVersion: 5
     name: Normal
     pixelLightCount: 2
     shadows: 2
@@ -141,9 +149,13 @@ QualitySettings:
     realtimeReflectionProbes: 0
     billboardsFaceCameraPosition: 1
     useLegacyDetailDistribution: 1
+    adaptiveVsync: 0
     vSyncCount: 0
     realtimeGICPUUsage: 100
+    adaptiveVsyncExtraA: 0
+    adaptiveVsyncExtraB: 0
     lodBias: 2
+    meshLodThreshold: 1
     maximumLODLevel: 0
     enableLODCrossFade: 1
     streamingMipmapsActive: 0
@@ -171,7 +183,7 @@ QualitySettings:
     - Android
     - iPhone
     - Windows Store Apps
-  - serializedVersion: 3
+  - serializedVersion: 5
     name: High
     pixelLightCount: 2
     shadows: 2
@@ -196,9 +208,13 @@ QualitySettings:
     realtimeReflectionProbes: 0
     billboardsFaceCameraPosition: 1
     useLegacyDetailDistribution: 1
+    adaptiveVsync: 0
     vSyncCount: 0
     realtimeGICPUUsage: 100
+    adaptiveVsyncExtraA: 0
+    adaptiveVsyncExtraB: 0
     lodBias: 2
+    meshLodThreshold: 1
     maximumLODLevel: 0
     enableLODCrossFade: 1
     streamingMipmapsActive: 0
@@ -226,7 +242,7 @@ QualitySettings:
     - Android
     - iPhone
     - Windows Store Apps
-  - serializedVersion: 3
+  - serializedVersion: 5
     name: Ultra
     pixelLightCount: 4
     shadows: 2
@@ -251,9 +267,13 @@ QualitySettings:
     realtimeReflectionProbes: 1
     billboardsFaceCameraPosition: 1
     useLegacyDetailDistribution: 1
+    adaptiveVsync: 0
     vSyncCount: 0
     realtimeGICPUUsage: 100
+    adaptiveVsyncExtraA: 0
+    adaptiveVsyncExtraB: 0
     lodBias: 4
+    meshLodThreshold: 1
     maximumLODLevel: 0
     enableLODCrossFade: 1
     streamingMipmapsActive: 0

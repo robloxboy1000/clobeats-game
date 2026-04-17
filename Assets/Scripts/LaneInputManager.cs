@@ -228,16 +228,8 @@ public class LaneInputManager : MonoBehaviour
                     // Optionally: play tap FX / scoring events here
                     if (strikeline != null)
                     {
-                        if (laneIndex == 7)
-                        {
-                            strikeline.HitNote(7);
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        else
-                        {
-                            strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                            strikeline.SLTopHit(laneIndex);
-                        }
+                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                        strikeline.SLTopHit(laneIndex);
                     }
                 }
 
@@ -280,17 +272,8 @@ public class LaneInputManager : MonoBehaviour
                     // Optionally: play tap FX / scoring events here
                     if (strikeline != null)
                     {
-                        if (laneIndex == 7)
-                        {
-                            strikeline.HitNote(7);
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        else
-                        {
-                            strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        
+                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                        strikeline.SLTopHit(laneIndex);
                     }
                 }
 
@@ -329,7 +312,7 @@ public class LaneInputManager : MonoBehaviour
             // If sustain time elapsed, end it
             if ((float)mp.GetElapsedTime() >= s.endTime)
             {
-                //Debug.Log(s.lane + " ended");
+                Debug.Log(s.lane + " ended");
                 if (spawner != null)
                 {
                     spawner.ReturnObjectToPool(s.note);
