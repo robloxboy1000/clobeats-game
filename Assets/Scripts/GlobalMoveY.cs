@@ -88,13 +88,14 @@ public class GlobalMoveY : MonoBehaviour
             }
 
             var t = obj.transform;
+            float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", 5f);
             // If the object has a ScheduledTime component, compute its world Y directly
             // from its scheduled song time and the currentSongSeconds using NoteSpawner's
             // layout parameters so tempo changes are respected.
             var sched = obj.GetComponent<ScheduledTime>();
             if (sched != null && ns != null)
             {
-                float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", ns != null ? ns.desiredHyperspeedSingleThreaded : speed);
+                spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", ns != null ? ns.desiredHyperspeedSingleThreaded : speed);
                 float strikeY = ns != null ? ns.GetStrikeLineY() : 0f;
                 float targetY = strikeY + ns.startingYPosition + ns.startingYOffset + ((sched.scheduledSeconds - currentSongSeconds) + ns.spawnLeadSeconds) * spacingFactor;
                 // preserve x,z
@@ -105,8 +106,8 @@ public class GlobalMoveY : MonoBehaviour
                 t.Translate(0f, -speed * Time.deltaTime, 0f, Space.World);
             }
             
-
-            if (lim.secondsUntil == -lim.hitWindowSeconds)
+            float twend = lim.hitWindowSeconds * spacingFactor;
+            if (obj.transform.position.y < -twend)
             {
                 NotePoolManager.Instance.Return(obj);
                 LaneManager.Instance.UnregisterNote(obj);

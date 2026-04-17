@@ -44,13 +44,12 @@ public class MenuManager : MonoBehaviour
     {
         
     }
-    async void Awake()
+    void Awake()
     {
         startPanel = menuCanvas.transform.Find("StartPanel").gameObject;
         mainMenuPanel = menuCanvas.transform.Find("MainMenuPanel").gameObject;
         quickplayPanel = menuCanvas.transform.Find("QuickPlayPanel").gameObject;
         songInfoPanel = quickplayPanel.transform.Find("SongInfoPanel").gameObject;
-        cbFeedPanel = menuCanvas.transform.Find("CBFeedPanel").gameObject;
         loadingPanel = menuCanvas.transform.Find("LoadingPanel").gameObject;
         playSongUIButton = songInfoPanel.transform.Find("PlaySongButton").gameObject.GetComponent<Button>();
         playSongUIButton.onClick.AddListener(async () =>
@@ -72,6 +71,10 @@ public class MenuManager : MonoBehaviour
                 {
                     Debug.LogError("SongFolderLoader not found in scene!");
                 }
+                if (gameManager != null)
+                {
+                    gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+                }
                 MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
                 if (musicPlayer != null)
                 {
@@ -87,46 +90,20 @@ public class MenuManager : MonoBehaviour
         loadingPreviewImage = songInfoPanel.transform.Find("AlbumImage").gameObject.transform.Find("LoadingImage").gameObject;
         logoObject = menuCanvas.transform.Find("Logo").gameObject;
         exitgamePanel = menuCanvas.transform.Find("ExitGamePanel").gameObject;
-        hoverHelpText = mainMenuPanel.transform.Find("HoverHelpText").GetComponent<TMPro.TextMeshProUGUI>();
         optionsPanel = menuCanvas.transform.Find("OptionsPanel").gameObject;
         onlineIndicatorPanel = menuCanvas.transform.Find("OnlineIndicatorPanel").gameObject;
         UGUIListHelper = FindFirstObjectByType<UGUIMenuList>().gameObject;
 
-        hoverHelpFilePath = Path.Combine(Application.streamingAssetsPath, "HoverHelpData.xml");
-        hoverHelpStrings = await ReadXmlToDictionary(hoverHelpFilePath);
         menuButtons = new Dictionary<string, GameObject>();
         foreach (Transform child in mainMenuPanel.transform)
         {
-            if (child.gameObject.GetComponent<Button>() != null)
+            if (child.gameObject.GetComponent<Selectable>() != null)
             {
                 menuButtons.Add(child.gameObject.name, child.gameObject);
             }
         }
-        if (!CheckIfButtonsAreNull())
-        {
-            menuButtons["quickplay"].GetComponent<Button>().onClick.AddListener( () => {
-                Debug.Log("Quick Play button pressed.");
-                mainMenuPanel.SetActive(false);
-                quickplayPanel.SetActive(true);
-                logoObject.SetActive(false);
-                
-            });
-            menuButtons["multiplayer"].GetComponent<Button>().onClick.AddListener(() => {
-                Debug.Log("Multiplayer button pressed.");
-            });
-            menuButtons["onlinemultiplayer"].GetComponent<Button>().onClick.AddListener(() => {
-                Debug.Log("Online Multiplayer button pressed.");
-            });
-            menuButtons["leaderboards"].GetComponent<Button>().onClick.AddListener(() => {
-                Debug.Log("Leaderboards button pressed.");
-            });
-            menuButtons["options"].GetComponent<Button>().onClick.AddListener(() => {
-                Debug.Log("Options button pressed.");
-                mainMenuPanel.SetActive(false);
-                optionsPanel.SetActive(true);
-                logoObject.SetActive(false);
-            });
-        }
+        
+        
         if (mainMenuPanel != null)
         mainMenuPanel.SetActive(false);
         if (quickplayPanel != null)
@@ -147,21 +124,23 @@ public class MenuManager : MonoBehaviour
         loadingPreviewImage.SetActive(false);
     }
 
+    private void OpenQPPanel()
+    {
+        mainMenuPanel.SetActive(false);
+        quickplayPanel.SetActive(true);
+        logoObject.SetActive(false);
+    }
+
+    private void OpenOptionsPanel()
+    {
+        mainMenuPanel.SetActive(false);
+        optionsPanel.SetActive(true);
+        logoObject.SetActive(false);
+    }
+
     private bool CheckIfButtonsAreNull()
     {
         if (menuButtons["quickplay"] != null)
-        {
-            return false;
-        }
-        else if (menuButtons["multiplayer"] != null)
-        {
-            return false;
-        }
-        else if (menuButtons["onlinemultiplayer"] != null)
-        {
-            return false;
-        }
-        else if (menuButtons["leaderboards"] != null)
         {
             return false;
         }
@@ -179,10 +158,6 @@ public class MenuManager : MonoBehaviour
     void Update()
     {
         if (menuButtons == null) return;
-        if (playSongOnlineUIButton != null)
-        {
-            playSongOnlineUIButton.interactable = isOnline;
-        }
         
         if (menuButtons.Count == 0)
         {
@@ -195,16 +170,7 @@ public class MenuManager : MonoBehaviour
                 GameObject selectedObj = EventSystem.current.currentSelectedGameObject;
                 if (selectedObj != null && menuButtons.ContainsKey(selectedObj.name))
                 {
-                    HoverEventSender hoverSender = selectedObj.GetComponent<HoverEventSender>();
-                    if (hoverSender != null && hoverSender.isHovering)
-                    {
-                        //Debug.Log("Showing help for " + selectedObj.name);
-                        ShowHelpText(selectedObj.name);
-                    }
-                    else if (hoverSender != null && !hoverSender.isHovering)
-                    {
-                        hoverHelpText.text = "Hover over an option to see more info.";
-                    }
+                    Debug.Log("Currnetly selected: " + selectedObj.name);
                 }
             }
         }
@@ -251,6 +217,11 @@ public class MenuManager : MonoBehaviour
                     else
                     {
                         Debug.LogError("SongFolderLoader not found in scene!");
+                    }
+                    
+                    if (gameManager != null)
+                    {
+                        gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
                     }
                     MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
                     if (musicPlayer != null)

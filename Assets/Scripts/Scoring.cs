@@ -7,7 +7,7 @@ public class Scoring : MonoBehaviour
 {
     public int playerID;
     public int currentSongID;
-    public int currentSongPath;
+    public string currentSongPath;
     public float lastNoteSecondsUntil;
     public int lastFret;
     public int currentScore;
