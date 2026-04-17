@@ -165,6 +165,7 @@ public class UIUpdater : MonoBehaviour
             }
             savedcombo = 1;
             savednotesHit = 0;
+            comboDotsCount = 0;
             comboText.text = savedcombo.ToString() + "x";
             notesHitText.text = savednotesHit.ToString();
         }
@@ -197,7 +198,7 @@ public class UIUpdater : MonoBehaviour
     public async Task UpdateCurrentEvent(string value)
     {
         currentEventText.text = $"GlobalEvent: {value}";
-        Debug.Log("Current MIDI text event: " + value);
+        //Debug.Log("Current MIDI text event: " + value);
         await Task.Yield();
     }
 
@@ -215,7 +216,7 @@ public class UIUpdater : MonoBehaviour
         else
         {
             SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
-            UpdateLoadingPhrase(songFolderLoader.loadingPhrase);
+            //UpdateLoadingPhrase(songFolderLoader.loadingPhrase);
             UpdateCurrentTick(noteSpawner.currentTick);
             tempo = SyncInfoToTempo(noteSpawner.FindSyncForTick(noteSpawner.currentTick));
             UpdateBPM(tempo);

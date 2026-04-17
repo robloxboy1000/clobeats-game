@@ -7,6 +7,7 @@ using UnityEngine.EventSystems;
 using System.Threading.Tasks;
 using Melanchall.DryWetMidi.Core;
 using System.Linq;
+using Rewired.Integration.UnityUI;
 
 public class UGUIMenuList : MonoBehaviour
 {
@@ -20,7 +21,19 @@ public class UGUIMenuList : MonoBehaviour
     public List<string> itemNames = new List<string>();
     List<GameObject> instantiatedListItems = new List<GameObject>();
 
+    public class ListObject
+    {
+        public string songPath;
+        public int songID;
+    }
+
+    Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
+
     public Button regenerateItemsButton;
+
+    public int currentSelectedItem = 0;
+
+    public int OICCount = 0;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -62,8 +75,26 @@ public class UGUIMenuList : MonoBehaviour
 
 
     // Update is called once per frame
-    void Update()
+    async void Update()
     {
+        GameObject currentHoveringButton = EventSystem.current.currentSelectedGameObject;
+        if (currentHoveringButton != null)
+        {
+            var hover = currentHoveringButton.gameObject.GetComponent<HoverEventSender>();
+            if (hover != null)
+            {
+                if (hover.isHovering)
+                {
+                    currentSelectedItem = int.Parse(currentHoveringButton.name);
+                    if (currentSelectedItem != int.Parse(currentHoveringButton.name))
+                    {
+                        OICCount = 0;
+                    }
+                    await OnItemClicked(itemPaths[currentSelectedItem].songPath, itemPaths[currentSelectedItem].songID, itemPaths[currentSelectedItem].songID);
+                    OICCount++;
+                }
+            }
+        }
         
     }
     async Task ClearItemObjects()
@@ -108,35 +139,45 @@ public class UGUIMenuList : MonoBehaviour
             
         // Find the text component within the new item and set its value
         // (You might need a dedicated script for complex prefabs)
-        GameObject songArtistTextObject = newItem.transform.Find("SongArtistText").gameObject;
-        GameObject songTitleTextObject = newItem.transform.Find("SongTitleText").gameObject;
+        GameObject songArtistTextObject = newItem.transform.Find("Marqee1").Find("SongArtistText").gameObject;
+        GameObject songTitleTextObject = newItem.transform.Find("Maquee2").Find("SongTitleText").gameObject;
+        GameObject songNumberTextObject = newItem.transform.Find("SongNumberText").gameObject;
 
         TMPro.TextMeshProUGUI songArtistText = songArtistTextObject.GetComponent<TMPro.TextMeshProUGUI>();
         TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
+        TMPro.TextMeshProUGUI songNumberText = songNumberTextObject.GetComponent<TMPro.TextMeshProUGUI>();
 
         GameManager gameManager = FindAnyObjectByType<GameManager>();
 
         GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(item.cachedSongID);
         if (songEntry != null)
         {
+            if (songNumberText != null)
+            {
+                songNumberText.text = "(" + songEntry.songNumber + ")";
+            }
             if (songArtistText != null)
             {
-                songArtistText.text = "(" + songEntry.songNumber + ") " + songEntry.songArtist;
+                var stm = newItem.transform.Find("Marqee1").GetComponent<ScrollingTextManager>();
+                songArtistText.text = songEntry.songArtist;
+                stm.SetText(songEntry.songArtist);
             }
             if (songTitleText != null)
             {
+                var stm = newItem.transform.Find("Maquee2").GetComponent<ScrollingTextManager>();
                 songTitleText.text = songEntry.songTitle;
+                stm.SetText(songEntry.songTitle);
             }
         }
   
-        Button button = newItem.GetComponent<Button>();
+        Selectable button = newItem.GetComponent<Selectable>();
         if (button != null)
         {
-            button.name = item.cachedSongID.ToString();
-            button.onClick.AddListener(async () => 
-            { 
-                await OnItemClicked(item.songPath, int.Parse(button.name), int.Parse(EventSystem.current.currentSelectedGameObject.name)); 
-                button.gameObject.transform.Find("highlight").gameObject.SetActive(true);
+            button.name = songEntry.songNumber.ToString();
+            itemPaths.Add(songEntry.songNumber, new ListObject
+            {
+                songPath = songEntry.songPath,
+                songID = songEntry.cachedSongID
             });
         } 
         await Task.Yield();
@@ -145,6 +186,7 @@ public class UGUIMenuList : MonoBehaviour
     
     async Task OnItemClicked(string name, int id, int lastID)
     {
+        if (OICCount != 0) return;
         Debug.Log($"Clicked on: {name}, {id}, {lastID}");
         GameObject songInfoPanel = rootTransform.Find("SongInfoPanel").gameObject;
         if (songInfoPanel != null)
@@ -172,14 +214,14 @@ public class UGUIMenuList : MonoBehaviour
                     }
                     else
                     {
-                        albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
+                        albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
                     }
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogError("Fallback to placeholder album because: " + ex.Message);
-                albumTexture.texture = Resources.Load<Texture>("albumPlaceholder");
+                albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
             }
             GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(id);
             if (songEntry != null)
@@ -209,6 +251,7 @@ public class UGUIMenuList : MonoBehaviour
                     }
                     else
                     {
+                        await Task.Delay(1000);
                         if (songMatch != null)
                         if (File.Exists(songMatch.path))
                         {

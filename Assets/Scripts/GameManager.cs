@@ -11,11 +11,13 @@ using System.IO;
 using System.Threading;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
+using TMPro;
 
 
 public class GameManager : MonoBehaviour
 {
     public bool enableSustains = true;
+    public bool thirtyFPSCap = false;
     public List<string> songFolders;
 
     public Dictionary<int, SongInfo> cachedSongs = new Dictionary<int, SongInfo>();
@@ -26,7 +28,7 @@ public class GameManager : MonoBehaviour
         public int resolution = 480;
         public Queue<NoteSpawner.SyncInfo> syncInfos = new Queue<NoteSpawner.SyncInfo>();
         public Queue<NoteSpawner.NoteInfo> noteInfos = new Queue<NoteSpawner.NoteInfo>();
-        public Queue<NoteSpawner.GlobalEventInfo> globalEvents = new Queue<NoteSpawner.GlobalEventInfo>();
+        public Dictionary<int, NoteSpawner.GlobalEventInfo> globalEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>();
         public int songLengthInTicks = 0;
     }
 
@@ -52,7 +54,7 @@ public class GameManager : MonoBehaviour
     public int currentSongResolution = 480;
     public Queue<NoteSpawner.NoteInfo> currentSongNotes = new Queue<NoteSpawner.NoteInfo>();
     public Queue<NoteSpawner.SyncInfo> currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>();
-    public Queue<NoteSpawner.GlobalEventInfo> currentSongEvents = new Queue<NoteSpawner.GlobalEventInfo>();
+    public Dictionary<int, NoteSpawner.GlobalEventInfo> currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>();
     public int currentSongLengthInTicks = 0;
 
     public string currentSongTitle;
@@ -70,6 +72,8 @@ public class GameManager : MonoBehaviour
 
     public bool inSong = false;
     public string savePath = null;
+
+    public GameObject unDestructibleLoadingPhraseScreen;
 
     // note mappings
     Dictionary<string, Dictionary<int, int>> difficultyMappings = new Dictionary<string, Dictionary<int,int>>
@@ -140,7 +144,7 @@ public class GameManager : MonoBehaviour
                 currentSongResolution = si.resolution;
                 currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>(si.syncInfos);
                 currentSongNotes = new Queue<NoteSpawner.NoteInfo>(si.noteInfos);
-                currentSongEvents = new Queue<NoteSpawner.GlobalEventInfo>(si.globalEvents);
+                currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>(si.globalEvents);
                 currentSongLengthInTicks = si.songLengthInTicks;
             }
         }
@@ -183,7 +187,29 @@ public class GameManager : MonoBehaviour
         double scale = (double)targetResolution / Math.Max(1, midiResolution);
 
         var globalEvents = GetTextEventsFromTrackByName(midi, "EVENTS", scale);
-        foreach (var evt in globalEvents) info.globalEvents.Enqueue(evt);
+        foreach (var evt in globalEvents)
+        {
+            int key = (int)evt.spawnTime;
+            if (!info.globalEvents.TryGetValue(key, out var existing))
+            {
+                info.globalEvents.Add(key, evt);
+            }
+            else
+            {
+                // Merge event values for identical spawn times using '|' as separator
+                string sep = "|";
+                if (string.IsNullOrEmpty(existing.value))
+                {
+                    existing.value = evt.value;
+                }
+                else if (!string.IsNullOrEmpty(evt.value))
+                {
+                    existing.value = existing.value + sep + evt.value;
+                }
+                // keep existing.spawnTime and existing.spawnTimeMs
+            }
+        }
+        
 
         // choose difficulty key (string) from player settings or UI
         string chosenDiff = ddst;
@@ -348,6 +374,7 @@ public class GameManager : MonoBehaviour
                     spawnTimeMs = (float)(startSeconds * 1000.0),
                     value = eve.Text
                 });
+                //Debug.Log("Text event Added: " + eve.Text);
             }
 
             // If you expect only one matching track, break here.
@@ -434,9 +461,96 @@ public class GameManager : MonoBehaviour
             await Task.Yield();
         }
     }
-    public string GetCurrentSongTitle()
+    public async Task<string> GetSongTitle(string iniPath)
     {
-        return currentSongTitle != string.Empty ? currentSongTitle : string.Empty;
+        string data = await File.ReadAllTextAsync(iniPath);
+        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        bool inSongSection = false;
+
+        foreach (string line in lines)
+        {
+            string trimmedLine = line.Trim();
+
+            if (trimmedLine.StartsWith("["))
+            {
+                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
+                continue;
+            }
+
+            if (inSongSection)
+            {
+                string[] parts = trimmedLine.Split('=');
+                    
+                if (parts.Length == 2 && parts[0].Trim() == "name" && parts[1].Trim() is string name)
+                {
+                    return name.Trim();
+                }
+                else
+                {
+                    return string.Empty;
+                }
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+
+        return null; 
+    }
+
+    public async Task<string> GetSongLoadingPhrase(string iniPath)
+    {
+        string data = await File.ReadAllTextAsync(iniPath);
+        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        bool inSongSection = false;
+
+        foreach (string line in lines)
+        {
+            string trimmedLine = line.Trim();
+
+            if (trimmedLine.StartsWith("["))
+            {
+                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
+                continue;
+            }
+
+            if (inSongSection)
+            {
+                string[] parts = trimmedLine.Split('=');
+                    
+                if (parts.Length == 2 && parts[0].Trim() == "loading_phrase" && parts[1].Trim() is string name)
+                {
+                    return name.Trim();
+                }
+                else
+                {
+                    return string.Empty;
+                }
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+
+        return null; 
+    }
+    public async void EnableLoadSongVisual(GameObject loadingCanvas, string songIniPath)
+    {
+        if (loadingCanvas != null)
+        {
+            loadingCanvas.SetActive(true);
+            TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay").Find("LoadingPhraseText").GetComponent<TextMeshProUGUI>();
+            textObj.text = await GetSongLoadingPhrase(songIniPath);
+        }
+    }
+    public void DisableLoadSongVisual(GameObject loadingCanvas)
+    {
+        if (loadingCanvas != null)
+        {
+            loadingCanvas.SetActive(false);
+        }
     }
 
     public IEnumerator PlaySong()
@@ -444,11 +558,16 @@ public class GameManager : MonoBehaviour
         
         UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
         GameObject gp = GameObject.Find("GuitarPlayer");
+        unDestructibleLoadingPhraseScreen = GameObject.Find("SongLoadingCanvas");
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
         if (uiUpdater != null)
         {
             uiUpdater.songInfoPanel.SetActive(true);
-            uiUpdater.loadingOverlay.SetActive(false);
+            //uiUpdater.loadingOverlay.SetActive(false);
+        }
+        if (unDestructibleLoadingPhraseScreen != null && unDestructibleLoadingPhraseScreen.activeSelf)
+        {
+            DisableLoadSongVisual(unDestructibleLoadingPhraseScreen);
         }
         if (gp != null)
         {
@@ -479,6 +598,14 @@ public class GameManager : MonoBehaviour
             highwayAnim.Play("ShowHighway");
             sFXPlayer.PlayHighwayRiseClip();
             yield return new WaitForSecondsRealtime(1f);
+            var sl = gp.transform.Find("Strikeline").GetComponent<ImprovedStrikeline>();
+            if (sl != null)
+            {
+                sl.RippleAnim();
+                sFXPlayer.PlayFretRippleUpClip();
+                yield return new WaitForSecondsRealtime(1f);
+            }
+            highwayAnim.Stop();
         }
         VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
         if (venueAnimationPlayer != null)
@@ -525,18 +652,19 @@ public class GameManager : MonoBehaviour
         currentSongLengthInTicks = 0;
     }
 
-    public static async Task GetStringFromAddr(string addr)
+    public static async Task<string> GetStringFromAddr(string addr)
     {
         using (HttpClient client = new HttpClient())
         {
             client.DefaultRequestHeaders.UserAgent.TryParseAdd("CloBeats/0.0.1");
             try
             {
-                await client.GetStringAsync(addr);
+                return await client.GetStringAsync(addr);
             }
             catch (Exception ex)
             {
                 Debug.LogError("Server error occoured: " + ex.Message);
+                return null;
             }
         }
     }
@@ -602,6 +730,15 @@ public class GameManager : MonoBehaviour
     void Update()
     {
         ddst = PlayerPrefs.GetString("SelectedDifficulty");
+        thirtyFPSCap = PlayerPrefs.GetInt("ThirtyFPSCap", 0) == 1;
+        if (thirtyFPSCap)
+        {
+            Application.targetFrameRate = 30;
+        }
+        else
+        {
+            Application.targetFrameRate = -1;
+        }
     }
     
 }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 
@@ -20,6 +21,13 @@ public class ExceptionManager : MonoBehaviour
 
     void HandleLog(string logString, string stackTrace, LogType type)
     {
+        System.Console.WriteLine($"[{Time.time}]: [{type}]: \"{logString}\"");
+
+        //using (StreamWriter sw = new StreamWriter(Path.Combine(Application.persistentDataPath, $"cb_log_{Time.time}.log")))
+        //{
+        //    sw.WriteLine($"[{Time.time}]: [{type}]: \"{logString}\"");
+        //    sw.Close();
+        //}
         if (debugLogField != null)
         {
             debugLogField.text += $"[{Time.time}]: [{type}]: \"{logString}\"\r\n";

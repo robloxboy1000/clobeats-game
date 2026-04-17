@@ -37,20 +37,8 @@ public class GeneralSettingsObject : MonoBehaviour
         username = PlayerPrefs.GetString("Username", string.Empty);
         serverAddress = PlayerPrefs.GetString("ServerAddress", string.Empty);
 
-        //songsFolderPathInputField = transform.Find("SongsFolderPathObject").
-        //gameObject.transform.Find("SongsPathInputField").
-        //gameObject.GetComponent<TMPro.TMP_InputField>();
-
         songDifficultyDropdown = transform.Find("SongDifficultyObject").
         gameObject.transform.Find("DifficultyInputField").
-        gameObject.GetComponent<TMPro.TMP_InputField>();
-
-        usernameInputField = transform.Find("UsernameObject").
-        gameObject.transform.Find("UsernameInputField").
-        gameObject.GetComponent<TMPro.TMP_InputField>();
-
-        serverAddressInputField = transform.Find("ServerAddressObject").
-        gameObject.transform.Find("ServerInputField").
         gameObject.GetComponent<TMPro.TMP_InputField>();
 
         hpSlider = transform.Find("HyperspeedSliderObject").
@@ -68,10 +56,6 @@ public class GeneralSettingsObject : MonoBehaviour
         fpsSlider = transform.Find("FramerateSliderObject").
         gameObject.transform.Find("FPSSlider").
         gameObject.GetComponent<Slider>();
-
-        resInput = transform.Find("ResolutionObject").
-        gameObject.transform.Find("resInputField").
-        gameObject.GetComponent<TMPro.TMP_InputField>();
 
         resDropdown = transform.Find("ResolutionDropdownObject").
         gameObject.transform.Find("ResDropdownOptions").
@@ -93,17 +77,7 @@ public class GeneralSettingsObject : MonoBehaviour
             });
         }
 
-
-        findServerButton = transform.Find("FindServerButton").gameObject.GetComponent<Button>();
         saveSettingsButton = transform.Find("SaveSettingsButton").gameObject.GetComponent<Button>();
-
-        
-
-        findServerButton.onClick.AddListener(async () =>
-        {
-            Debug.Log("Testing server...");
-            await TestServerAtAddr(serverAddress);
-        });
 
         saveSettingsButton.onClick.AddListener(() =>
         {
@@ -164,18 +138,6 @@ public class GeneralSettingsObject : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (serverAddressInputField != null)
-        {
-            serverAddress = serverAddressInputField.text;
-        }
-        //if (songsFolderPathInputField != null)
-        //{
-        //    songsFolderPath = songsFolderPathInputField.text;
-        //}
-        if (usernameInputField != null)
-        {
-            username = usernameInputField.text;
-        }
         if (hpSlider != null)
         {
             TMPro.TextMeshProUGUI hpText = transform.Find("HyperspeedSliderObject").

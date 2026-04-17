@@ -15,7 +15,7 @@ public class HoldFPS : MonoBehaviour
         }
         else
         {
-            Application.targetFrameRate = int.MaxValue;
+            Application.targetFrameRate = -1;
         }
     }
 }
