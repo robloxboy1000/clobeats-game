@@ -6,6 +6,8 @@ public class Sustain : MonoBehaviour
     public float endSeconds;
     public float spacingFactor;
 
+    public Color color;
+
     // Root Y where sustain begins (world space)
     private float startY;
 
@@ -91,5 +93,11 @@ public class Sustain : MonoBehaviour
         {
             gameObject.SetActive(false);
         }
+    }
+
+    void Update()
+    {
+        var sustainSprite = gameObject.GetComponent<SpriteRenderer>();
+        sustainSprite.color = color;
     }
 }

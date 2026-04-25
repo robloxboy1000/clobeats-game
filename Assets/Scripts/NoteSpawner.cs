@@ -282,8 +282,6 @@ public class NoteSpawner : MonoBehaviour
             double dspStart = AudioSettings.dspTime + visualLeadSeconds;
             musicPlayer.PlayScheduled(dspStart);
         }
-
-        StartMovingNotes();
         // Start managed spawning of bars/beats (pooled, ahead-window)
         if (PlayerPrefs.GetInt("EnableBarBeats", 1) == 1)
         {
@@ -299,6 +297,7 @@ public class NoteSpawner : MonoBehaviour
         }
         // Start progressive runtime spawning of notes (small initial window + streaming spawn)
         StartProgressiveSpawning();
+        StartMovingNotes();
     }
         
 
@@ -666,7 +665,7 @@ public class NoteSpawner : MonoBehaviour
         }
         runtimeSpawnCoroutine = null;
     }
-
+    public float lastNoteSpawnTime = 0;
     // Spawn a single note (pooled) with sustain handling and lane registration
     private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
     {
@@ -683,23 +682,26 @@ public class NoteSpawner : MonoBehaviour
 
         Vector2 pos = (fret == 7) ? new Vector2(0 + noteSpawningXOffset, yPosition) : new Vector2((fret - 2f) + noteSpawningXOffset, yPosition);
         GameObject inst = null;
+        Color gemColor = Color.white;
 
         if (fret == 7)
         {
-            if (openNotePrefab != null) inst = NotePoolManager.Instance.Get(openNotePrefab);
+            if (openNotePrefab != null) inst = NotePoolManager.Instance.Get(openNotePrefab); gemColor = Color.magenta;
         }
         else
         {
             switch (fret)
             {
-                case 0: if (greenNotePrefab != null) inst = NotePoolManager.Instance.Get(greenNotePrefab); break;
-                case 1: if (redNotePrefab != null) inst = NotePoolManager.Instance.Get(redNotePrefab); break;
-                case 2: if (yellowNotePrefab != null) inst = NotePoolManager.Instance.Get(yellowNotePrefab); break;
-                case 3: if (blueNotePrefab != null) inst = NotePoolManager.Instance.Get(blueNotePrefab); break;
-                case 4: if (orangeNotePrefab != null) inst = NotePoolManager.Instance.Get(orangeNotePrefab); break;
+                case 0: if (greenNotePrefab != null) inst = NotePoolManager.Instance.Get(greenNotePrefab); gemColor = Color.green; break;
+                case 1: if (redNotePrefab != null) inst = NotePoolManager.Instance.Get(redNotePrefab); gemColor = Color.red; break;
+                case 2: if (yellowNotePrefab != null) inst = NotePoolManager.Instance.Get(yellowNotePrefab); gemColor = Color.yellow; break;
+                case 3: if (blueNotePrefab != null) inst = NotePoolManager.Instance.Get(blueNotePrefab); gemColor = Color.blue; break;
+                case 4: if (orangeNotePrefab != null) inst = NotePoolManager.Instance.Get(orangeNotePrefab); gemColor = new Color(1f, 0.5f, 0f); break;
                 default: break;
             }
         }
+
+        
 
         if (inst == null) return;
         inst.transform.position = pos;
@@ -713,22 +715,31 @@ public class NoteSpawner : MonoBehaviour
         inst.SetActive(true);
         AddObjectToGlobalMoveY(inst);
 
+        // hopo handling
+        lastNoteSpawnTime = n.spawnTime;
+        int calcThreshold = (resolution / 3) + 1; // 192 = 64 ticks, 480 = 160 ticks
+        if (n.spawnTime - lastNoteSpawnTime > calcThreshold)
+        {
+            var hopo = inst.GetComponent<HopoIndicator>();
+            if (hopo == null) hopo = inst.AddComponent<HopoIndicator>();
+            hopo.isHopo = true;
+            //var visual = inst.GetComponent<NoteVisualChanger>();
+            //if (visual != null) visual.isHOPO = true;
+        }
+
         // sustain handling
-        if (n.length > 240 && n.lengthMs > 240)
+        if (n.length > calcThreshold)
         {
             var sust = inst.GetComponent<SustainedNote>();
             if (sust == null) sust = inst.AddComponent<SustainedNote>();
-            float sustainEndSeconds = 0f;
-            if (n.lengthMs > 0f)
-                sustainEndSeconds = n.spawnTimeMs / 1000f + n.lengthMs / 1000f;
-            else
-                sustainEndSeconds = GetTimeInSecondsAtTick(n.spawnTime + n.length);
-            sust.durationSeconds = sustainEndSeconds;
+            sust.durationSeconds = n.lengthMs / 1000f;
             var sustainObj = inst.GetComponentInChildren<Sustain>()?.gameObject;
             if (sustainObj != null)
             {
+                var scr = sustainObj.GetComponent<Sustain>();
+                scr.color = gemColor;
                 sustainObj.transform.position = inst.transform.position;
-                SetupSustain(sustainObj, n.spawnTimeMs, (int)n.lengthMs, spacingFactor, inst.transform.position);
+                SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor, inst.transform.position);
                 sustainObj.SetActive(true);
             }
         }

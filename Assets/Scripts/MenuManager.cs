@@ -21,7 +21,7 @@ public class MenuManager : MonoBehaviour
     public GameObject onlineIndicatorPanel;
     string hoverHelpFilePath;
     public Dictionary<string, string> hoverHelpStrings;
-    public Dictionary<string, GameObject> menuButtons;
+    public Dictionary<int, string> menuButtons;
     private GameObject UGUIListHelper;
 
     public Button playSongUIButton;
@@ -37,6 +37,8 @@ public class MenuManager : MonoBehaviour
     public bool isOnline = false;
     public string currentPreviewingSongPath = string.Empty;
     public int currentPreviewingID = 0;
+
+
     
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -94,12 +96,21 @@ public class MenuManager : MonoBehaviour
         onlineIndicatorPanel = menuCanvas.transform.Find("OnlineIndicatorPanel").gameObject;
         UGUIListHelper = FindFirstObjectByType<UGUIMenuList>().gameObject;
 
-        menuButtons = new Dictionary<string, GameObject>();
+
         foreach (Transform child in mainMenuPanel.transform)
         {
-            if (child.gameObject.GetComponent<Selectable>() != null)
+            if (child.gameObject.GetComponent<Button>() != null)
             {
-                menuButtons.Add(child.gameObject.name, child.gameObject);
+                var button = child.gameObject.GetComponent<Button>();
+                if (button == null) child.gameObject.AddComponent<Button>();
+                if (child.gameObject.name == "quickplay")
+                {
+                    button.onClick.AddListener(() => OpenQPPanel());
+                }
+                else if (child.gameObject.name == "options")
+                {
+                    button.onClick.AddListener(() => OpenOptionsPanel());
+                }
             }
         }
         
@@ -138,42 +149,12 @@ public class MenuManager : MonoBehaviour
         logoObject.SetActive(false);
     }
 
-    private bool CheckIfButtonsAreNull()
-    {
-        if (menuButtons["quickplay"] != null)
-        {
-            return false;
-        }
-        else if (menuButtons["options"] != null)
-        {
-            return false;
-        }
-        else
-        {
-            return true;
-        }
-    }
+
 
     // Update is called once per frame
     void Update()
     {
-        if (menuButtons == null) return;
-        
-        if (menuButtons.Count == 0)
-        {
-            
-        }
-        if (menuButtons.Count > 0)
-        {
-            if (!CheckIfButtonsAreNull())
-            {
-                GameObject selectedObj = EventSystem.current.currentSelectedGameObject;
-                if (selectedObj != null && menuButtons.ContainsKey(selectedObj.name))
-                {
-                    Debug.Log("Currnetly selected: " + selectedObj.name);
-                }
-            }
-        }
+
     }
 
     void OnEnable()
@@ -287,7 +268,7 @@ public class MenuManager : MonoBehaviour
         }
     }
 
-    public void ScrollSongListDown()
+    public void ScrollMainDown()
     {
         UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
         {

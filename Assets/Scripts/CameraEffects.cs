@@ -7,29 +7,17 @@ using UnityEngine.SceneManagement;
 public class CameraEffects : MonoBehaviour
 {
     public Camera cameraToTweak;
-    bool mainCameraFound = false;
+
     // Start is called before the first frame update
     void Start()
     {
-        SceneManager.sceneLoaded += OnSceneLoaded;
-    }
 
-    void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
-    {
-        mainCameraFound = false;
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (!mainCameraFound)
-        {
-            if (Camera.main != null)
-            {
-                cameraToTweak = Camera.main;
-                mainCameraFound = true;
-            }
-        }
+        
     }
     public void SetChromaticAberration(float intensity)
     {

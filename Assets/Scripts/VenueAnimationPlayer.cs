@@ -11,7 +11,6 @@ public class VenueAnimationPlayer : MonoBehaviour
     public string cameraAnimationFile;
     public float currentTick = 0f;
     MusicPlayer musicPlayer;
-    bool mainCameraFound = false;
 
     [System.Serializable]
     public class VecData
@@ -29,7 +28,8 @@ public class VenueAnimationPlayer : MonoBehaviour
         public float tick;
         public VecData position;
         public VecData rotation;
-        public float focalLength;
+        public GameObject prefab;
+        public string trackId; // id of the track/target this keyframe affects
     }
 
     [System.Serializable]
@@ -51,7 +51,6 @@ public class VenueAnimationPlayer : MonoBehaviour
 
     void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
     {
-        mainCameraFound = false;
         if (scene.buildIndex == 2)
         {
             ToggleCamera(false);
@@ -146,17 +145,9 @@ public class VenueAnimationPlayer : MonoBehaviour
     void Update()
     {
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        if (!mainCameraFound)
-        {
-            if (Camera.main != null)
-            {
-                mainCamera = Camera.main;
-                mainCameraFound = true;
-            }
-        }
         if (musicPlayer != null)
         {
-            currentTick = musicPlayer.GetElapsedTime() * 1000f;
+            currentTick = (float)musicPlayer.GetElapsedTime() * 1000f;
         }
         else
         {
@@ -202,29 +193,59 @@ public class VenueAnimationPlayer : MonoBehaviour
         Vector3 posB = next.position != null ? next.position.ToVector3() : Vector3.zero;
         Vector3 rotA = prev.rotation != null ? prev.rotation.ToVector3() : Vector3.zero;
         Vector3 rotB = next.rotation != null ? next.rotation.ToVector3() : Vector3.zero;
-        float focA = prev.focalLength;
-        float focB = next.focalLength;
 
         Vector3 p = Vector3.Lerp(posA, posB, t);
         Quaternion r = Quaternion.Slerp(Quaternion.Euler(rotA), Quaternion.Euler(rotB), t);
 
-        float fl = Mathf.Lerp(Mathf.Clamp(focA, 50, 200), Mathf.Clamp(focB, 50, 200), t);
-
-        if (mainCamera != null)
+        if (!string.IsNullOrEmpty(prev.trackId))
         {
-            mainCamera.transform.position = p;
-            mainCamera.transform.rotation = r;
-            mainCamera.focalLength = fl;
+            GameObject currentGO = GameObject.Find(prev.trackId);
+
+            if (currentGO != null)
+            {
+                currentGO.transform.position = p;
+                currentGO.transform.rotation = r;
+            }
+            else
+            {
+                Debug.LogWarning(prev.trackId + " could not be found");
+            }
         }
+        else
+        {
+            GameObject currentPreGO = Instantiate(prev.prefab);
+
+            if (currentPreGO != null)
+            {
+                currentPreGO.transform.position = p;
+                currentPreGO.transform.rotation = r;
+            }
+            
+        }
+        
+
+        
+        
     }
 
     void ApplyKeyframe(Keyframe k)
     {
         if (k == null) return;
-        if (mainCamera == null) return;
-        Vector3 p = k.position != null ? k.position.ToVector3() : Vector3.zero;
-        Quaternion r = k.rotation != null ? Quaternion.Euler(k.rotation.ToVector3()) : Quaternion.identity;
-        mainCamera.transform.position = p;
-        mainCamera.transform.rotation = r;
+        if (!string.IsNullOrEmpty(k.trackId))
+        {
+            GameObject go = GameObject.Find(k.trackId);
+            Vector3 p = k.position != null ? k.position.ToVector3() : Vector3.zero;
+            Quaternion r = k.rotation != null ? Quaternion.Euler(k.rotation.ToVector3()) : Quaternion.identity;
+            go.transform.position = p;
+            go.transform.rotation = r;
+        }
+        else
+        {
+            GameObject prefabGO = Instantiate(k.prefab);
+            Vector3 p = k.position != null ? k.position.ToVector3() : Vector3.zero;
+            Quaternion r = k.rotation != null ? Quaternion.Euler(k.rotation.ToVector3()) : Quaternion.identity;
+            prefabGO.transform.position = p;
+            prefabGO.transform.rotation = r;
+        }
     }
 }

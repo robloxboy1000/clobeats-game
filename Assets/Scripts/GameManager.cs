@@ -48,6 +48,7 @@ public class GameManager : MonoBehaviour
         public int songNumber;
     }
     public string ddst;
+    public string currentPart = "Guitar";
     public int cachedSongChartCount = 0;
     public int cachedSongEntryCount = 0;
 
@@ -75,14 +76,27 @@ public class GameManager : MonoBehaviour
 
     public GameObject unDestructibleLoadingPhraseScreen;
 
-    // note mappings
-    Dictionary<string, Dictionary<int, int>> difficultyMappings = new Dictionary<string, Dictionary<int,int>>
+    // note mappings (RBN2)
+    Dictionary<string, Dictionary<int, int>> partGuitarDifficultyMappings = new Dictionary<string, Dictionary<int,int>>
     {
         ["Easy"] = new Dictionary<int,int> { {60,0}, {61,1}, {62,2}, {63,3}, {64,4}, {59,7} },
         ["Medium"] = new Dictionary<int,int> { {72,0}, {73,1}, {74,2}, {75,3}, {76,4}, {71,7} },
         ["Hard"] = new Dictionary<int,int> { {84,0}, {85,1}, {86,2}, {87,3}, {88,4}, {83,7} },
-        ["Expert"] = new Dictionary<int,int> { {96,0}, {97,1}, {98,2}, {99,3}, {100,4}, {95,7} },
+        ["Expert"] = new Dictionary<int,int> { {96,0}, {97,1}, {98,2}, {99,3}, {100,4}, {95,7}, {94,8} },
     };
+
+    // scene enums
+    public enum SceneIndexes
+    {
+        Preloader = 0,
+        Gameplay = 1,
+        Venue = 2,
+        ScoreScene = 3,
+        Blank = 4,
+        HealthAndSafetyScene = 5,
+        MainMenu = 6,
+        AttractScene = 7
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -213,12 +227,26 @@ public class GameManager : MonoBehaviour
 
         // choose difficulty key (string) from player settings or UI
         string chosenDiff = ddst;
-        if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
-        if (difficultyMappings.TryGetValue(chosenDiff, out var map))
+        string chosenPart = currentPart.ToUpper();
+        if (chosenPart == "GUITAR")
         {
-            var trackNotes = GetNotesFromTrackByName(midi, "PART GUITAR", map, scale);
-            foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+            if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
+            if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
+            {
+                var trackNotes = GetNotesFromTrackByName(midi, "PART GUITAR", map, scale);
+                foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+            }
         }
+        else if (chosenPart == "BASS")
+        {
+            if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
+            if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
+            {
+                var trackNotes = GetNotesFromTrackByName(midi, "PART BASS", map, scale);
+                foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+            }
+        }
+        
 
         // Set cached resolution to the target resolution we converted into
         info.resolution = targetResolution;
@@ -499,9 +527,9 @@ public class GameManager : MonoBehaviour
         return null; 
     }
 
-    public async Task<string> GetSongLoadingPhrase(string iniPath)
+    public string GetSongLoadingPhrase(string iniPath)
     {
-        string data = await File.ReadAllTextAsync(iniPath);
+        string data = File.ReadAllText(iniPath);
         string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         bool inSongSection = false;
 
@@ -536,13 +564,14 @@ public class GameManager : MonoBehaviour
 
         return null; 
     }
-    public async void EnableLoadSongVisual(GameObject loadingCanvas, string songIniPath)
+    public void EnableLoadSongVisual(GameObject loadingCanvas, string songIniPath)
     {
         if (loadingCanvas != null)
         {
+            Debug.Log("song ini path: " + songIniPath);
             loadingCanvas.SetActive(true);
             TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay").Find("LoadingPhraseText").GetComponent<TextMeshProUGUI>();
-            textObj.text = await GetSongLoadingPhrase(songIniPath);
+            textObj.text = GetSongLoadingPhrase(songIniPath);
         }
     }
     public void DisableLoadSongVisual(GameObject loadingCanvas)
@@ -562,8 +591,7 @@ public class GameManager : MonoBehaviour
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
         if (uiUpdater != null)
         {
-            uiUpdater.songInfoPanel.SetActive(true);
-            //uiUpdater.loadingOverlay.SetActive(false);
+            StartCoroutine(uiUpdater.SongInfoAnim());
         }
         if (unDestructibleLoadingPhraseScreen != null && unDestructibleLoadingPhraseScreen.activeSelf)
         {
@@ -583,13 +611,13 @@ public class GameManager : MonoBehaviour
             {
                 Animation venueAnim = venue.GetComponent<Animation>();
                 venueAnim.Play("VenueEntry");
-                yield return new WaitForSecondsRealtime(10f);
+                yield return new WaitForSecondsRealtime(6f);
             }
         }
+
         if (uiUpdater != null)
         {
             uiUpdater.InitializeUI();
-            uiUpdater.songInfoPanel.SetActive(false);
         }
         
         if (gp != null)
@@ -730,6 +758,7 @@ public class GameManager : MonoBehaviour
     void Update()
     {
         ddst = PlayerPrefs.GetString("SelectedDifficulty");
+        currentPart = PlayerPrefs.GetString("SelectedPart");
         thirtyFPSCap = PlayerPrefs.GetInt("ThirtyFPSCap", 0) == 1;
         if (thirtyFPSCap)
         {

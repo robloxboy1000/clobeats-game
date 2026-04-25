@@ -23,9 +23,11 @@ public class MusicPlayer : MonoBehaviour
     // ManagedBass stream handles
     private int songStreamHandle = 0;
     public AudioSource previewAudioStream;
-    public float currentTime = 0f;
+    public double currentTime = 0;
     public float previousTime = 0f;
     public float NSSonglength = 0;
+    public double songLength = 0;
+    public double graceEndSeconds = 4.0;
     float[] spectrumData = new float[512];
     int reverbFX = 0;
 
@@ -372,8 +374,9 @@ public class MusicPlayer : MonoBehaviour
         if (noteSpawner != null)
         {
             currentTime = GetElapsedTime();
+            songLength = GetSongLength();
             
-            if (gameManager.inSong && (currentTime * 1000) >= noteSpawner.songLengthInTicks)
+            if (gameManager.inSong && currentTime == GetSongLength())
             {
                 Debug.Log("song ended");
                 StartCoroutine(EndSong());
@@ -407,11 +410,17 @@ public class MusicPlayer : MonoBehaviour
             videoPlayer.time = currentTime;
             videoPlayer.Play();
         }
+        else if (videoPlayer.isPrepared && videoPlayer.isPlaying && videoPlayer.time == GetSongLength())
+        {
+            videoPlayer.Stop();
+            videoPlayer.gameObject.SetActive(false);
+        }
     }
-    public IEnumerator EndSong()
+    public IEnumerator EndSong(string afterScene = "ScoreScreen")
     {
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
         Debug.Log("Song ended. (called manually)");
+
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
         gameManager.inSong = false;
         gameManager.currentSongLengthInTicks = 0;
         if (noteSpawner != null)
@@ -455,11 +464,11 @@ public class MusicPlayer : MonoBehaviour
         LoadingManager loadingManager = FindFirstObjectByType<LoadingManager>();
         if (loadingManager != null)
         {
-            loadingManager.LoadScene("ScoreScreen", LoadSceneMode.Single, false);
+            loadingManager.LoadScene(afterScene, LoadSceneMode.Single, false);
         }
         yield return null;
     }
-    public float GetElapsedTime()
+    public double GetElapsedTime()
     {
         if (bassInitialized && songStreamHandle != 0)
         {
@@ -467,13 +476,13 @@ public class MusicPlayer : MonoBehaviour
             {
                 long pos = Bass.ChannelGetPosition(songStreamHandle);
                 double secs = Bass.ChannelBytes2Seconds(songStreamHandle, pos);
-                return (float)secs;
+                return secs;
             }
             catch { return 0f; }
         }
         return 0f;
     }
-    public float GetSongLength()
+    public double GetSongLength()
     {
         if (bassInitialized && songStreamHandle != 0)
         {
@@ -481,7 +490,7 @@ public class MusicPlayer : MonoBehaviour
             {
                 long length = Bass.ChannelGetLength(songStreamHandle);
                 double secs = Bass.ChannelBytes2Seconds(songStreamHandle, length);
-                return (float)secs;
+                return secs;
             }
             catch { return 0f;}
         }
@@ -507,7 +516,7 @@ public class MusicPlayer : MonoBehaviour
             try
             {
 
-                int level = Bass.ChannelGetData(songStreamHandle, spectrumData, (int)Bass.ChannelGetLength(songStreamHandle));
+                int level = Bass.ChannelGetData(songStreamHandle, spectrumData, 1);
                 return level;
             }
             catch { return 0; }

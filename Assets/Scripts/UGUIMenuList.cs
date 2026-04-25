@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Melanchall.DryWetMidi.Core;
 using System.Linq;
 using Rewired.Integration.UnityUI;
+using UnityEngine.UIElements;
 
 public class UGUIMenuList : MonoBehaviour
 {
@@ -29,11 +30,22 @@ public class UGUIMenuList : MonoBehaviour
 
     Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
 
-    public Button regenerateItemsButton;
+    public UnityEngine.UI.Button regenerateItemsButton;
 
-    public int currentSelectedItem = 0;
+    private int _privcurrentSelectedItem;
+    public int currentSelectedItem
+    {
+        get => _privcurrentSelectedItem;
+        set
+        {
+            if (_privcurrentSelectedItem != value) // Only trigger if the value actually changes
+            {
+                _privcurrentSelectedItem = value;
+                OnSelectedChanged(); // Call your method here
+            }
+        }
+    }
 
-    public int OICCount = 0;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -48,7 +60,7 @@ public class UGUIMenuList : MonoBehaviour
         // cachedEntries is a Dictionary<int, SongEntryInfo> — iterate values to list entries
         foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
         {
-            await GenerateList(entry.Value);
+            await AddEntry(entry.Value);
         }
         SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         songFolderLoader.ClearValues();
@@ -65,7 +77,7 @@ public class UGUIMenuList : MonoBehaviour
                 itemNames.Clear();
                 foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
                 {
-                    await GenerateList(entry.Value);
+                    await AddEntry(entry.Value);
                 }
                 SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
                 songFolderLoader.ClearValues();
@@ -75,28 +87,16 @@ public class UGUIMenuList : MonoBehaviour
 
 
     // Update is called once per frame
-    async void Update()
+    void Update()
     {
-        GameObject currentHoveringButton = EventSystem.current.currentSelectedGameObject;
-        if (currentHoveringButton != null)
-        {
-            var hover = currentHoveringButton.gameObject.GetComponent<HoverEventSender>();
-            if (hover != null)
-            {
-                if (hover.isHovering)
-                {
-                    currentSelectedItem = int.Parse(currentHoveringButton.name);
-                    if (currentSelectedItem != int.Parse(currentHoveringButton.name))
-                    {
-                        OICCount = 0;
-                    }
-                    await OnItemClicked(itemPaths[currentSelectedItem].songPath, itemPaths[currentSelectedItem].songID, itemPaths[currentSelectedItem].songID);
-                    OICCount++;
-                }
-            }
-        }
         
     }
+
+    public void OnSelectedChanged()
+    {
+        CheckSelectedEntry(currentSelectedItem);
+    }
+
     async Task ClearItemObjects()
     {
         if (instantiatedListItems != null)
@@ -120,7 +120,7 @@ public class UGUIMenuList : MonoBehaviour
             }
         }
     }
-    async Task GenerateList(GameManager.SongEntryInfo item)
+    async Task AddEntry(GameManager.SongEntryInfo item)
     {
         MenuManager menuManager = FindAnyObjectByType<MenuManager>();
         // Instantiate a new item for each entry in the data list
@@ -139,55 +139,41 @@ public class UGUIMenuList : MonoBehaviour
             
         // Find the text component within the new item and set its value
         // (You might need a dedicated script for complex prefabs)
-        GameObject songArtistTextObject = newItem.transform.Find("Marqee1").Find("SongArtistText").gameObject;
-        GameObject songTitleTextObject = newItem.transform.Find("Maquee2").Find("SongTitleText").gameObject;
-        GameObject songNumberTextObject = newItem.transform.Find("SongNumberText").gameObject;
+        GameObject songTitleTextObject = newItem.transform.Find("Marqee1").Find("SongtitleText").gameObject;
 
-        TMPro.TextMeshProUGUI songArtistText = songArtistTextObject.GetComponent<TMPro.TextMeshProUGUI>();
         TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-        TMPro.TextMeshProUGUI songNumberText = songNumberTextObject.GetComponent<TMPro.TextMeshProUGUI>();
 
         GameManager gameManager = FindAnyObjectByType<GameManager>();
 
         GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(item.cachedSongID);
         if (songEntry != null)
         {
-            if (songNumberText != null)
-            {
-                songNumberText.text = "(" + songEntry.songNumber + ")";
-            }
-            if (songArtistText != null)
-            {
-                var stm = newItem.transform.Find("Marqee1").GetComponent<ScrollingTextManager>();
-                songArtistText.text = songEntry.songArtist;
-                stm.SetText(songEntry.songArtist);
-            }
             if (songTitleText != null)
             {
-                var stm = newItem.transform.Find("Maquee2").GetComponent<ScrollingTextManager>();
                 songTitleText.text = songEntry.songTitle;
-                stm.SetText(songEntry.songTitle);
             }
         }
-  
-        Selectable button = newItem.GetComponent<Selectable>();
-        if (button != null)
+        newItem.name = songEntry.songNumber.ToString();
+        itemPaths.Add(songEntry.songNumber, new ListObject
         {
-            button.name = songEntry.songNumber.ToString();
-            itemPaths.Add(songEntry.songNumber, new ListObject
-            {
-                songPath = songEntry.songPath,
-                songID = songEntry.cachedSongID
-            });
-        } 
+            songPath = songEntry.songPath,
+            songID = songEntry.cachedSongID
+        });
         await Task.Yield();
     }
 
-    
-    async Task OnItemClicked(string name, int id, int lastID)
+    public async void CheckSelectedEntry(int id)
     {
-        if (OICCount != 0) return;
-        Debug.Log($"Clicked on: {name}, {id}, {lastID}");
+        if (itemPaths.TryGetValue(id, out ListObject listObject))
+        {
+            await OnItemClicked(listObject.songPath, listObject.songID);
+        }
+    }
+
+    
+    async Task OnItemClicked(string name, int id)
+    {
+        Debug.Log($"Clicked on: {name}, {id}");
         GameObject songInfoPanel = rootTransform.Find("SongInfoPanel").gameObject;
         if (songInfoPanel != null)
         {

@@ -1,10 +1,14 @@
+using System;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.Video;
+
 
 public class VideoAttractionPlayer : MonoBehaviour
 {
     public VideoPlayer videoPlayer;
     public string videoURL;
+    public double videoLength = 0.0;
     bool isInMainMenu = false;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -19,6 +23,7 @@ public class VideoAttractionPlayer : MonoBehaviour
         {
             videoURL = PlayerPrefs.GetString("VideoAttractPath", Application.streamingAssetsPath + "/video_attract.webm");
             videoPlayer.url = videoURL;
+            videoPlayer.prepareCompleted += OnVideoLoaded;
             if (!videoPlayer.isPrepared)
             {
                 videoPlayer.Prepare();
@@ -87,9 +92,15 @@ public class VideoAttractionPlayer : MonoBehaviour
             Skip();
         }
 
-        if (!videoPlayer.isPlaying && videoPlayer.time == videoPlayer.length)
+        if (videoPlayer.isPlaying && videoPlayer.time == videoLength)
         {
             End();
         }
+    }
+
+    void OnVideoLoaded(VideoPlayer vp)
+    {
+        videoLength = vp.length;
+        
     }
 }

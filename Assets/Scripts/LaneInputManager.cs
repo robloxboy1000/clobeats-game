@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Melanchall.DryWetMidi.Core;
 using UnityEngine;
 
 // Enhanced input handler: shows a hit-window visual, supports strum/chords,
@@ -32,7 +33,6 @@ public class LaneInputManager : MonoBehaviour
     GameObject note = null;
 
     MusicPlayer mp;
-    const float EPS = 0.1f;
     public float secondsUntil;
 
 
@@ -135,20 +135,36 @@ public class LaneInputManager : MonoBehaviour
     }
 
     // Called when the player strums; will attempt to hit all currently held frets (chords)
-    public void OnStrum()
+    public bool OnStrum()
     {
-        if (heldLanes.Count == 0) TryHitLane(7);
-        // Copy so TryHitLane can modify collections safely
-        var lanes = new List<int>(heldLanes);
-        foreach (var lane in lanes)
+        if (heldLanes.Count == 0)
         {
-            TryHitLane(lane);
+            if (TryHitLane(7))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
-    }
-
-    public int GetHeldLanes()
-    {
-        return heldLanes.Count;
+        else
+        {
+            // Copy so TryHitLane can modify collections safely
+            var lanes = new List<int>(heldLanes);
+            foreach (var lane in lanes)
+            {
+                if (TryHitLane(lane))
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     // Backwards-compatible single-fret hit (e.g., mapping a single key without a strum action)
@@ -157,160 +173,118 @@ public class LaneInputManager : MonoBehaviour
         TryHitLane(laneIndex);
     }
 
-    void TryHitLane(int laneIndex, bool autoHit = false)
+    bool TryHitLane(int laneIndex, bool autoHit = false)
     {
         if (spawner == null) spawner = FindAnyObjectByType<NoteSpawner>();
-        if (spawner == null) return;
-
-        
+        if (spawner == null) return false;
         float spacingFactor = PlayerPrefs.GetFloat("Hyperspeed", 5f);
         float strikeY = spawner.GetStrikeLineY();
         // Use the same base Y as NoteSpawner so world Y <-> seconds mapping matches:
         float baseY = strikeY + spawner.startingYPosition + spawner.startingYOffset;
-
-        // Try to hit as many consecutive notes in this lane as fall within the timing window.
-        while (true)
-        {
-            note = LaneManager.Instance.GetNextNoteInLane(laneIndex);
-            if (note == null) break;
-
-            float noteY = note.transform.position.y;
-            // Prefer scheduled song time if available (more accurate and synced to audio DSP clock)
-            var sched = note.GetComponent<ScheduledTime>();
-            mp = FindAnyObjectByType<MusicPlayer>();
-            float currentSongSeconds = mp != null ? (float)mp.GetElapsedTime() : Time.time;
+        note = LaneManager.Instance.GetNextNoteInLane(laneIndex);
+        if (note == null) return false;
+        float noteY = note.transform.position.y;
+        // Prefer scheduled song time if available (more accurate and synced to audio DSP clock)
+        var sched = note.GetComponent<ScheduledTime>();
+        mp = FindAnyObjectByType<MusicPlayer>();
+        float currentSongSeconds = mp != null ? (float)mp.GetElapsedTime() : Time.time;
             
-            if (sched != null)
-            {
-                // scheduledSeconds is the song time when the note should be at the strike line
-                secondsUntil = sched.scheduledSeconds - currentSongSeconds;
-            }
-            else
-            {
-                // Fallback to world-Y -> time mapping used by NoteSpawner
-                // NoteSpawner: y = strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
-                // therefore timeSeconds = (y - baseY) / spacingFactor - spawnLeadSeconds
-                secondsUntil = (noteY - baseY) / Mathf.Max(0.0001f, spacingFactor) - spawner.spawnLeadSeconds;
-            }
-            if (Mathf.Abs(secondsUntil) <= hitWindowSeconds && !autoHit)
-            {
-                //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
-
-                var sustainComp = note.GetComponent<SustainedNote>();
-                LaneManager.Instance.UnregisterNote(note);
-
-                if (sustainComp != null && sustainComp.durationSeconds > 0f)
-                {
-                    spawner.ReturnObjectToPool(note);
-                    // Start sustain tracking instead of immediately returning to pool.
-                    activeSustains.Add(new ActiveSustain
-                    {
-                        note = note,
-                        endTime = (float)mp.GetElapsedTime() + sustainComp.durationSeconds,
-                        lane = laneIndex
-                    });
-                    // Optionally: play sustain start FX / scoring events here
-                    if (strikeline != null)
-                    {
-                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                        strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
-                        strikeline.SLTopHit(laneIndex);
-                    }
-                    // Spawn / show separate sustain visual managed by SustainManager
-                    if (SustainManager.Instance != null)
-                    {
-                        SustainManager.Instance.StartSustain(laneIndex, sustainComp.durationSeconds);
-                    }
-                }
-                else
-                {
-                    spawner.ReturnObjectToPool(note);
-                    // Optionally: play tap FX / scoring events here
-                    if (strikeline != null)
-                    {
-                        if (laneIndex == 7)
-                        {
-                            strikeline.HitNote(7);
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        else
-                        {
-                            strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                    }
-                }
-
-                // continue loop to allow multiple notes in the same lane to be hit if present
-                break;
-            }
-            else if (Mathf.Abs(secondsUntil) <= 0 + EPS && autoHit)
-            {
-                //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
-
-                var sustainComp = note.GetComponent<SustainedNote>();
-                LaneManager.Instance.UnregisterNote(note);
-
-                if (sustainComp != null && sustainComp.durationSeconds > 0f)
-                {
-                    spawner.ReturnObjectToPool(note);
-                    // Start sustain tracking instead of immediately returning to pool.
-                    //activeSustains.Add(new ActiveSustain
-                    //{
-                    //    note = note,
-                    //    endTime = (float)mp.GetElapsedTime() + sustainComp.durationSeconds,
-                    //    lane = laneIndex
-                    //});
-                    // Optionally: play sustain start FX / scoring events here
-                    if (strikeline != null)
-                    {
-                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                        //strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
-                        strikeline.SLTopHit(laneIndex);
-                    }
-                    // Spawn / show separate sustain visual managed by SustainManager
-                    if (SustainManager.Instance != null)
-                    {
-                        //SustainManager.Instance.StartSustain(laneIndex, sustainComp.durationSeconds);
-                    }
-                }
-                else
-                {
-                    spawner.ReturnObjectToPool(note);
-                    // Optionally: play tap FX / scoring events here
-                    if (strikeline != null)
-                    {
-                        if (laneIndex == 7)
-                        {
-                            strikeline.HitNote(7);
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        else
-                        {
-                            strikeline.HitNote(laneIndex - 2); // zero-based xOffset
-                            strikeline.SLTopHit(laneIndex);
-                        }
-                        
-                    }
-                }
-
-                // continue loop to allow multiple notes in the same lane to be hit if present
-                //break;
-            }
-            else
-            {
-                if (!autoHit)
-                {
-                    // Next note is outside of timing window -> stop
-                    if (strikeline != null)
-                    {
-                        strikeline.MissNote();
-                    }
-                }
-                //Debug.Log("No more hittable notes in lane " + laneIndex + "; next note in " + secondsUntil + " seconds."); 
-                break;
-            }
+        if (sched != null)
+        {
+            // scheduledSeconds is the song time when the note should be at the strike line
+            secondsUntil = sched.scheduledSeconds - currentSongSeconds;
         }
+        else
+        {
+            // Fallback to world-Y -> time mapping used by NoteSpawner
+            // NoteSpawner: y = strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
+            // therefore timeSeconds = (y - baseY) / spacingFactor - spawnLeadSeconds
+            secondsUntil = (noteY - baseY) / Mathf.Max(0.0001f, spacingFactor) - spawner.spawnLeadSeconds;
+        }
+        if (Mathf.Abs(secondsUntil) <= hitWindowSeconds && !autoHit)
+        {
+            //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
+
+            var sustainComp = note.GetComponent<SustainedNote>();
+            LaneManager.Instance.UnregisterNote(note);
+
+            if (sustainComp != null && sustainComp.durationSeconds > 0f)
+            {
+                spawner.ReturnObjectToPool(note);
+                // Start sustain tracking instead of immediately returning to pool.
+                activeSustains.Add(new ActiveSustain
+                {
+                    note = note,
+                    endTime = (float)mp.GetElapsedTime() + sustainComp.durationSeconds,
+                    lane = laneIndex
+                });
+                // Optionally: play sustain start FX / scoring events here
+                if (strikeline != null)
+                {
+                    strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                    strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
+                    strikeline.SLTopHit(laneIndex);
+                }
+                // Spawn / show separate sustain visual managed by SustainManager
+                if (SustainManager.Instance != null)
+                {
+                    SustainManager.Instance.StartSustain(laneIndex, sustainComp.durationSeconds);
+                }
+            }
+            else
+            {
+                spawner.ReturnObjectToPool(note);
+                // Optionally: play tap FX / scoring events here
+                if (strikeline != null)
+                {
+                    if (laneIndex == 7)
+                    {
+                        strikeline.HitNote(7);
+                        strikeline.SLTopHit(laneIndex);
+                    }
+                    else
+                    {
+                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                        strikeline.SLTopHit(laneIndex);
+                    }
+                }
+            }
+            return true;
+        }
+        else if (Mathf.Abs(secondsUntil) <= 0.05 && autoHit)
+        {
+            //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
+            LaneManager.Instance.UnregisterNote(note);
+            spawner.ReturnObjectToPool(note);
+            // Optionally: play tap FX / scoring events here
+            if (strikeline != null)
+            {
+                if (laneIndex == 7)
+                {
+                    strikeline.HitNote(7);
+                    strikeline.SLTopHit(laneIndex);
+                }
+                else
+                {
+                    strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                    strikeline.SLTopHit(laneIndex);
+                }
+            }
+            return true;
+        }
+        else
+        {
+            if (!autoHit)
+            {
+                // Next note is outside of timing window -> stop
+                if (strikeline != null)
+                {
+                    strikeline.MissNote();
+                }
+            }
+            return false;
+        }
+        
     }
 
     void UpdateActiveSustains()

@@ -202,6 +202,13 @@ public class UIUpdater : MonoBehaviour
         await Task.Yield();
     }
 
+    public IEnumerator SongInfoAnim(float duration = 6f)
+    {
+        songInfoPanel.SetActive(true);
+        yield return new WaitForSeconds(duration);
+        songInfoPanel.SetActive(false);
+    }
+
     // Update is called once per frame
     async void Update()
     {

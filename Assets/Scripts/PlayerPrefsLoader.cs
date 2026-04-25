@@ -20,6 +20,7 @@ public class PlayerPrefsLoader : MonoBehaviour
     private Toggle venueToggle;
     private Button clearSettingsButton;
     private TMPro.TMP_Dropdown difficultyDropdown;
+    private TMPro.TMP_Dropdown partDropdown;
     private Button mainMenuButton;
     private Toggle enableBarBeatsToggle;
     private Toggle autoplayToggle;
@@ -87,6 +88,23 @@ public class PlayerPrefsLoader : MonoBehaviour
                 difficultyDropdown.value = savedDifficulty;
             }
         }
+        partDropdown = gameObject.transform.Find("PartDropdown").GetComponent<TMPro.TMP_Dropdown>();
+        if (partDropdown != null)
+        {
+            int savedPart = PlayerPrefs.GetString("SelectedPart", "Guitar") switch
+            {
+                "Guitar" => 0,
+                "Bass" => 1,
+                "Drums" => 2,
+                "Keys" => 3,
+                "Guitar CoOp" => 4,
+                _ => 0,
+            };
+            if (savedPart >= 0 && savedPart < partDropdown.options.Count)
+            {
+                partDropdown.value = savedPart;
+            }
+        }
 
         qualityDropdown = gameObject.transform.Find("QualityDropdown").GetComponent<TMPro.TMP_Dropdown>();
         if (qualityDropdown != null)
@@ -147,6 +165,8 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetInt("EnableVenue", venueToggle.isOn ? 1 : 0);
             string selectedDifficulty = difficultyDropdown.options[difficultyDropdown.value].text;
             PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty);
+            string selectedpart = partDropdown.options[partDropdown.value].text;
+            PlayerPrefs.SetString("SelectedPart", selectedpart);
             PlayerPrefs.SetInt("EnableBarBeats", enableBarBeatsToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableAutoplay", autoplayToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);
@@ -189,6 +209,8 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetInt("EnableVenue", venueToggle.isOn ? 1 : 0);
             string selectedDifficulty = difficultyDropdown.options[difficultyDropdown.value].text;
             PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty);
+            string selectedpart = partDropdown.options[partDropdown.value].text;
+            PlayerPrefs.SetString("SelectedPart", selectedpart);
             PlayerPrefs.SetInt("EnableBarBeats", enableBarBeatsToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableAutoplay", autoplayToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);

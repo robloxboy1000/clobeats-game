@@ -3,14 +3,13 @@ using UnityEngine;
 public class SFXPlayer : MonoBehaviour
 {
     public AudioSource audioSource;
-    public AudioSource surroundSoundAudioSource;
     public AudioClip[] overstrumClips;
     public AudioClip comboLostClip;
     public AudioClip highwayRiseClip;
     public AudioClip fretRippleUpClip;
     public AudioClip songFailClip;
 
-    public bool useSurroundSound = false;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {

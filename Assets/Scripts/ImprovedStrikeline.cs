@@ -262,7 +262,7 @@ public class ImprovedStrikeline : MonoBehaviour
         SLTopHit(4);
         yield return new WaitForSeconds(0.2f);
         
-        ResetAnims();
+        //ResetAnims();
     }
 
     public void SLTopHit(float laneIndex)

@@ -1,10 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Threading.Tasks;
 using Rewired;
-using UnityEngine.UI;
 
 
 public class OldInputManager : MonoBehaviour
@@ -47,14 +44,6 @@ public class OldInputManager : MonoBehaviour
             await Task.Yield();
         }
     }
-    private async Task InputNoteHit(int value)
-    {
-        if (laneInputManager != null)
-        {
-            laneInputManager.OnFretHit(value);
-            await Task.Yield();
-        }
-    }
     private async Task InputNoteUp(int value)
     {
         if (laneInputManager != null)
@@ -67,7 +56,11 @@ public class OldInputManager : MonoBehaviour
     {
         if (laneInputManager != null)
         {
-            laneInputManager.OnStrum();
+            if (!laneInputManager.OnStrum())
+            {
+                var sfx = FindAnyObjectByType<SFXPlayer>();
+                sfx.PlayOverstrumClip();
+            }
             await Task.Yield();
         }
     }
@@ -113,6 +106,20 @@ public class OldInputManager : MonoBehaviour
                 {
                     menuManager.Exit();
                 }
+                if (menuManager.quickplayPanel.activeSelf)
+                {
+                    if (player.GetButtonSinglePressDown("StrumDown"))
+                    {
+                        UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
+                        menuList.currentSelectedItem++;
+                    }
+                    else if (player.GetButtonSinglePressDown("StrumUp"))
+                    {
+                        UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
+                        menuList.currentSelectedItem--;
+                    }
+                }
+                
             }
         }
         else
@@ -128,8 +135,8 @@ public class OldInputManager : MonoBehaviour
             if (player.GetButtonDown("Orange")) await InputNoteDown(4);
             if (player.GetButtonUp("Orange")) await InputNoteUp(4);
 
-            if (player.GetButtonDown("StrumUp")) await InputStrum();
-            if (player.GetButtonDown("StrumDown")) await InputStrum();
+            if (player.GetButtonSinglePressDown("StrumUp")) await InputStrum();
+            if (player.GetButtonSinglePressDown("StrumDown")) await InputStrum();
 
             if (player.GetButtonUp("Start")) PauseGame();
             if (player.GetButtonUp("Select")) ReleaseSP();
@@ -148,7 +155,6 @@ public class OldInputManager : MonoBehaviour
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
         if (isPaused)
         {
-
             if (musicPlayer != null)
             {
                 musicPlayer.resumeAudio();
