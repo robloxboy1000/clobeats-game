@@ -7,11 +7,13 @@ using UnityEngine;
 public class UIUpdater : MonoBehaviour
 {
     public TMPro.TMP_Text scoreText;
+    public GameObject scoreObject;
     public TMPro.TMP_Text comboText;
     public TMPro.TMP_Text comboDotsText;
     public TMPro.TMP_Text notesHitText;
     public NewRockMeter rockMeterSlider;
-    public GameObject loadingOverlay;
+    public StarMeter spMeter;
+
     public GameObject songInfoPanel;
     public TMPro.TMP_Text currentBPMText;
     public TMPro.TMP_Text currentTickText;
@@ -22,11 +24,21 @@ public class UIUpdater : MonoBehaviour
     float savesscore = 0f;
     int savedcombo = 1;
     int comboDotsCount = 0;
-    int savednotesHit = 0;
+    public int savednotesHit = 0;
     int rockMeter = 50;
+    float spMeterRead = 0;
     public float tempo = 120.000f;
 
     public int combolimit = 4;
+
+    public bool inStar = false;
+
+    public enum UpdateType
+    {
+        Visuals,
+        ScoreAdd,
+        ScoreMinus,
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -41,6 +53,7 @@ public class UIUpdater : MonoBehaviour
         comboDotsText.text = "";
         notesHitText.text = "0";
         rockMeterSlider.value = rockMeter;
+        spMeter.value = spMeterRead;
     }
     public void UpdateForNoteHit()
     {
@@ -48,11 +61,43 @@ public class UIUpdater : MonoBehaviour
         if (lim != null)
         {
             UpdateScore();
-            UpdateCombo();
+            UpdateCombo(UpdateType.ScoreAdd);
             UpdateNotesHit();
             UpdateRockMeter();
+            if (!inStar)
+            {
+                UpdateStarMeter(0.25f);
+            }
+        }
+        GuitarPlayer player = FindAnyObjectByType<GuitarPlayer>();
+        if (player != null)
+        {
+            player.NoteHit();
         }
         
+    }
+
+    public void StarPowerToggle(bool toggle)
+    {
+        SFXPlayer sFX = FindAnyObjectByType<SFXPlayer>();
+        MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        inStar = toggle;
+
+        if (toggle)
+        {
+            combolimit = 8;
+            savedcombo = savedcombo * 2;
+            sFX.PlayClip("Star_Deployed");
+            sFX.PlayClip("FeverCheer1");
+            musicPlayer.ToggleReverb(true);
+        }
+        else
+        {
+            combolimit = 4;
+            sFX.PlayClip("Star_Release");
+            musicPlayer.ToggleReverb(false);
+        }
+
     }
     public void UpdateForNoteMiss()
     {
@@ -67,6 +112,11 @@ public class UIUpdater : MonoBehaviour
     {
         rockMeter = Mathf.Clamp(rockMeter + 1, 0, 100);
         rockMeterSlider.value = rockMeter;
+    }
+    public void UpdateStarMeter(float amount)
+    {
+        spMeterRead = Mathf.Clamp(spMeterRead + amount, 0, 100);
+        spMeter.value = spMeterRead;
     }
     public void UpdateScore()
     {
@@ -88,13 +138,62 @@ public class UIUpdater : MonoBehaviour
         }
         scoreText.text = savesscore.ToString("F0");
     }
-    public void UpdateCombo()
+    public void UpdateCombo(UpdateType type = UpdateType.ScoreAdd)
     {
-        if (savednotesHit % 10 == 0 && savednotesHit != 0)
+        if (type == UpdateType.ScoreAdd)
         {
-            savedcombo += 1; // Increase combo every 10 notes hit
-            comboDotsCount = 0;
+            if (savednotesHit % 10 == 0 && savednotesHit != 0)
+            {
+                savedcombo += 1; // Increase combo every 10 notes hit
+                comboDotsCount = 0;
+            }
+            comboDotsCount += 1;
         }
+        else if (type == UpdateType.ScoreMinus)
+        {
+            if (savednotesHit % 10 == 0 && savednotesHit != 0)
+            {
+                savedcombo -= 1; // decrease combo every 10 notes hit
+                comboDotsCount = 0;
+            }
+            comboDotsCount -= 1;
+        }
+        else if (type == UpdateType.Visuals)
+        {
+            comboText.text = savedcombo.ToString() + "x";
+            comboDotsText.text = new string('.', comboDotsCount);
+
+            if (savedcombo == 2)
+            {
+                comboText.color = new Color(1f, 0.5f, 0f);
+                comboDotsText.color = new Color(1f, 0.5f, 0f);
+            }
+            else if (savedcombo == 3)
+            {
+                comboText.color = Color.green;
+                comboDotsText.color = Color.green;
+            }
+            else if (savedcombo == 4)
+            {
+                comboText.color = new Color(1f, 0f, 1f);
+                comboDotsText.color = new Color(1f, 0f, 1f);
+            }
+            else
+            {
+                if (inStar)
+                {
+                    comboText.color = Color.cyan;
+                    comboDotsText.color = Color.cyan;
+                }
+                else
+                {
+                    comboText.color = Color.white;
+                    comboDotsText.color = Color.white;
+                }
+            
+            }
+        }
+        
         
         if (savedcombo >= combolimit)
         {
@@ -102,30 +201,7 @@ public class UIUpdater : MonoBehaviour
             comboDotsCount = 10;
         }
         
-        comboText.text = savedcombo.ToString() + "x";
-        comboDotsCount += 1;
-        comboDotsText.text = new string('.', comboDotsCount);
-
-        if (savedcombo == 2)
-        {
-            comboText.color = new Color(1f, 0.5f, 0f);
-            comboDotsText.color = new Color(1f, 0.5f, 0f);
-        }
-        else if (savedcombo == 3)
-        {
-            comboText.color = Color.green;
-            comboDotsText.color = Color.green;
-        }
-        else if (savedcombo == 4)
-        {
-            comboText.color = new Color(1f, 0f, 1f);
-            comboDotsText.color = new Color(1f, 0f, 1f);
-        }
-        else
-        {
-            comboText.color = Color.white;
-            comboDotsText.color = Color.white;
-        }
+        
     }
     public void UpdateNotesHit()
     {
@@ -181,6 +257,18 @@ public class UIUpdater : MonoBehaviour
         songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().text = title;
         songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().text = "by " + artist + ", " + year.ToString();
     }
+    public void SetSongInfoOpacity(float amount)
+    {
+        songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().color = new Color(songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().color.r,
+        songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().color.g,
+        songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().color.b,
+        Mathf.Clamp01(amount));
+
+        songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().color = new Color(songInfoPanel.transform.Find("TitleText - UI").GetComponent<TMPro.TMP_Text>().color.r,
+        songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().color.g,
+        songInfoPanel.transform.Find("ArtistText - UI").GetComponent<TMPro.TMP_Text>().color.b,
+        Mathf.Clamp01(amount));
+    }
     public void UpdateBPM(double bpm)
     {
         currentBPMText.text = "BPM: " + bpm.ToString("F1");
@@ -188,12 +276,6 @@ public class UIUpdater : MonoBehaviour
     public void UpdateCurrentTick(int tick)
     {
         currentTickText.text = $"Tick: {tick}"; // Append the current tick to the BPM text
-    }
-
-    public void UpdateLoadingPhrase(string value)
-    {
-        TMPro.TextMeshProUGUI loadingPhraseText = loadingOverlay.transform.Find("LoadingPhraseText").GetComponent<TMPro.TextMeshProUGUI>();
-        loadingPhraseText.text = value;
     }
     public async Task UpdateCurrentEvent(string value)
     {
@@ -204,9 +286,24 @@ public class UIUpdater : MonoBehaviour
 
     public IEnumerator SongInfoAnim(float duration = 6f)
     {
-        songInfoPanel.SetActive(true);
-        yield return new WaitForSeconds(duration);
-        songInfoPanel.SetActive(false);
+        if (songInfoPanel != null)
+        {
+            SetSongInfoOpacity(1);
+            yield return new WaitForSeconds(duration);
+            SetSongInfoOpacity(0);
+        }
+    }
+
+    public void ScoreVisibility(bool toggle)
+    {
+        if (toggle)
+        {
+            scoreObject.SetActive(true);
+        }
+        else
+        {
+            scoreObject.SetActive(false);
+        }
     }
 
     // Update is called once per frame
@@ -228,6 +325,12 @@ public class UIUpdater : MonoBehaviour
             tempo = SyncInfoToTempo(noteSpawner.FindSyncForTick(noteSpawner.currentTick));
             UpdateBPM(tempo);
             await UpdateCurrentEvent(noteSpawner.GetEventInfoStringOnTick(noteSpawner.currentTick));
+            UpdateCombo(UpdateType.Visuals);
+            if (inStar)
+            {
+                UpdateStarMeter(-Time.deltaTime * 5f);
+                //savedcombo = savedcombo * 2;
+            }
         }
     }
 

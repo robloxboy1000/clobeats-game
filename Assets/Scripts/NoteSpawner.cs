@@ -8,11 +8,14 @@ using UnityEngine.SceneManagement;
 using System.Linq;
 using UnityEngine.Video;
 using Melanchall.DryWetMidi.Core;
+using System.Linq.Expressions;
 
 
 public class NoteSpawner : MonoBehaviour
 {
-    public static NoteSpawner Instance;
+    public static NoteSpawner Instance { get; private set; }
+
+    [Header("Note Objects")]
     // strum
     public GameObject greenNotePrefab;
     public GameObject redNotePrefab;
@@ -21,12 +24,29 @@ public class NoteSpawner : MonoBehaviour
     public GameObject orangeNotePrefab;
     // open
     public GameObject openNotePrefab; 
+    // beginner open
+    public GameObject beginnerNotePrefab;
 
+    [Tooltip("Optional prefab to use for invisible/freestyle tick placeholders. If null, lightweight GameObjects are used.")]
+    public GameObject freestyleDummyPrefab;
+    [Header("Countdown")]
+    [Tooltip("Audio clip to play on each beat of the selected countdown bar (except the last beat)")]
+    public AudioClip countdownReadyClip;
+    [Tooltip("Audio clip to play on the last beat of the selected countdown bar (GO)")]
+    public AudioClip countdownGoClip;
+    [Tooltip("Volume for countdown clips")]
+    [Range(0f,1f)]
+    public float countdownVolume = 1f;
+    [Tooltip("Enable automatic countdown scheduling on Play()")]
+    public bool enableCountdown = true;
+    bool countdownScheduled = false;
+    [Tooltip("Bar number to use for countdown (1 = first bar, 2 = second, ...)")]
+    public int countdownBarNumber = 2;
+    [Header("Tempo Map Objects")]
     public GameObject barPrefab; // Prefab for bars
     public GameObject beatPrefab; // Prefab for beats
-
+    [Header("Others")]
     public GameManager gameManager;
-
     public class NoteInfo
     {
         public float spawnTime; // legacy: ticks
@@ -34,16 +54,24 @@ public class NoteSpawner : MonoBehaviour
         public int fret;
         public int length; // legacy: ticks length for sustains
         public float lengthMs; // preferred: sustain length in milliseconds
-        public bool isHopo = false; // whether this note should be treated as a HOPO
+        public bool isFreestyleParent = false; // parent marker for freestyle sustain region
+        public bool isFreestyleFake = false;   // fake per-tick placeholder inside freestyle
     }
-
     public class GlobalEventInfo
     {
         public float spawnTime;
         public float spawnTimeMs;
         public string value;
+        public bool passed = false;
     }
-
+    public class LyricEventInfo
+    {
+        public float spawnTick; // must comply to tempo map
+        public string sungNote;
+        public float length;
+        public string value;
+        public bool passed = false;
+    }
     // Prewarm pooled note and sustain prefabs based on note density in the chart.
     private void PrewarmNotePools()
     {
@@ -52,6 +80,7 @@ public class NoteSpawner : MonoBehaviour
         {
             // count notes per fret and sustains
             int green = 0, red = 0, yellow = 0, blue = 0, orange = 0, open = 0;
+            int logGreen = 0, logRed = 0, logYellow = 0, logBlue = 0, logOrange = 0, logOpen = 0;
 
             for (int i = 0; i < gameManager.currentSongNotes.ToArray().Length; i++)
             {
@@ -77,55 +106,56 @@ public class NoteSpawner : MonoBehaviour
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(green * multiplier));
                 NotePoolManager.Instance.Prewarm(greenNotePrefab, cnt);
+                logGreen = cnt;
             }
             if (redNotePrefab != null)
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(red * multiplier));
                 NotePoolManager.Instance.Prewarm(redNotePrefab, cnt);
+                logRed = cnt;
             }
             if (yellowNotePrefab != null)
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(yellow * multiplier));
                 NotePoolManager.Instance.Prewarm(yellowNotePrefab, cnt);
+                logYellow = cnt;
             }
             if (blueNotePrefab != null)
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(blue * multiplier));
                 NotePoolManager.Instance.Prewarm(blueNotePrefab, cnt);
+                logBlue = cnt;
             }
             if (orangeNotePrefab != null)
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(orange * multiplier));
                 NotePoolManager.Instance.Prewarm(orangeNotePrefab, cnt);
+                logOrange = cnt;
             }
             if (openNotePrefab != null)
             {
                 int cnt = Mathf.Max(minPool, Mathf.CeilToInt(open * multiplier));
                 NotePoolManager.Instance.Prewarm(openNotePrefab, cnt);
+                logOpen = cnt;
             }
+            Debug.Log($"[PrewarmNotePools] Notes prewarmed: {{{logGreen}, {logRed}, {logYellow}, {logBlue}, {logOrange}, {logOpen}}}");
         }
         catch (System.Exception ex)
         {
             Debug.LogWarning("PrewarmNotePools failed: " + ex);
         }
     }
-
     public class SyncInfo
     {
         public float time;
         public float bpm;
         public string timeSignature;
     }
-
-    
-
     private int resolution = 192; // Default resolution
     float currentBpm = 120f; // Default BPM
     public int songLengthInTicks = 0;
     public int currentTick = 0;
-
     private UIUpdater uiUpdater;
-
     public float startingYPosition = 16f; // Configurable starting Y position for notes and bars/beats
     public float spawnLeadSeconds = 2f; // Extra seconds added to spacing so notes spawn further away from the strikeline
     public float preSpawnAheadSeconds = 10f; // How far ahead (in seconds) to spawn bars/beats
@@ -133,7 +163,6 @@ public class NoteSpawner : MonoBehaviour
     // y = strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
     // If false, spawn positions are computed relative to currentMusicTime (timeSeconds - currentSongSeconds)
     public bool preSpawnLongPlane = true;
-    
     // Optional: use the strikeline's world Z as the reference center (commonly 0)
     public Transform strikeLineTransform;
     public bool useStrikeLineY = true;
@@ -141,17 +170,14 @@ public class NoteSpawner : MonoBehaviour
     public float startingYOffset = 0f;
     public int barPoolSize = 16;
     public int beatPoolSize = 64;
-
     // Pools and active lists
     private Queue<GameObject> barPool = new Queue<GameObject>();
     private Queue<GameObject> beatPool = new Queue<GameObject>();
     private List<GameObject> activeBars = new List<GameObject>();
     private List<GameObject> activeBeats = new List<GameObject>();
-
     public float recycleGraceSeconds = 1f; // seconds to wait after pass before recycling
     // Track scheduled song seconds for pooled objects to avoid relying on transform.z
     private Dictionary<GameObject, float> scheduledTimeByObject = new Dictionary<GameObject, float>();
-
     private Coroutine barBeatSpawnerCoroutine = null;
     private MusicPlayer musicPlayer;
     // how many seconds visuals lead before audio starts (audio scheduled at dspTime + visualLeadSeconds)
@@ -172,15 +198,14 @@ public class NoteSpawner : MonoBehaviour
     private string audioClipPath = "";
     private string desiredDifficultySingleThreaded = "Expert";
 
-    public int hopoThreshold = 170; // ms threshold for HOPOs
-
-    public float noteSpawningXOffset = 0; // used for multiplayer
-    public string playerType = "Single";
+    public float noteSpawningXOffset = 0;
+    public float noteSpawningZOffset = 0;
     public float desiredHyperspeedSingleThreaded = 5f;
-    public bool preSpawnOnParse = false;
-
     public Transform highwayTransform;
     public RenderTexture venueDisplayImage; // venue display/jumbotron
+    public bool allowNotePooling = false;
+
+    
 
     void Start()
     {
@@ -198,16 +223,11 @@ public class NoteSpawner : MonoBehaviour
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         desiredDifficultySingleThreaded = PlayerPrefs.GetString("SelectedDifficulty", "Expert");
         desiredHyperspeedSingleThreaded = PlayerPrefs.GetFloat("Hyperspeed", 5f);
-        
-        if (uiUpdater != null)
-        {
-            uiUpdater.loadingOverlay.SetActive(true);
-            uiUpdater.songInfoPanel.SetActive(false);
-        }
         await Load();
     }
 
 
+    
     
     private async Task Load()
     {
@@ -226,8 +246,21 @@ public class NoteSpawner : MonoBehaviour
                 audioClipPath = audioClip;
                 videoClipPath = videoClip;
             });
-            await songFolderLoader.LoadIniFile(await System.IO.File.ReadAllTextAsync(songFolderLoader.songFolderPath + @"\song.ini"));
-            await musicPlayer.loadSongAudio(audioClipPath);
+            if (uiUpdater != null)
+            {
+                uiUpdater.SetSongInfoOpacity(0);
+            }
+            await songFolderLoader.LoadIniFile(songFolderLoader.songFolderPath + @"\song.ini");
+            Debug.Log("[NoteSpawner.Load] audioClipPath: '" + audioClipPath + "'");
+            if (audioClipPath.EndsWith("mid"))
+            {
+                await musicPlayer.loadSongMidi(audioClipPath);
+            }
+            else
+            {
+                await musicPlayer.loadSongAudio(audioClipPath);
+            }
+            
             musicPlayer.loadVideo(videoClipPath);
             //songLengthInTicks = gameManager.currentSongLengthInTicks;
             
@@ -236,14 +269,47 @@ public class NoteSpawner : MonoBehaviour
                 Debug.Log("Loading video clip: " + videoClipPath);
                 LoadVideoVenue();
             }
+            else
+            {
+                GameObject videoViewer = GameObject.Find("videoQuad");
+                if (videoViewer != null)
+                {
+                    videoViewer.SetActive(false);
+                }
+            }
 
             if (uiUpdater != null)
             {
                 Debug.Log("Song data loaded successfully.");
-                CreatePools();
-                PrewarmNotePools();
-                await System.Threading.Tasks.Task.Delay(6000); // delay to let loading phrase be visible
-                VenueAnimationPlayer.Instance.ToggleCamera(true);
+                INIParser parser = new INIParser();
+                parser.Open(songFolderLoader.songFolderPath + @"\song.ini");
+                bool checkSectionCase = parser.IsSectionExists("song");
+                int preLoadedNumber = checkSectionCase ? parser.ReadValue("song", "countdown_bar_number", 0) : parser.ReadValue("Song", "countdown_bar_number", 0);
+                int enableDefaultCount = checkSectionCase ? parser.ReadValue("song", "count", 0) : parser.ReadValue("Song", "count", 0);
+                if (preLoadedNumber <= 0)
+                {
+                    enableCountdown = false;
+                    countdownBarNumber = preLoadedNumber;
+                }
+                else if (enableDefaultCount == 1)
+                {
+                    enableCountdown = true;
+                    countdownBarNumber = preLoadedNumber >= 1 ? preLoadedNumber : 2;
+                }
+                else
+                {
+                    enableCountdown = true;
+                    countdownBarNumber = preLoadedNumber;
+                }
+                CreateTempoMapPools();
+                if (allowNotePooling)
+                {
+                    PrewarmNotePools();
+                }
+                parser.Close();
+                
+                await Task.Delay(6000); // delay to let loading phrase be visible and let pools initialize
+                VenueAnimationPlayer.Instance.TryToggleCamera(true);
                 GameManager gm = FindFirstObjectByType<GameManager>();
                 if (gm != null)
                 {
@@ -269,6 +335,12 @@ public class NoteSpawner : MonoBehaviour
             videoPlayer.url = videoClipPath;
             videoPlayer.renderMode = VideoRenderMode.RenderTexture;
             videoPlayer.targetTexture = venueDisplayImage;
+
+            GameObject videoViewer = GameObject.Find("videoQuad");
+            if (videoViewer != null)
+            {
+                videoViewer.SetActive(true);
+            }
         }
     }
 
@@ -280,8 +352,19 @@ public class NoteSpawner : MonoBehaviour
         if (musicPlayer != null)
         {
             double dspStart = AudioSettings.dspTime + visualLeadSeconds;
+            // schedule countdown clips for the configured bar number
+            if (enableCountdown && !countdownScheduled)
+            {
+                try { ScheduleCountdownForBar(dspStart, countdownBarNumber); } catch (Exception ex) { Debug.LogWarning("ScheduleCountdownForSecondBar failed: " + ex.Message); }
+                countdownScheduled = true;
+            }
+
             musicPlayer.PlayScheduled(dspStart);
         }
+
+        // Start progressive runtime spawning of notes (small initial window + streaming spawn) (has to be on same thread w/o Task.Run)
+        StartProgressiveSpawning();
+        
         // Start managed spawning of bars/beats (pooled, ahead-window)
         if (PlayerPrefs.GetInt("EnableBarBeats", 1) == 1)
         {
@@ -295,9 +378,6 @@ public class NoteSpawner : MonoBehaviour
             // PlayerPrefs requests no bars/beats; still spawn a single FirstBar to synchronize music.
             SpawnFirstBarOnly();
         }
-        // Start progressive runtime spawning of notes (small initial window + streaming spawn)
-        StartProgressiveSpawning();
-        StartMovingNotes();
     }
         
 
@@ -347,7 +427,7 @@ public class NoteSpawner : MonoBehaviour
         
     
 
-    private void CreatePools()
+    private void CreateTempoMapPools()
     {
         if (barPrefab != null && barPool.Count == 0)
         {
@@ -375,6 +455,8 @@ public class NoteSpawner : MonoBehaviour
                 beatPool.Enqueue(go);
             }
         }
+        Debug.Log($"[CreateTempoMapPools] Prewarmed {barPool.Count} bar objects.");
+        Debug.Log($"[CreateTempoMapPools] Prewarmed {beatPool.Count} beat objects.");
     }
 
     private GameObject GetBarFromPool()
@@ -566,7 +648,7 @@ public class NoteSpawner : MonoBehaviour
         sustainInstance.transform.position = new Vector3(startPosition.x, centerY, startPosition.z);
     }
 
-    private void AddObjectToGlobalMoveY(GameObject go)
+    public void AddObjectToGlobalMoveY(GameObject go)
     {
         if (go == null) return;
         GlobalMoveY globalMoveY = FindAnyObjectByType<GlobalMoveY>();
@@ -576,7 +658,7 @@ public class NoteSpawner : MonoBehaviour
         }
     }
 
-    private void RemoveObjectFromGlobalMoveY(GameObject go)
+    public void RemoveObjectFromGlobalMoveY(GameObject go)
     {
         if (go == null) return;
         GlobalMoveY globalMoveY = FindAnyObjectByType<GlobalMoveY>();
@@ -586,14 +668,24 @@ public class NoteSpawner : MonoBehaviour
         }
     }
 
-    private void StartMovingNotes()
+    private IEnumerator RemoveDummyAfterTime(GameObject go, float destroyAtSeconds)
     {
-        GlobalMoveY globalMoveY = FindAnyObjectByType<GlobalMoveY>();
-        if (globalMoveY != null)
+        if (go == null) yield break;
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        while (musicPlayer == null)
         {
-            globalMoveY.isMoving = true;
+            yield return null;
+            musicPlayer = FindAnyObjectByType<MusicPlayer>();
         }
+        // Wait until song time passes the destroyAtSeconds
+        while ((float)musicPlayer.GetElapsedTimeDsp() < destroyAtSeconds)
+        {
+            yield return null;
+        }
+        try { RemoveObjectFromGlobalMoveY(go); } catch { }
+        try { Destroy(go); } catch { }
     }
+
 
     // Start progressive spawning: small initial pre-spawn window, then spawn remaining notes at runtime
     public void StartProgressiveSpawning()
@@ -665,14 +757,251 @@ public class NoteSpawner : MonoBehaviour
         }
         runtimeSpawnCoroutine = null;
     }
-    public float lastNoteSpawnTime = 0;
+    
+    // Schedule countdown clips (ready/go) on the beats of a specified bar in the tempo map.
+    // dspStart is the absolute DSP time at which the song's time 0.0 seconds will occur.
+    // barNumber is 1-based (1 = first bar, 2 = second bar, ...)
+    private void ScheduleCountdownForBar(double dspStart, int barNumber = 2)
+    {
+        if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        if (gameManager == null) gameManager = FindAnyObjectByType<GameManager>();
+        //if (gameManager == null || gameManager.currentSongSyncTrack == null || gameManager.currentSongSyncTrack.Count == 0) return;
+
+        // Determine first bar tick (same logic as ManageBarBeatSpawning)
+        int firstBarTick = (int)gameManager.currentSongBeatEvents.ElementAt(0).spawnTime;
+        // Get sync info for that tick
+        //SyncInfo sync = FindSyncForTick(firstBarTick);
+
+        int numerator = 4;
+        int denomExp = 2; // denominator = 2^denomExp
+        //if (sync != null && !string.IsNullOrWhiteSpace(sync.timeSignature))
+        //{
+        //    string ts = sync.timeSignature.Trim();
+        //    var parts = ts.Split(new[] { ' ', '/', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        //    if (parts.Length >= 1) int.TryParse(parts[0], out numerator);
+        //    if (parts.Length >= 2) int.TryParse(parts[1], out denomExp);
+        //}
+
+        int denominator = 1 << Math.Max(0, denomExp);
+        int ticksPerBeat = Math.Max(1, resolution * 4 / denominator);
+        int beatsPerBar = Math.Max(1, numerator);
+        int ticksPerBar = ticksPerBeat * beatsPerBar;
+
+        int barIndex = Math.Max(1, barNumber);
+        int targetBarStartTick = firstBarTick + ticksPerBar * (barIndex - 1);
+
+        // Prefer explicit BEAT track events if they exist (note 12 = bar, 13 = regular beat)
+        try
+        {
+            if (gameManager != null && gameManager.currentSongBeatEvents != null && gameManager.currentSongBeatEvents.Count > 0)
+            {
+                int endTick = targetBarStartTick + ticksPerBar;
+                var beatsInBar = gameManager.currentSongBeatEvents.Where(e => e.spawnTime >= targetBarStartTick && e.spawnTime < endTick).OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                if (beatsInBar != null && beatsInBar.Count > 0)
+                {
+                    // Try to include the measure/bar marker first (note 12), then the regular beats (note 13)
+                    var barEvent = beatsInBar.Where(e => e.value == "12").OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).FirstOrDefault();
+
+                    List<GlobalEventInfo> orderedCounts = new List<GlobalEventInfo>();
+
+                    if (barEvent != null)
+                    {
+                        orderedCounts.Add(barEvent);
+                        // then add all regular beat events after the bar (prefer 13)
+                        var followingBeats = beatsInBar.Where(e => e != barEvent && e.value == "13").OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        if (followingBeats.Count == 0)
+                        {
+                            // fallback: any other events in the bar region except the bar marker
+                            followingBeats = beatsInBar.Where(e => e != barEvent).OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        }
+                        orderedCounts.AddRange(followingBeats);
+                    }
+                    else
+                    {
+                        // No explicit bar marker; fallback to prefer regular beats (13) or any available events
+                        var regularBeats = beatsInBar.Where(e => e.value == "13").OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        if (regularBeats.Count == 0) regularBeats = beatsInBar.OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        orderedCounts.AddRange(regularBeats);
+                    }
+
+                    // Schedule countdown clips: play `countdownReadyClip` on each count except the last, and `countdownGoClip` on the final count
+                    for (int i = 0; i < orderedCounts.Count; i++)
+                    {
+                        var be = orderedCounts[i];
+                        float beatSeconds = (be.spawnTimeMs > 0f) ? be.spawnTimeMs / 1000f : GetTimeInSecondsAtTick(be.spawnTime);
+                        double beatDsp = dspStart + beatSeconds;
+                        AudioClip clipToPlay = (i == orderedCounts.Count - 1) ? countdownGoClip : countdownReadyClip;
+                        if (clipToPlay == null) continue;
+                        ScheduleClipAtDspTime(clipToPlay, beatDsp, countdownVolume);
+                    }
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("ScheduleCountdownForSecondBar (BEAT) failed: " + ex.Message);
+        }
+    }
+
+    // Create a transient AudioSource to play 'clip' at absolute dspTime, then destroy after playback.
+    private void ScheduleClipAtDspTime(AudioClip clip, double dspTime, float volume = 1f)
+    {
+        if (clip == null) return;
+        GameObject go = new GameObject("CountdownClip");
+        go.transform.SetParent(this.transform, false);
+        var src = go.AddComponent<AudioSource>();
+        src.playOnAwake = false;
+        src.spatialBlend = 0f;
+        src.clip = clip;
+        src.volume = Mathf.Clamp01(volume);
+        try
+        {
+            src.PlayScheduled(dspTime - 0.04);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("ScheduleClipAtDspTime PlayScheduled failed: " + ex.Message);
+            try { src.Play(); } catch { }
+        }
+
+        // Compute seconds until end of playback from now
+        double nowDsp = AudioSettings.dspTime;
+        double secondsUntilEnd = (dspTime - nowDsp) + clip.length + 0.25;
+        if (secondsUntilEnd < 0.5) secondsUntilEnd = clip.length + 0.25; // fallback
+        Destroy(go, (float)secondsUntilEnd);
+    }
+
+    private bool CheckIfForcedNoteEventPassed(int index)
+    {
+        try
+        {
+            if (gameManager.currentSongForcedNoteEvents[index] != null)
+            {
+                if (gameManager.ddst == "Expert")
+                {
+                    if (gameManager.currentSongForcedNoteEvents[index].value == "102")
+                    {
+                        return true;
+                    }
+                    else if (gameManager.currentSongForcedNoteEvents[index].value == "101")
+                    {
+                        return false;
+                    }
+                }
+                else if (gameManager.ddst == "Hard")
+                {
+                    if (gameManager.currentSongForcedNoteEvents[index].value == "90")
+                    {
+                        return true;
+                    }
+                    else if (gameManager.currentSongForcedNoteEvents[index].value == "89")
+                    {
+                        return false;
+                    }
+                }
+                else if (gameManager.ddst == "Medium")
+                {
+                    if (gameManager.currentSongForcedNoteEvents[index].value == "78")
+                    {
+                        return true;
+                    }
+                    else if (gameManager.currentSongForcedNoteEvents[index].value == "77")
+                    {
+                        return false;
+                    }
+                }
+                else if (gameManager.ddst == "Easy")
+                {
+                    if (gameManager.currentSongForcedNoteEvents[index].value == "66")
+                    {
+                        return true;
+                    }
+                    else if (gameManager.currentSongForcedNoteEvents[index].value == "65")
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+        return false;
+    }
     // Spawn a single note (pooled) with sustain handling and lane registration
     private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
     {
         if (noteIndex < 0 || noteIndex >= gameManager.currentSongNotes.Count) return;
-        var n = gameManager.currentSongNotes.ElementAt(noteIndex);
+        NoteInfo n = gameManager.currentSongNotes.ElementAt(noteIndex);
+        NoteInfo lastN = null;
+        try { lastN = gameManager.currentSongNotes.ElementAt(noteIndex - 1); } catch { lastN = null; }
         if (n == null) return;
-        //Debug.Log($"Spawning note [spawnTime={n.spawnTime}, spawnTimeMs={n.spawnTimeMs}, fret={n.fret}, length={n.length}, lengthMs={n.lengthMs}, isHopo={n.isHopo}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with hyperspeed " + spacingFactor);
+        // Allow the first note (index 0) to spawn even when there is no previous note.
+        // HOPO detection below will handle a null lastN safely.
+        // Handle freestyle fake tick placeholders: create minimal invisible scheduled object and return
+        if (n.isFreestyleFake)
+        {
+            GameObject dummy = null;
+            if (freestyleDummyPrefab != null)
+            {
+                try { dummy = NotePoolManager.Instance.Get(freestyleDummyPrefab); } catch { dummy = Instantiate(freestyleDummyPrefab); }
+            }
+            else
+            {
+                dummy = new GameObject("FreestyleDummy");
+                dummy.transform.SetParent(highwayTransform, false);
+            }
+            
+            dummy.hideFlags = HideFlags.HideAndDontSave;
+            // position dummy at an off-screen place; GlobalMoveY will position it based on scheduledSeconds
+            dummy.transform.position = new Vector3(0f + noteSpawningXOffset, GetStrikeLineY(), 0f + noteSpawningZOffset);
+
+            var dummySched = dummy.GetComponent<ScheduledTime>() ?? dummy.AddComponent<ScheduledTime>();
+            dummySched.scheduledSeconds = (n.spawnTimeMs > 0f) ? n.spawnTimeMs / 1000f : timeSeconds;
+
+            // hide visuals if any
+            //var rend = dummy.GetComponentInChildren<Renderer>(); if (rend != null) rend.enabled = false;
+
+            dummy.SetActive(true);
+            AddObjectToGlobalMoveY(dummy);
+
+            // cleanup after the note has passed
+            float destroyAt = dummySched.scheduledSeconds + recycleGraceSeconds + 1f;
+            StartCoroutine(RemoveDummyAfterTime(dummy, destroyAt));
+            return;
+        }
+
+        // Handle freestyle parent (sustain region): spawn sustain visuals across lanes
+        if (n.isFreestyleParent)
+        {
+            float startSec = (n.spawnTimeMs > 0f) ? n.spawnTimeMs / 1000f : GetTimeInSecondsAtTick(n.spawnTime);
+            float endSec = 0f;
+            if (n.lengthMs > 0f) endSec = startSec + (n.lengthMs / 1000f); else endSec = GetTimeInSecondsAtTick(n.spawnTime + n.length);
+            float dur = Mathf.Max(0.001f, startSec - endSec);
+
+            if (SustainManager.Instance != null)
+            {
+                int laneCount = 5;
+                try { if (SustainManager.Instance.laneXPositions != null) laneCount = SustainManager.Instance.laneXPositions.Length; } catch { }
+                for (int lane = 0; lane < 5; lane++)
+                {
+                    try { SustainManager.Instance.StartSustain(lane, dur, Color.white, true); } catch { }
+                }
+            }
+            return;
+        }
+
+        //Debug.Log($"Spawning note [spawnTime={n.spawnTime}, spawnTimeMs={n.spawnTimeMs}, fret={n.fret}, length={n.length}, lengthMs={n.lengthMs}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with hyperspeed " + spacingFactor);
         int fret = n.fret;
         float strikeY = GetStrikeLineY();
         float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
@@ -680,23 +1009,25 @@ public class NoteSpawner : MonoBehaviour
             ? strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
             : strikeY + startingYPosition + startingYOffset + ((timeSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
 
-        Vector2 pos = (fret == 7) ? new Vector2(0 + noteSpawningXOffset, yPosition) : new Vector2((fret - 2f) + noteSpawningXOffset, yPosition);
+        Vector3 pos = new Vector3((fret - 2f) + noteSpawningXOffset, yPosition, 0f + noteSpawningZOffset);
+        Vector3 openpos = new Vector3(0 + noteSpawningXOffset, yPosition, 0f + noteSpawningZOffset);
         GameObject inst = null;
         Color gemColor = Color.white;
 
         if (fret == 7)
         {
-            if (openNotePrefab != null) inst = NotePoolManager.Instance.Get(openNotePrefab); gemColor = Color.magenta;
+            if (openNotePrefab != null) try { inst = NotePoolManager.Instance.Get(openNotePrefab); gemColor = Color.magenta; } catch { inst = null; }
         }
         else
         {
             switch (fret)
             {
-                case 0: if (greenNotePrefab != null) inst = NotePoolManager.Instance.Get(greenNotePrefab); gemColor = Color.green; break;
-                case 1: if (redNotePrefab != null) inst = NotePoolManager.Instance.Get(redNotePrefab); gemColor = Color.red; break;
-                case 2: if (yellowNotePrefab != null) inst = NotePoolManager.Instance.Get(yellowNotePrefab); gemColor = Color.yellow; break;
-                case 3: if (blueNotePrefab != null) inst = NotePoolManager.Instance.Get(blueNotePrefab); gemColor = Color.blue; break;
-                case 4: if (orangeNotePrefab != null) inst = NotePoolManager.Instance.Get(orangeNotePrefab); gemColor = new Color(1f, 0.5f, 0f); break;
+                case 0: if (greenNotePrefab != null) try { inst = NotePoolManager.Instance.Get(greenNotePrefab); gemColor = Color.green; } catch { inst = null; } break;
+                case 1: if (redNotePrefab != null) try { inst = NotePoolManager.Instance.Get(redNotePrefab); gemColor = Color.red; } catch { inst = null; } break;
+                case 2: if (yellowNotePrefab != null) try { inst = NotePoolManager.Instance.Get(yellowNotePrefab); gemColor = Color.yellow; } catch { inst = null; } break;
+                case 3: if (blueNotePrefab != null) try { inst = NotePoolManager.Instance.Get(blueNotePrefab); gemColor = Color.blue; } catch { inst = null; } break;
+                case 4: if (orangeNotePrefab != null) try { inst = NotePoolManager.Instance.Get(orangeNotePrefab); gemColor = new Color(1f, 0.5f, 0f); } catch { inst = null; } break;
+                case 8: if (beginnerNotePrefab != null) try { inst = NotePoolManager.Instance.Get(beginnerNotePrefab); gemColor = Color.blue; } catch { inst = null; } break;
                 default: break;
             }
         }
@@ -704,7 +1035,16 @@ public class NoteSpawner : MonoBehaviour
         
 
         if (inst == null) return;
-        inst.transform.position = pos;
+        if (fret == 7 || fret == 8)
+        {
+            inst.transform.position = openpos;
+        }
+        else
+        {
+            inst.transform.position = pos;
+        }
+        inst.hideFlags = HideFlags.HideAndDontSave;
+        
         // attach scheduled time so GlobalMoveY can compute exact positions relative to song time
         var sched = inst.GetComponent<ScheduledTime>();
         if (sched == null) sched = inst.AddComponent<ScheduledTime>();
@@ -716,15 +1056,20 @@ public class NoteSpawner : MonoBehaviour
         AddObjectToGlobalMoveY(inst);
 
         // hopo handling
-        lastNoteSpawnTime = n.spawnTime;
+        //lastNoteSpawnTime = lastN?.spawnTime ?? n.spawnTime;
         int calcThreshold = (resolution / 3) + 1; // 192 = 64 ticks, 480 = 160 ticks
-        if (n.spawnTime - lastNoteSpawnTime > calcThreshold)
+        if (lastN != null && Mathf.Abs(lastN.spawnTime - n.spawnTime) != 0 && Mathf.Abs(lastN.spawnTime - n.spawnTime) < calcThreshold && lastN.fret != n.fret && lastN.spawnTime != n.spawnTime)
         {
-            var hopo = inst.GetComponent<HopoIndicator>();
-            if (hopo == null) hopo = inst.AddComponent<HopoIndicator>();
-            hopo.isHopo = true;
-            //var visual = inst.GetComponent<NoteVisualChanger>();
-            //if (visual != null) visual.isHOPO = true;
+            inst.AddComponent<HopoIndicator>();
+            var visual = inst.GetComponent<NoteVisualChanger>();
+            if (visual != null)
+                visual.currentNoteType = NoteVisualChanger.NoteType.HOPO;
+        }
+        else
+        {
+            var visual = inst.GetComponent<NoteVisualChanger>();
+            if (visual != null)
+                visual.currentNoteType = NoteVisualChanger.NoteType.Forced;
         }
 
         // sustain handling
@@ -732,7 +1077,7 @@ public class NoteSpawner : MonoBehaviour
         {
             var sust = inst.GetComponent<SustainedNote>();
             if (sust == null) sust = inst.AddComponent<SustainedNote>();
-            sust.durationSeconds = n.lengthMs / 1000f;
+            sust.durationSeconds = GetTimeInSecondsAtTick(n.spawnTime + n.length) - GetTimeInSecondsAtTick(n.spawnTime);
             var sustainObj = inst.GetComponentInChildren<Sustain>()?.gameObject;
             if (sustainObj != null)
             {
@@ -789,7 +1134,8 @@ public class NoteSpawner : MonoBehaviour
     // Convert elapsed song time (seconds) to nearest chart tick, honoring tempo changes in syncTrack.
     public float GetTickAtTimeSeconds(float seconds, bool roundToNearest = false)
     {
-        if (seconds <= 0f) return 0;
+        //if (seconds <= 0f) return 0; // allow below zero
+        
         if (gameManager.currentSongSyncTrack == null || gameManager.currentSongSyncTrack.Count == 0)
         {
             float sPerTick = 60f / (currentBpm * resolution);
@@ -840,9 +1186,12 @@ public class NoteSpawner : MonoBehaviour
 
         // Start spawning from the first sync tick or 0
         int nextBarTick = 0;
-        if (gameManager.currentSongSyncTrack != null && gameManager.currentSongSyncTrack.Count > 0) nextBarTick = (int)gameManager.currentSongSyncTrack.ElementAt(0).time;
+        //if (gameManager.currentSongSyncTrack != null && gameManager.currentSongSyncTrack.Count > 0) nextBarTick = (int)gameManager.currentSongSyncTrack.ElementAt(0).time;
 
-        
+        // Beat events caching and progress index so we don't respawn the same events each frame
+        List<GlobalEventInfo> beatEvents = null;
+        int nextBeatEventIndex = 0;
+        HashSet<string> spawnedBeatKeys = new HashSet<string>();
 
         while (true)
         {
@@ -852,95 +1201,207 @@ public class NoteSpawner : MonoBehaviour
                 continue;
             }
 
-            float currentSongSeconds = (musicPlayer != null) ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+            float currentSongSeconds = (musicPlayer != null) ? (float)musicPlayer.GetElapsedTimeDsp() : GetTimeInSecondsAtTick(currentTick);
 
             // spawn bars while their time is within the ahead window
-            while (nextBarTick < songLengthInTicks)
+            // Prefer explicit BEAT track events when available (note 12=bar, 13=beat)
+            if (beatEvents == null)
             {
-                float barTime = GetTimeInSecondsAtTick(nextBarTick);
-                if (barTime > currentSongSeconds + preSpawnAheadSeconds) break;
+                try { if (gameManager != null && gameManager.currentSongBeatEvents != null && gameManager.currentSongBeatEvents.Count > 0) beatEvents = gameManager.currentSongBeatEvents.OrderBy(e => e.spawnTime).ToList(); } catch { }
+            }
 
-                // Spawn bar and record its scheduled time
-                var bar = GetBarFromPool();
-                    float strikeY = GetStrikeLineY();
-                    float secondsUntilBar = barTime - currentSongSeconds;
-                    float barY = strikeY + startingYPosition + startingYOffset + (secondsUntilBar + spawnLeadSeconds) * spacingFactor;
-                bar.transform.position = new Vector3(0f + noteSpawningXOffset, barY, 0f);
-                // ensure visibility gate is initialized with current reveal Z in case values changed since pooling
-                var bGate = bar.GetComponent<VisibilityGate>();
-                if (bGate == null) bGate = bar.AddComponent<VisibilityGate>();
-                //bGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
-                bar.SetActive(true);
-                scheduledTimeByObject[bar] = barTime;
-                // add to GlobalMoveY so pooled bars are moved along with notes
-                AddObjectToGlobalMoveY(bar);
-                // insert into activeBars keeping ascending scheduled time order; fall back to transform.z if mapping missing
-                int insertIndex = activeBars.FindIndex(bobj => {
-                    float btime;
-                    if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > barTime;
-                    // fallback: infer scheduled time from z position (use strike-line + starting offsets as base)
-                    btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
-                    return btime > barTime;
-                });
-                if (insertIndex >= 0) activeBars.Insert(insertIndex, bar); else activeBars.Add(bar);
+            if (beatEvents != null && beatEvents.Count > 0) // MIDI BEAT track (if available)
+            {
+                while (nextBeatEventIndex < beatEvents.Count)
+                {
+                    var ev = beatEvents[nextBeatEventIndex];
+                    float evTime = (ev.spawnTimeMs > 0f) ? ev.spawnTimeMs / 1000f : GetTimeInSecondsAtTick(ev.spawnTime);
+                    if (evTime > currentSongSeconds + preSpawnAheadSeconds) break;
+
+                    // Build a per-event key (time + event value) so bar and beat at same time are distinct
+                    string evKey = ((ev.spawnTimeMs > 0f) ? Math.Round(ev.spawnTimeMs).ToString() : Math.Round(ev.spawnTime).ToString()) + "_" + ev.value;
+                    if (spawnedBeatKeys.Contains(evKey))
+                    {
+                        nextBeatEventIndex++;
+                        continue;
+                    }
+
+                    // spawn either BAR (note 12) or BEAT (note 13/other)
+                    int noteNum = 0; int.TryParse(ev.value, out noteNum);
+                    if (noteNum == 12)
+                    {
+                        var bar = GetBarFromPool();
+                        float strikeY = GetStrikeLineY();
+                        float secondsUntilBar = evTime - currentSongSeconds;
+                        float barY = strikeY + startingYPosition + startingYOffset + (secondsUntilBar + spawnLeadSeconds) * spacingFactor;
+                        bar.transform.position = new Vector3(0f + noteSpawningXOffset, barY, 0f + noteSpawningZOffset);
+                        //var bGate = bar.GetComponent<VisibilityGate>(); if (bGate == null) bGate = bar.AddComponent<VisibilityGate>();
+                        bar.SetActive(true);
+                        scheduledTimeByObject[bar] = evTime;
+                        var bschedBar = bar.GetComponent<ScheduledTime>(); if (bschedBar == null) bschedBar = bar.AddComponent<ScheduledTime>();
+                        bschedBar.scheduledSeconds = evTime;
+                        AddObjectToGlobalMoveY(bar);
+                        int insertIndex = activeBars.FindIndex(bobj => {
+                            float btime;
+                            if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > evTime;
+                            btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
+                            return btime > evTime;
+                        });
+                        if (insertIndex >= 0) activeBars.Insert(insertIndex, bar); else activeBars.Add(bar);
+                        spawnedBeatKeys.Add(evKey);
+                        //Debug.Log("[ManageBarBeatSpawning] Spawned BEAT track BAR (" + noteNum + ") at evTime: " + evTime);
+                    }
+                    else if (noteNum == 13) // regular beat
+                    {
+                        var beatGO = GetBeatFromPool();
+                        float beatTime = evTime;
+                        float strikeY2 = GetStrikeLineY();
+                        float secondsUntilBeat = beatTime - currentSongSeconds;
+                        float beatY = strikeY2 + startingYPosition + startingYOffset + (secondsUntilBeat + spawnLeadSeconds) * spacingFactor;
+                        beatGO.transform.position = new Vector3(0f + noteSpawningXOffset, beatY, 0f + noteSpawningZOffset);
+                        //var gate = beatGO.GetComponent<VisibilityGate>(); if (gate == null) gate = beatGO.AddComponent<VisibilityGate>();
+                        beatGO.SetActive(true);
+                        // Dim 8th-note beat visuals by setting alpha to 1 if a SpriteRenderer exists
+                        var sprRend = beatGO.GetComponent<SpriteRenderer>();
+                        if (sprRend) sprRend.color = new Color(sprRend.color.r, sprRend.color.g, sprRend.color.b, 1f);
+                        scheduledTimeByObject[beatGO] = beatTime;
+                        var bsched = beatGO.GetComponent<ScheduledTime>(); if (bsched == null) bsched = beatGO.AddComponent<ScheduledTime>();
+                        bsched.scheduledSeconds = beatTime;
+                        AddObjectToGlobalMoveY(beatGO);
+                        int bInsert = activeBeats.FindIndex(bobj => {
+                            float btime;
+                            if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > beatTime;
+                            btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
+                            return btime > beatTime;
+                        });
+                        if (bInsert >= 0) activeBeats.Insert(bInsert, beatGO); else activeBeats.Add(beatGO);
+                        spawnedBeatKeys.Add(evKey);
+                    }
+                    else
+                    {
+                        var beatGO = GetBeatFromPool();
+                        float beatTime = evTime;
+                        float strikeY2 = GetStrikeLineY();
+                        float secondsUntilBeat = beatTime - currentSongSeconds;
+                        float beatY = strikeY2 + startingYPosition + startingYOffset + (secondsUntilBeat + spawnLeadSeconds) * spacingFactor;
+                        beatGO.transform.position = new Vector3(0f + noteSpawningXOffset, beatY, 0f + noteSpawningZOffset);
+                        //var gate = beatGO.GetComponent<VisibilityGate>(); if (gate == null) gate = beatGO.AddComponent<VisibilityGate>();
+                        beatGO.SetActive(true);
+                        
+                        var sprRendMain = beatGO.GetComponent<SpriteRenderer>();
+                        if (sprRendMain) sprRendMain.color = new Color(sprRendMain.color.r, sprRendMain.color.g, sprRendMain.color.b, 0.5f);
+                        scheduledTimeByObject[beatGO] = beatTime;
+                        var bsched = beatGO.GetComponent<ScheduledTime>(); if (bsched == null) bsched = beatGO.AddComponent<ScheduledTime>();
+                        bsched.scheduledSeconds = beatTime;
+                        AddObjectToGlobalMoveY(beatGO);
+                        int bInsert = activeBeats.FindIndex(bobj => {
+                            float btime;
+                            if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > beatTime;
+                            btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
+                            return btime > beatTime;
+                        });
+                        if (bInsert >= 0) activeBeats.Insert(bInsert, beatGO); else activeBeats.Add(beatGO);
+                        spawnedBeatKeys.Add(evKey);
+                        //Debug.Log("[ManageBarBeatSpawning] Spawned BEAT track STRONG/WEAK BEAT (" + noteNum + ") at evTime: " + evTime);
+                    }
+
+                    nextBeatEventIndex++;
+                }
+            }
+            else // MIDI tempo map (no BEAT track)
+            {
+                while (nextBarTick < songLengthInTicks)
+                {
+                    float barTime = GetTimeInSecondsAtTick(nextBarTick);
+                    if (barTime > currentSongSeconds + preSpawnAheadSeconds) break;
+
+                    // Spawn bar and record its scheduled time
+                    var bar = GetBarFromPool();
+                        float strikeY = GetStrikeLineY();
+                        float secondsUntilBar = barTime - currentSongSeconds;
+                        float barY = strikeY + startingYPosition + startingYOffset + (secondsUntilBar + spawnLeadSeconds) * spacingFactor;
+                    bar.transform.position = new Vector3(0f + noteSpawningXOffset, barY, 0f + noteSpawningZOffset);
+                    // ensure visibility gate is initialized with current reveal Z in case values changed since pooling
+                    var bGate = bar.GetComponent<VisibilityGate>();
+                    if (bGate == null) bGate = bar.AddComponent<VisibilityGate>();
+                    //bGate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+                    bar.SetActive(true);
+                    scheduledTimeByObject[bar] = barTime;
+                    // add to GlobalMoveY so pooled bars are moved along with notes
+                    AddObjectToGlobalMoveY(bar);
+                    // insert into activeBars keeping ascending scheduled time order; fall back to transform.z if mapping missing
+                    int insertIndex = activeBars.FindIndex(bobj => {
+                        float btime;
+                        if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > barTime;
+                        // fallback: infer scheduled time from z position (use strike-line + starting offsets as base)
+                        btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
+                        return btime > barTime;
+                    });
+                    if (insertIndex >= 0) activeBars.Insert(insertIndex, bar); else activeBars.Add(bar);
+                    //Debug.Log("[ManageBarBeatSpawning] Spawned tempo map BAR at barTime: " + barTime);
 
                 
 
-                // spawn beats within this bar
-                SyncInfo sync = FindSyncForTick(nextBarTick);
-                // Default to 4/4 (numerator=4, exponent=2 -> denominator = 2^2 = 4)
-                int ticksPerBeat = resolution;
-                int beatsPerBar = 4;
-                if (sync != null && !string.IsNullOrWhiteSpace(sync.timeSignature))
-                {
-                    // Support formats like "numerator exponent" (e.g. "6 3" -> 6/8)
-                    // or "numerator/denominator" (e.g. "6/8"). The exponent is the
-                    // power of two for the denominator (exponent=2 -> denom=4). Default exponent=2.
-                    string ts = sync.timeSignature.Trim();
-                    var parts = ts.Split(new[] { ' ', '/', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                    int numerator = 4;
-                    int denomExp = 2; // exponent -> denominator = 2^denomExp
-                    if (parts.Length >= 1) int.TryParse(parts[0], out numerator);
-                    if (parts.Length >= 2) int.TryParse(parts[1], out denomExp);
-                    int denominator = 1 << Math.Max(0, denomExp);
-                    // ticksPerBeat corresponds to the denominator note (e.g., denom=4 -> quarter note)
-                    ticksPerBeat = Math.Max(1, resolution * 4 / denominator);
-                    beatsPerBar = Math.Max(1, numerator);
-                }
-                for (int beatIndex = 1; beatIndex < beatsPerBar; beatIndex++)
-                {
-                    int beatTick = nextBarTick + (beatIndex * ticksPerBeat);
-                    if (beatTick >= songLengthInTicks) break;
-                    var beatGO = GetBeatFromPool();
-                    float beatTime = GetTimeInSecondsAtTick(beatTick);
-                    float strikeY2 = GetStrikeLineY();
-                    float secondsUntilBeat = beatTime - currentSongSeconds;
-                    float beatY = strikeY2 + startingYPosition + startingYOffset + (secondsUntilBeat + spawnLeadSeconds) * spacingFactor;
-                    beatGO.transform.position = new Vector3(0f + noteSpawningXOffset, beatY, 0f);
-                    var gate = beatGO.GetComponent<VisibilityGate>();
-                    if (gate == null) gate = beatGO.AddComponent<VisibilityGate>();
-                    //gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
-                    beatGO.SetActive(true);
-                    scheduledTimeByObject[beatGO] = beatTime;
-                    var bsched = beatGO.GetComponent<ScheduledTime>();
-                    if (bsched == null) bsched = beatGO.AddComponent<ScheduledTime>();
-                    bsched.scheduledSeconds = beatTime;
-                    // add to GlobalMoveY so pooled beats are moved along with notes
-                    AddObjectToGlobalMoveY(beatGO);
-                    int bInsert = activeBeats.FindIndex(bobj => {
-                        float btime;
-                        if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > beatTime;
-                        btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
-                        return btime > beatTime;
-                    });
-                    if (bInsert >= 0) activeBeats.Insert(bInsert, beatGO); else activeBeats.Add(beatGO);
-                }
+                    // spawn beats within this bar
+                    SyncInfo sync = FindSyncForTick(nextBarTick);
+                    // Default to 4/4 (numerator=4, exponent=2 -> denominator = 2^denomExp = 4)
+                    int ticksPerBeat = resolution;
+                    int beatsPerBar = 4;
+                    if (sync != null && !string.IsNullOrWhiteSpace(sync.timeSignature))
+                    {
+                        // Support formats like "numerator exponent" (e.g. "6 3" -> 6/8)
+                        // or "numerator/denominator" (e.g. "6/8"). The exponent is the
+                        // power of two for the denominator (exponent=2 -> denom=4). Default exponent=2.
+                        string ts = sync.timeSignature.Trim();
+                        var parts = ts.Split(new[] { ' ', '/', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        int numerator = 4;
+                        int denomExp = 2; // exponent -> denominator = 2^denomExp
+                        if (parts.Length >= 1) int.TryParse(parts[0], out numerator);
+                        if (parts.Length >= 2) int.TryParse(parts[1], out denomExp);
+                        int denominator = 1 << Math.Max(0, denomExp);
+                        // ticksPerBeat corresponds to the denominator note (e.g., denom=4 -> quarter note)
+                        ticksPerBeat = Math.Max(1, resolution * 4 / denominator);
+                        beatsPerBar = Math.Max(1, numerator);
+                    }
+                    for (int beatIndex = 1; beatIndex < beatsPerBar; beatIndex++)
+                    {
+                        int beatTick = nextBarTick + (beatIndex * ticksPerBeat);
+                        if (beatTick >= songLengthInTicks) break;
+                        var beatGO = GetBeatFromPool();
+                        float beatTime = GetTimeInSecondsAtTick(beatTick);
+                        float strikeY2 = GetStrikeLineY();
+                        float secondsUntilBeat = beatTime - currentSongSeconds;
+                        float beatY = strikeY2 + startingYPosition + startingYOffset + (secondsUntilBeat + spawnLeadSeconds) * spacingFactor;
+                        beatGO.transform.position = new Vector3(0f + noteSpawningXOffset, beatY, 0f + noteSpawningZOffset);
+                        var gate = beatGO.GetComponent<VisibilityGate>();
+                        if (gate == null) gate = beatGO.AddComponent<VisibilityGate>();
+                        //gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+                        beatGO.SetActive(true);
+                        // Ensure regular tempo-map beats are opaque (reset alpha in case pooled from 8th-note)
+                        var sr = beatGO.GetComponent<SpriteRenderer>(); if (sr) sr.color = new Color(sr.color.r, sr.color.g, sr.color.b, 1f);
+                            scheduledTimeByObject[beatGO] = beatTime;
+                        var bsched = beatGO.GetComponent<ScheduledTime>();
+                        if (bsched == null) bsched = beatGO.AddComponent<ScheduledTime>();
+                        bsched.scheduledSeconds = beatTime;
+                        // add to GlobalMoveY so pooled beats are moved along with notes
+                        AddObjectToGlobalMoveY(beatGO);
+                        int bInsert = activeBeats.FindIndex(bobj => {
+                            float btime;
+                            if (scheduledTimeByObject.TryGetValue(bobj, out btime)) return btime > beatTime;
+                            btime = (bobj.transform.position.y - (GetStrikeLineY() + startingYPosition + startingYOffset)) / Math.Max(0.0001f, spacingFactor);
+                            return btime > beatTime;
+                        });
+                        if (bInsert >= 0) activeBeats.Insert(bInsert, beatGO); else activeBeats.Add(beatGO);
+                        //Debug.Log("[ManageBarBeatSpawning] Spawned tempo map BEAT at beatTime: " + beatTime);
+                    }
 
-                // advance to next bar tick based on current sync's bar size
+                    // advance to next bar tick based on current sync's bar size
 
-                int barAdvance = resolution;
-                nextBarTick += barAdvance;
+                    int barAdvance = resolution;
+                    nextBarTick += barAdvance;
+                }
             }
+            
 
             // Recycle bars/beats that are behind the current playback (passed)
             for (int i = activeBars.Count - 1; i >= 0; i--)
@@ -1067,9 +1528,7 @@ public class NoteSpawner : MonoBehaviour
         if (highwayTransform != null)
         {
             noteSpawningXOffset = highwayTransform.position.x;
+            noteSpawningZOffset = highwayTransform.position.z;
         }
-        
-
-        
     }
 }

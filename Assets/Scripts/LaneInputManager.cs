@@ -19,6 +19,20 @@ public class LaneInputManager : MonoBehaviour
 
     // Tracks held frets (for chord/strum behavior)
     HashSet<int> heldLanes = new HashSet<int>();
+    int _laneCount;
+
+    int laneCount
+    {
+        get => _laneCount;
+        set
+        {
+            if (_laneCount != value)
+            {
+                _laneCount = value;
+                OnLaneHeldCountChanged();
+            }
+        }
+    }
 
     // Active sustains that are currently being held after a successful hit
     class ActiveSustain { public GameObject note; public float endTime; public int lane; }
@@ -59,6 +73,7 @@ public class LaneInputManager : MonoBehaviour
         if (uiUpdater == null) uiUpdater = FindAnyObjectByType<UIUpdater>();
         UpdateHitWindowVisual();
         UpdateActiveSustains();
+        laneCount = heldLanes.Count;
 
         if (heldLanes.Contains(0))
         {
@@ -113,12 +128,13 @@ public class LaneInputManager : MonoBehaviour
 
         if (autoPlayEnabled)
         {
-            TryHitLane(0, true);
-            TryHitLane(1, true);
-            TryHitLane(2, true);
-            TryHitLane(3, true);
-            TryHitLane(4, true);
-            TryHitLane(7, true);
+            TryHitLane(0, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(1, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(2, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(3, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(4, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(7, true, NoteVisualChanger.NoteType.Forced, true);
+            TryHitLane(8, true, NoteVisualChanger.NoteType.Forced, true);
         }
     }
 
@@ -126,6 +142,14 @@ public class LaneInputManager : MonoBehaviour
     public void OnFretPressed(int laneIndex)
     {
         heldLanes.Add(laneIndex);
+        if (uiUpdater.savednotesHit > 0)
+        {
+            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.HOPO, true);
+        }
+        else
+        {
+            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Tap, true);
+        }
     }
 
     public void OnFretReleased(int laneIndex)
@@ -152,28 +176,33 @@ public class LaneInputManager : MonoBehaviour
         {
             // Copy so TryHitLane can modify collections safely
             var lanes = new List<int>(heldLanes);
+            Dictionary<int, bool> laneBools = new Dictionary<int, bool>();
             foreach (var lane in lanes)
             {
-                if (TryHitLane(lane))
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                laneBools.Add(lane, TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced | NoteVisualChanger.NoteType.HOPO | NoteVisualChanger.NoteType.Tap, true));
             }
-            return true;
+            if (laneBools.ContainsValue(false))
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
         }
     }
 
     // Backwards-compatible single-fret hit (e.g., mapping a single key without a strum action)
     public void OnFretHit(int laneIndex)
     {
-        TryHitLane(laneIndex);
+        TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Forced | NoteVisualChanger.NoteType.HOPO | NoteVisualChanger.NoteType.Tap, true);
+    }
+    public void OnLaneHeldCountChanged()
+    {
+        OnStrum();
     }
 
-    bool TryHitLane(int laneIndex, bool autoHit = false)
+    bool TryHitLane(int laneIndex, bool autoHit = false, NoteVisualChanger.NoteType noteType = NoteVisualChanger.NoteType.Forced, bool isChord = false)
     {
         if (spawner == null) spawner = FindAnyObjectByType<NoteSpawner>();
         if (spawner == null) return false;
@@ -188,6 +217,7 @@ public class LaneInputManager : MonoBehaviour
         var sched = note.GetComponent<ScheduledTime>();
         mp = FindAnyObjectByType<MusicPlayer>();
         float currentSongSeconds = mp != null ? (float)mp.GetElapsedTime() : Time.time;
+        var visual = note.GetComponent<NoteVisualChanger>();
             
         if (sched != null)
         {
@@ -201,12 +231,25 @@ public class LaneInputManager : MonoBehaviour
             // therefore timeSeconds = (y - baseY) / spacingFactor - spawnLeadSeconds
             secondsUntil = (noteY - baseY) / Mathf.Max(0.0001f, spacingFactor) - spawner.spawnLeadSeconds;
         }
+        float autoHitWindowSeconds = Mathf.Min(0, hitWindowSeconds);
         if (Mathf.Abs(secondsUntil) <= hitWindowSeconds && !autoHit)
         {
-            //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
-
+            //Debug.Log("PlayerHit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
             var sustainComp = note.GetComponent<SustainedNote>();
-            LaneManager.Instance.UnregisterNote(note);
+            if (visual != null)
+            {
+                if (visual.currentNoteType == noteType)
+                {
+                    LaneManager.Instance.UnregisterNote(note);
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            
+
+            Color sustainColor = Color.white;
 
             if (sustainComp != null && sustainComp.durationSeconds > 0f)
             {
@@ -215,7 +258,7 @@ public class LaneInputManager : MonoBehaviour
                 activeSustains.Add(new ActiveSustain
                 {
                     note = note,
-                    endTime = (float)mp.GetElapsedTime() + sustainComp.durationSeconds,
+                    endTime = spawner.GetTimeInSecondsAtTick(spawner.currentTick) + sustainComp.durationSeconds,
                     lane = laneIndex
                 });
                 // Optionally: play sustain start FX / scoring events here
@@ -225,10 +268,21 @@ public class LaneInputManager : MonoBehaviour
                     strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
                     strikeline.SLTopHit(laneIndex);
                 }
+                int visualLaneInd = 0;
+                switch (laneIndex)
+                {
+                    case 0: sustainColor = Color.green; visualLaneInd = 0; break;
+                    case 1: sustainColor = Color.red; visualLaneInd = 1; break;
+                    case 2: sustainColor = Color.yellow; visualLaneInd = 2; break;
+                    case 3: sustainColor = Color.blue; visualLaneInd = 3; break;
+                    case 4: sustainColor = new Color(1f, 0.5f, 0f); visualLaneInd = 4; break;
+                    case 7: sustainColor = Color.magenta; visualLaneInd = 2; break;
+                    case 8: sustainColor = Color.green; visualLaneInd = 2; break;
+                }
                 // Spawn / show separate sustain visual managed by SustainManager
                 if (SustainManager.Instance != null)
                 {
-                    SustainManager.Instance.StartSustain(laneIndex, sustainComp.durationSeconds);
+                    SustainManager.Instance.StartSustain(visualLaneInd, sustainComp.durationSeconds, sustainColor, isChord);
                 }
             }
             else
@@ -251,40 +305,91 @@ public class LaneInputManager : MonoBehaviour
             }
             return true;
         }
-        else if (Mathf.Abs(secondsUntil) <= 0.05 && autoHit)
+        else if (secondsUntil <= autoHitWindowSeconds && autoHit)
         {
-            //Debug.Log("Hit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
-            LaneManager.Instance.UnregisterNote(note);
-            spawner.ReturnObjectToPool(note);
-            // Optionally: play tap FX / scoring events here
-            if (strikeline != null)
+            //Debug.Log("AutoHit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
+
+            var sustainComp = note.GetComponent<SustainedNote>();
+            if (visual != null)
             {
-                if (laneIndex == 7)
+                if (!autoHit)
                 {
-                    strikeline.HitNote(7);
-                    strikeline.SLTopHit(laneIndex);
+                    if (visual.currentNoteType == noteType)
+                    {
+                        LaneManager.Instance.UnregisterNote(note);
+                    }
+                    else
+                    {
+                        return false;
+                    }
                 }
                 else
                 {
+                    LaneManager.Instance.UnregisterNote(note);
+                }
+                
+            }
+
+            Color sustainColor = Color.white;
+
+            if (sustainComp != null && sustainComp.durationSeconds > 0f)
+            {
+                spawner.ReturnObjectToPool(note);
+                // Start sustain tracking instead of immediately returning to pool.
+                activeSustains.Add(new ActiveSustain
+                {
+                    note = note,
+                    endTime = spawner.GetTimeInSecondsAtTick(spawner.currentTick) + sustainComp.durationSeconds,
+                    lane = laneIndex
+                });
+                // Optionally: play sustain start FX / scoring events here
+                if (strikeline != null)
+                {
                     strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                    strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
                     strikeline.SLTopHit(laneIndex);
+                }
+                int visualLaneInd = 0;
+                switch (laneIndex)
+                {
+                    case 0: sustainColor = Color.green; visualLaneInd = 0; break;
+                    case 1: sustainColor = Color.red; visualLaneInd = 1; break;
+                    case 2: sustainColor = Color.yellow; visualLaneInd = 2; break;
+                    case 3: sustainColor = Color.blue; visualLaneInd = 3; break;
+                    case 4: sustainColor = new Color(1f, 0.5f, 0f); visualLaneInd = 4; break;
+                    case 7: sustainColor = Color.magenta; visualLaneInd = 2; break;
+                    case 8: sustainColor = Color.green; visualLaneInd = 2; break;
+                }
+                // Spawn / show separate sustain visual managed by SustainManager
+                if (SustainManager.Instance != null)
+                {
+                    SustainManager.Instance.StartSustain(visualLaneInd, sustainComp.durationSeconds, sustainColor, isChord);
+                }
+            }
+            else
+            {
+                spawner.ReturnObjectToPool(note);
+                // Optionally: play tap FX / scoring events here
+                if (strikeline != null)
+                {
+                    if (laneIndex == 7)
+                    {
+                        strikeline.HitNote(7);
+                        strikeline.SLTopHit(laneIndex);
+                    }
+                    else
+                    {
+                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                        strikeline.SLTopHit(laneIndex);
+                    }
                 }
             }
             return true;
         }
         else
         {
-            if (!autoHit)
-            {
-                // Next note is outside of timing window -> stop
-                if (strikeline != null)
-                {
-                    strikeline.MissNote();
-                }
-            }
             return false;
         }
-        
     }
 
     void UpdateActiveSustains()
@@ -301,7 +406,7 @@ public class LaneInputManager : MonoBehaviour
             }
 
             // If sustain time elapsed, end it
-            if ((float)mp.GetElapsedTime() >= s.endTime)
+            if (spawner.GetTimeInSecondsAtTick(spawner.currentTick) >= s.endTime)
             {
                 //Debug.Log(s.lane + " ended");
                 if (spawner != null)
@@ -323,7 +428,7 @@ public class LaneInputManager : MonoBehaviour
                 // sustain is ongoing; scoring / FX per-frame can be handled here
                 if (uiUpdater != null)
                 {
-                    uiUpdater.UpdateForSustainHold(Time.deltaTime * 20f); // e.g., score for holding sustain
+                    uiUpdater.UpdateForSustainHold(uiUpdater.inStar ? Time.deltaTime * 40f : Time.deltaTime * 20f); // e.g., score for holding sustain
                 }
             }
         }

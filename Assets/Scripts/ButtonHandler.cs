@@ -5,7 +5,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.IO;
+#if !IL2CPP
 using System.Windows.Forms;
+#endif
 
 public class ButtonHandler : MonoBehaviour
 {
@@ -109,7 +111,12 @@ public class ButtonHandler : MonoBehaviour
             {
                 gameManager.ResetAllValues();
                 gameManager.inSong = false;
+                SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
+                gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
             }
+            
+                
+            
             Time.timeScale = 1f; // Ensure time scale is reset
             LoadingManager loader = FindAnyObjectByType<LoadingManager>();
             if (loader != null)
@@ -170,7 +177,7 @@ public class ButtonHandler : MonoBehaviour
             LoadingManager loader = FindAnyObjectByType<LoadingManager>();
             if (loader != null)
             {
-                loader.LoadScene("VideoAttractionScene", LoadSceneMode.Single, false);
+                loader.LoadScene("VideoAttractionScene", LoadSceneMode.Single);
             }
         }
         else if (myButton.name == "SuppExitButton")
@@ -207,7 +214,7 @@ public class ButtonHandler : MonoBehaviour
         }
         else if (myButton.name == "SelectFolderButton")
         {
-
+            #if UNITY_STANDALONE_WIN && !IL2CPP
             Ookii.Dialogs.VistaFolderBrowserDialog folderBrowserDialog = new Ookii.Dialogs.VistaFolderBrowserDialog
             {
                 SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\CloBeats\songs\local"
@@ -218,6 +225,20 @@ public class ButtonHandler : MonoBehaviour
                 sfpField.text = folderBrowserDialog.SelectedPath;
                 Debug.Log("Folder selected: '" + folderBrowserDialog.SelectedPath + "'");
             }
+            #elif IL2CPP
+                MessageBox.Instance.Show("Please enter the path manually as your system does not support folder dialogs.");
+            #else
+                FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog()
+                {
+                    SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\CloBeats\songs\local"
+                };
+                if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
+                {
+                    TMPro.TMP_InputField sfpField = GameObject.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
+                    sfpField.text = folderBrowserDialog.SelectedPath;
+                    Debug.Log("Folder selected: '" + folderBrowserDialog.SelectedPath + "'");
+                }
+            #endif
 
         }
     }

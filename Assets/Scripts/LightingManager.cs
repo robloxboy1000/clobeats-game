@@ -1,41 +1,26 @@
+using System;
 using System.Collections.Generic;
+using System.Net.NetworkInformation;
 using UnityEngine;
 
 public class LightingManager : MonoBehaviour
 {
-    public List<GameObject> envLights = new List<GameObject>();
+    public static LightingManager Instance { get; private set; }
     public List<GameObject> stageLights = new List<GameObject>();
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
 
-    public void EnvLight(int lightID, float intensity, Color color)
-    {
-        if (envLights[lightID].gameObject != null)
-        {
-            var light = envLights[lightID].GetComponent<Light>();
-            if (light != null)
-            {
-                light.color = color;
-                light.intensity = intensity;
-            }
-        }
-        else
-        {
-            Debug.LogWarning("LightingManager: Invalid environment light ID: " + lightID);
-        }
-    }
     public void StageLight(int lightID, float intensity, Vector2 rotation, Color color)
     {
+        try
+        {
+            
+        
         if (stageLights[lightID].gameObject != null)
         {
-            var light = stageLights[lightID].GetComponentInChildren<Light>();
+            var light = stageLights[lightID].GetComponentInChildren<VLight>();
             if (light != null)
             {
-                light.intensity = intensity;
-                light.color = color;
+                light.lightMultiplier = intensity;
+                light.colorTint = color;
             }
             GameObject lightX = stageLights[lightID].transform.Find("Spotlight" + lightID + "X").gameObject;
             GameObject lightY = stageLights[lightID];
@@ -51,11 +36,11 @@ public class LightingManager : MonoBehaviour
         {
             Debug.LogWarning("LightingManager: Invalid stage light ID: " + lightID);
         }
-    }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("LightingManager: Exception Occoured: " + ex.Message);
+        }
     }
 }

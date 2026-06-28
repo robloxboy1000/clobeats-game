@@ -187,7 +187,7 @@ public class UGUIMenuList : MonoBehaviour
             try
             {
                 string[] detectedImages = Directory.GetFiles(name);
-                List<string> supportedImages = new List<string> { "jpg","jpeg","png","dds" };
+                List<string> supportedImages = new List<string> { "jpg","jpeg","png","dds","webp" };
                 var imageMatch = detectedImages
                     .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
                     .FirstOrDefault(x => supportedImages.Contains(x.ext));
@@ -228,20 +228,20 @@ public class UGUIMenuList : MonoBehaviour
                     if (musicPlayer.previewAudioPlaying)
                     {
                         musicPlayer.StopPreviewAudio();
-                        await Task.Delay(1000);
+                        //await Task.Delay(1000);
                         if (songMatch != null)
                         if (File.Exists(songMatch.path))
                         {
-                            StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
+                            //StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
                         }
                     }
                     else
                     {
-                        await Task.Delay(1000);
+                        //await Task.Delay(1000);
                         if (songMatch != null)
                         if (File.Exists(songMatch.path))
                         {
-                            StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
+                            //StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
                         }
                     }
                 }

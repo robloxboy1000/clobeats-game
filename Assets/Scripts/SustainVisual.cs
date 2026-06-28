@@ -5,9 +5,10 @@ public class SustainVisual : MonoBehaviour
 {
     int laneIndex = -1;
     float endTime;
+    public Color sustColor;
 
     // Setup called by SustainManager
-    public void Setup(int laneIndex, float x, float baseY, float duration, float spacing)
+    public void Setup(int laneIndex, float x, float baseY, float duration, float spacing, Color color)
     {
         this.laneIndex = laneIndex;
         float height = Mathf.Max(0.001f, duration * spacing);
@@ -17,7 +18,10 @@ public class SustainVisual : MonoBehaviour
         transform.localScale = s;
         var mp = FindAnyObjectByType<MusicPlayer>();
         endTime = (float)mp.GetElapsedTime() + duration;
+        sustColor = color;
         gameObject.SetActive(true);
+        var ns = FindAnyObjectByType<NoteSpawner>();
+        ns.AddObjectToGlobalMoveY(gameObject);
     }
 
     // Force end early (called by manager)
@@ -32,6 +36,11 @@ public class SustainVisual : MonoBehaviour
         if ((float)mp.GetElapsedTime() >= endTime)
         {
             NotifyFinished();
+        }
+        SpriteRenderer sprite = GetComponent<SpriteRenderer>();
+        if (sprite != null)
+        {
+            sprite.color = sustColor;
         }
     }
 

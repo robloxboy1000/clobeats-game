@@ -10,11 +10,12 @@ using System.IO;
 using System.Threading;
 using System.Linq;
 using System.ComponentModel;
+using TMPro;
+using System.Drawing.Text;
 
 public class PlayerPrefsLoader : MonoBehaviour
 {
     private TMPro.TMP_InputField pathInputField;
-    private TMPro.TMP_InputField songsFolderPathInputField;
     private Slider speedInputField;
     private Button playButton;
     private Toggle venueToggle;
@@ -28,12 +29,11 @@ public class PlayerPrefsLoader : MonoBehaviour
     private TMPro.TMP_Dropdown qualityDropdown;
     private TMPro.TextMeshProUGUI resolutionText;
     public bool autoLoad = false;
-    public bool serverMode = false;
 
     public GameObject blankImage;
     public GameObject indefiniteLoadingScreen;
     public List<string> songItemNames = new List<string>();
-    public string configFilePath = Application.dataPath + "/config.ini";
+    bool isFullscreen = true;
     // Start is called before the first frame update
     void Start()
     {
@@ -48,12 +48,6 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             pathInputField.text = PlayerPrefs.GetString("SelectedFolderPath", string.Empty);
         }
-        songsFolderPathInputField = gameObject.transform.Find("SongsFolderPathField").GetComponent<TMPro.TMP_InputField>();
-        if (pathInputField != null)
-        {
-            songsFolderPathInputField.text = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
-        }
-
         speedInputField = gameObject.transform.Find("HyperspeedSlider").GetComponent<Slider>();
         if (speedInputField != null)
         {
@@ -117,7 +111,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
             qualityDropdown.onValueChanged.AddListener((index) =>
             {
-                //QualitySettings.SetQualityLevel(index);
+                QualitySettings.SetQualityLevel(index);
             });
         }
 
@@ -140,6 +134,20 @@ public class PlayerPrefsLoader : MonoBehaviour
             laneInputManager.autoPlayEnabled = autoplayToggle.isOn;
             
         }
+        Toggle vSyncToggle = gameObject.transform.Find("enableVSyncToggle").GetComponent<Toggle>();
+        if (vSyncToggle != null)
+        {
+            vSyncToggle.isOn = PlayerPrefs.GetInt("EnableVSync", 0) == 1;
+            if (vSyncToggle.isOn)
+            {
+                QualitySettings.vSyncCount = 1;
+            }
+            else
+            {
+                QualitySettings.vSyncCount = 0;
+            }
+            
+        }
 
         clearSettingsButton = gameObject.transform.Find("ClearSettingsButton").GetComponent<Button>();
         if (clearSettingsButton != null)
@@ -154,6 +162,23 @@ public class PlayerPrefsLoader : MonoBehaviour
                 difficultyDropdown.value = 0;
                 enableBarBeatsToggle.isOn = true;
                 autoplayToggle.isOn = false;
+            });
+        }
+        Button toggleFullscreenButton = gameObject.transform.Find("FullscreenButton").GetComponent<Button>();
+        if (toggleFullscreenButton != null)
+        {
+            toggleFullscreenButton.onClick.AddListener(() =>
+            {
+                
+                if (isFullscreen)
+                {
+                    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, false);
+                }
+                else
+                {
+                    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
+                }
+                
             });
         }
 
@@ -187,7 +212,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             GameManager gameManager = FindAnyObjectByType<GameManager>();
             if (gameManager != null)
             {
-                gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+                gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
             }
 
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
@@ -232,10 +257,35 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
         });
 
+        Button enterVenueButton = gameObject.transform.Find("EnterVenueButton").GetComponent<Button>();
+        if (enterVenueButton)
+        {
+            enterVenueButton.onClick.AddListener( () =>
+            {
+                LoadingManager loader = FindFirstObjectByType<LoadingManager>();
+                if (loader != null)
+                {
+                    loader.LoadScene("v_PaddedRoom_JT");
+                }
+                else
+                {
+                    Debug.LogError("LoadingManager not found in scene!");
+                }
+            });
+        }
+        TMP_InputField seekToInputField = gameObject.transform.Find("SeekToField").GetComponent<TMP_InputField>();
+        if (seekToInputField)
+        {
+            
+        }
+
         GameManager gameManager = FindAnyObjectByType<GameManager>();
+        DontDestroyOnLoad(gameManager.unDestructibleLoadingPhraseScreen);
+        gameManager.DisableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen);
         string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        gameManager.savePath = documentsPath + @"\CloBeats\save";
-        if (!File.Exists(gameManager.savePath))
+        
+        gameManager.savePath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "save";
+        if (!Directory.Exists(gameManager.savePath))
         {
             Directory.CreateDirectory(gameManager.savePath);
         }
@@ -251,6 +301,10 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 indefiniteLoadingScreen.SetActive(false);
             }
+            PlayerPrefs.SetInt("EnableVenue", 1);
+            PlayerPrefs.SetInt("EnableAutoplay", 0);
+            PlayerPrefs.GetInt("EnableVSync", 0);
+            Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
             await LoadGame();
         }
         else
@@ -263,6 +317,15 @@ public class PlayerPrefsLoader : MonoBehaviour
             if (indefiniteLoadingScreen != null)
             {
                 indefiniteLoadingScreen.SetActive(false);
+            }
+        }
+
+        SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
+        if (sFXPlayer != null)
+        {
+            foreach (AudioClip clip in Resources.LoadAll<AudioClip>("SFX"))
+            {
+                sFXPlayer.LoadActualClip(clip);
             }
         }
     }
@@ -285,96 +348,49 @@ public class PlayerPrefsLoader : MonoBehaviour
             return false;
         }
     }
-    public void RegenerateCacheFile()
-    {
-        Debug.Log("Regenerating cache");
-        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
-        string[] directories = Directory.GetDirectories(songFoldersPath);
-        int songCount = 0;
-        using (StreamWriter sw = new StreamWriter(documentsPath + @"\CloBeats\cbfoldercache"))
-        {
-            foreach (string dir in directories)
-            {
-                sw.WriteLine($"{songCount}={dir.GetHashCode()}={dir.Replace("/", @"\")}");
-                songCount++;
-            }
-        }
-        Debug.Log("Restart the game.");
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#endif
-        UnityEngine.Application.Quit();
-    }
-    public void ListDirs()
-    {
-        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
-        string[] directories = Directory.GetDirectories(songFoldersPath);
-        string[] cachedSongsFile = File.ReadAllLines(documentsPath + @"\CloBeats\cbfoldercache");
-        foreach (string dir in directories)
-        {
-            Debug.Log("Directories: " + dir);
-        }
-        foreach (string dir in cachedSongsFile)
-        {
-            Debug.Log("Directories (cached): " + dir);
-        }
-    }
     public async Task<bool> LoadWholeGame(bool loadMainMenu = true)
     {
         Debug.Log("Loading game...");
-        ListDirs();
+        songItemNames.Clear();
         if (songItemNames.Count == 0)
         {
             try
             {
                 string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string songFoldersPath = documentsPath + @"\CloBeats\songs\local";
-                if (songFoldersPath != string.Empty)
+                string songFoldersPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
+                
+                
+                GameManager gameManager = FindAnyObjectByType<GameManager>();
+                if (!Directory.Exists(songFoldersPath))
                 {
-                    GameManager gameManager = FindAnyObjectByType<GameManager>();
-                    if (!File.Exists(songFoldersPath))
-                    {
-                        Directory.CreateDirectory(songFoldersPath);
-                    }
-                    
-                    string[] directories = Directory.GetDirectories(songFoldersPath);
-                    string[] cachedSongsFile = File.ReadAllLines(documentsPath + @"\CloBeats\cbfoldercache");
-                    if (cachedSongsFile != null)
-                    {
-                        foreach (string line in cachedSongsFile)
-                        {
-                            string[] hashandpath = line.Split('=', StringSplitOptions.None);
-                            int number = int.Parse(hashandpath[0]);
-                            int hash = int.Parse(hashandpath[1]);
-                            string path = hashandpath[2].Replace("/", @"\");
-                            string dir = directories[number];
-                            if (path == dir)
-                            {
-                                Debug.Log(number + " '" + path + "' equals '" + dir + "'");
-                                gameManager.songFolders.Add(dir);
-                                await gameManager.CacheSingleSong(dir, hash, number);
-                                await Task.Yield();
-                            }
-                            else
-                            {
-                                throw new Exception($"{number} '{path}' does not equal '{dir}'");
-                            }
-                            
-                        }
-                    }
+                    Directory.CreateDirectory(songFoldersPath);
                 }
-                else
-                {
                     
+                string[] directories = Directory.GetDirectories(songFoldersPath);
+                if (directories != null)
+                {
+                    int ind = 0;
+                    TextMeshProUGUI loadingText = indefiniteLoadingScreen.transform.Find("LoadingText").GetComponent<TextMeshProUGUI>();
+                    loadingText.text = "Loading songs: (" + ind + " songs)";
+                    
+                    foreach (string dir in directories)
+                    {
+                        int hash = dir.GetHashCode();
+                        int number = ind;
+                        gameManager.songFolders.Add(dir);
+                        songItemNames.Add(dir);
+                        gameManager.CacheSingleSong(dir, hash, number);
+                        ind++;
+                        loadingText.text = "Loading songs: (" + ind + " songs)";
+                        await Task.Yield();
+                    }
                 }
                 
             }
             catch (Exception ex)
             {
                 Debug.LogError("Song listing failed: " + ex);
-                RegenerateCacheFile();
+                //RegenerateCacheFile();
                 return false;
             }
         }
@@ -396,9 +412,9 @@ public class PlayerPrefsLoader : MonoBehaviour
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
             if (loader != null)
             {
-                loader.LoadScene("HS_Screen", LoadSceneMode.Single, true);
+                loader.LoadScene("HS_Screen", LoadSceneMode.Single);
                 await Task.Delay(6000);
-                loader.LoadScene("MainMenu", LoadSceneMode.Single, true);
+                loader.LoadScene("MainMenu", LoadSceneMode.Single);
                 return true;
             }
             else
@@ -440,13 +456,6 @@ public class PlayerPrefsLoader : MonoBehaviour
                 
             }
         }
-        if (songsFolderPathInputField != null)
-        {
-            if (System.IO.Directory.Exists(songsFolderPathInputField.text))
-            {
-                PlayerPrefs.SetString("SongsFolderPath", songsFolderPathInputField.text);
-            }
-        }
 
         if (resolutionText != null)
         {
@@ -456,6 +465,11 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             LaneInputManager laneInputManager = FindAnyObjectByType<LaneInputManager>();
             laneInputManager.autoPlayEnabled = autoplayToggle.isOn;
+        }
+        TMP_InputField seekToInputField = gameObject.transform.Find("SeekToField").GetComponent<TMP_InputField>();
+        if (seekToInputField)
+        {
+            PlayerPrefs.SetFloat("PracticeModeSeekTo", float.Parse(seekToInputField.text));
         }
     }
 }

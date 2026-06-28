@@ -2,9 +2,14 @@ using UnityEngine;
 
 public class NoteVisualChanger : MonoBehaviour
 {
-    public bool isStrum = true;
-    public bool isHOPO = false;
-    public bool isTap = false;
+    public enum NoteType
+    {
+        Forced,
+        HOPO,
+        Tap
+    }
+
+    public NoteType currentNoteType;
 
     public GameObject noteObject;
     public GameObject hopoNoteObject;
@@ -19,7 +24,7 @@ public class NoteVisualChanger : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (isStrum)
+        if (currentNoteType == NoteType.Forced)
         {
             if (noteObject != null)
             {
@@ -34,7 +39,7 @@ public class NoteVisualChanger : MonoBehaviour
                 tapNoteObject.SetActive(false);
             }
         }
-        if (isHOPO)
+        if (currentNoteType == NoteType.HOPO)
         {
             if (noteObject != null)
             {
@@ -49,7 +54,7 @@ public class NoteVisualChanger : MonoBehaviour
                 tapNoteObject.SetActive(false);
             }
         }
-        if (isTap)
+        if (currentNoteType == NoteType.Tap)
         {
             if (noteObject != null)
             {

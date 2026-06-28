@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class SFXPlayer : MonoBehaviour
@@ -8,6 +9,8 @@ public class SFXPlayer : MonoBehaviour
     public AudioClip highwayRiseClip;
     public AudioClip fretRippleUpClip;
     public AudioClip songFailClip;
+    public AudioClip scoreShowClip;
+    public Dictionary<string, AudioClip> loadedAudioClips = new Dictionary<string, AudioClip>();
 
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -64,6 +67,48 @@ public class SFXPlayer : MonoBehaviour
             audioSource.PlayOneShot(songFailClip);
         }
     }
+    public void PlayScoreShowClip()
+    {
+        if (scoreShowClip != null)
+        {
+            audioSource.PlayOneShot(scoreShowClip);
+        }
+    }
+    public void PlayClip(string clipName)
+    {
+        if (loadedAudioClips.TryGetValue(clipName, out var clip))
+        {
+            audioSource.PlayOneShot(clip);
+        }
+        else
+        {
+            Debug.LogError("[SFXPlayer] Audio clip '" + clipName + "' is not loaded.");
+        }
+    }
+    public void LoadClip(string clipName)
+    {
+        AudioClip clip = Resources.Load<AudioClip>(clipName);
+        if (clip != null)
+        {
+            loadedAudioClips.Add(clipName, clip);
+        }
+        else
+        {
+            Debug.LogError("[SFXPlayer] Audio clip '" + clipName + "' does not exist in resources.");
+        }
+    }
+    public void LoadActualClip(AudioClip clip1)
+    {
+        if (clip1 != null)
+        {
+            loadedAudioClips.Add(clip1.name, clip1);
+        }
+        else
+        {
+            Debug.LogError("[SFXPlayer] Audio clip '" + clip1.name + "' does not exist.");
+        }
+    }
+
 
 
     // Update is called once per frame

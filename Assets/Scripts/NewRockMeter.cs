@@ -17,23 +17,13 @@ public class NewRockMeter : MonoBehaviour
     public GameObject yellowIndicator;
     public GameObject redIndicator;
 
+
     public float value
     {
         get { return currentValue; }
         set { SetHandlePosition(Mathf.Lerp(minZPosition, maxZPosition, (value - minValue) / (maxValue - minValue))); }
     }
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
     public void SetHandlePosition(float zPosition)
     {
         // Clamp the xPosition and zPosition to be within the defined range
@@ -75,4 +65,5 @@ public class NewRockMeter : MonoBehaviour
             redIndicator.SetActive(true);
         }
     }
+
 }

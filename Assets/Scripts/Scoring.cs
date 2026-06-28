@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class Scoring : MonoBehaviour
 {
-    public int playerID;
+    public string playerTag;
     public int currentSongID;
     public string currentSongPath;
     public float lastNoteSecondsUntil;
@@ -31,19 +31,19 @@ public class Scoring : MonoBehaviour
         currentSongID = id;
     }
 
-    public void SetPlayerID(int id)
+    public void SetPlayerTag(string tag)
     {
-        playerID = id;
+        playerTag = tag;
     }
 
     public void Save(string savePath)
     {
-        using (StreamWriter writer = new StreamWriter(savePath + @"\save" + currentSongPath.GetHashCode() + ".txt"))
+        using (StreamWriter writer = new StreamWriter(savePath + @"\save" + currentSongID + ".txt"))
         {
             writer.WriteLine("[save]");
             writer.WriteLine($"songid = {currentSongID}");
             writer.WriteLine($"songpath = {currentSongPath}");
-            writer.WriteLine($"playerid = {playerID}");
+            writer.WriteLine($"playertag = {playerTag}");
             writer.WriteLine($"score = {currentScore}");
             writer.WriteLine($"nhit = {currentNotesHit}");
             writer.WriteLine($"nmiss = {currentNotesMissed}");

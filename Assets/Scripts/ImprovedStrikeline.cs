@@ -59,7 +59,7 @@ public class ImprovedStrikeline : MonoBehaviour
     {
         Vector3 flamePosition = new Vector3(xOffset, gameObject.transform.position.y, gameObject.transform.position.z);
         StartCoroutine(SustainFlame(flamePosition, 0.5f));
-        EnableSustainSparks(flamePosition);
+        EnableSustainSparks(Mathf.CeilToInt(xOffset));
     }
 
     // co-routines
@@ -179,73 +179,51 @@ public class ImprovedStrikeline : MonoBehaviour
 
         }
         transform.position = new Vector3(0,0,0);
-        for (int i = 0; i >= 4; i++)
+        if (SLGreenTopPrefab != null)
         {
-            if (i == 0)
+            Animation topAnim = SLGreenTopPrefab.GetComponent<Animation>();
+            if (topAnim != null)
             {
-                if (SLGreenTopPrefab != null)
-                {
-                    Animation topAnim = SLGreenTopPrefab.GetComponent<Animation>();
-                    if (topAnim != null)
-                    {
-                        topAnim.Stop();
-                    }
-                    SLGreenTopPrefab.transform.position = new Vector3(-2, 0, 0);
-                }
+                topAnim.Stop();
             }
-            else if (i == 1)
-            {
-                if (SLRedTopPrefab != null)
-                {
-                    Animation topAnim = SLRedTopPrefab.GetComponent<Animation>();
-                    if (topAnim != null)
-                    {
-                        topAnim.Stop();
-                    }
-                    SLRedTopPrefab.transform.position = new Vector3(-1, 0, 0);
-                }
-            }
-            else if (i == 2)
-            {
-                if (SLYellowTopPrefab != null)
-                {
-                    Animation topAnim = SLYellowTopPrefab.GetComponent<Animation>();
-                    if (topAnim != null)
-                    {
-                        topAnim.Stop();
-                    }
-                    SLYellowTopPrefab.transform.position = new Vector3(0, 0, 0);
-                }
-            }
-            else if (i == 3)
-            {
-                if (SLBlueTopPrefab != null)
-                {
-                    Animation topAnim = SLBlueTopPrefab.GetComponent<Animation>();
-                    if (topAnim != null)
-                    {
-                        topAnim.Stop();
-                    }
-                    SLBlueTopPrefab.transform.position = new Vector3(1, 0, 0);
-                }
-            }
-            else if (i == 4)
-            {
-                if (SLOrangeTopPrefab != null)
-                {
-                    Animation topAnim = SLOrangeTopPrefab.GetComponent<Animation>();
-                    if (topAnim != null)
-                    {
-                        topAnim.Stop();
-                    }
-                    SLOrangeTopPrefab.transform.position = new Vector3(2, 0, 0);
-                }
-            }
-            else
-            {
-                Debug.LogWarning("Invalid fret lane index: " + i);
-            }
+            SLGreenTopPrefab.transform.position = new Vector3(-2, 0, 0);
         }
+        if (SLRedTopPrefab != null)
+        {
+            Animation topAnim = SLRedTopPrefab.GetComponent<Animation>();
+            if (topAnim != null)
+            {
+                topAnim.Stop();
+            }
+            SLRedTopPrefab.transform.position = new Vector3(-1, 0, 0);
+        }
+        if (SLYellowTopPrefab != null)
+        {
+            Animation topAnim = SLYellowTopPrefab.GetComponent<Animation>();
+            if (topAnim != null)
+            {
+                topAnim.Stop();
+            }
+            SLYellowTopPrefab.transform.position = new Vector3(0, 0, 0);
+        }
+        if (SLBlueTopPrefab != null)
+        {
+            Animation topAnim = SLBlueTopPrefab.GetComponent<Animation>();
+            if (topAnim != null)
+            {
+                topAnim.Stop();
+            }
+            SLBlueTopPrefab.transform.position = new Vector3(1, 0, 0);
+        }
+        if (SLOrangeTopPrefab != null)
+        {
+            Animation topAnim = SLOrangeTopPrefab.GetComponent<Animation>();
+            if (topAnim != null)
+            {
+                topAnim.Stop();
+            }
+            SLOrangeTopPrefab.transform.position = new Vector3(2, 0, 0);
+        }    
     }
 
     public IEnumerator RippleAnim()
@@ -380,21 +358,22 @@ public class ImprovedStrikeline : MonoBehaviour
             Debug.LogWarning("Invalid fret lane index: " + laneIndex);
         }
     }
-    public void EnableSustainSparks(Vector3 fret)
+    public void EnableSustainSparks(int fret)
     {
         if (sustainSparksPrefab != null)
 
         try
         {
             Quaternion rotation = Quaternion.Euler(0f, 180f, 0f);
-            activeSustainSparks.Add((int)fret.x, Instantiate(sustainSparksPrefab, fret, rotation));
+            Vector3 position = new Vector3(fret, 0, 0);
+            activeSustainSparks.Add(fret+2, Instantiate(sustainSparksPrefab, position, rotation));
         }
         catch (System.Exception)
         {
-            if (activeSustainSparks.TryGetValue((int)fret.x, out GameObject spark))
+            if (activeSustainSparks.TryGetValue(fret+2, out GameObject spark))
             {
                 Destroy(spark);
-                activeSustainSparks.Remove((int)fret.x);
+                activeSustainSparks.Remove(fret+2);
             }
             
         }
@@ -404,10 +383,10 @@ public class ImprovedStrikeline : MonoBehaviour
         if (sustainSparksPrefab != null)
         if (activeSustainSparks != null)
         {
-            if (activeSustainSparks.TryGetValue(xOffset, out GameObject spark))
+            if (activeSustainSparks.TryGetValue(xOffset+2, out GameObject spark))
             {
                 Destroy(spark);
-                activeSustainSparks.Remove(xOffset);
+                activeSustainSparks.Remove(xOffset+2);
             }
         }
     }

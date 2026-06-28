@@ -18,7 +18,7 @@ public class LaneManager : MonoBehaviour
                 {
                     var go = new GameObject("_LaneManager");
                     #if UNITY_EDITOR
-                    //go.hideFlags = HideFlags.HideAndDontSave;
+                    go.hideFlags = HideFlags.HideAndDontSave;
                     #endif
                     _instance = go.AddComponent<LaneManager>();
                 }

@@ -22,8 +22,6 @@ public class moveZed : MonoBehaviour
         float userSpeedSetting = PlayerPrefs.GetFloat("Hyperspeed", 5f);
         speed = userSpeedSetting;
 
-        GlobalMoveY globalMoveY = FindAnyObjectByType<GlobalMoveY>();
-        isPlaying = globalMoveY.isMoving;
         
         if (isPlaying)
         {

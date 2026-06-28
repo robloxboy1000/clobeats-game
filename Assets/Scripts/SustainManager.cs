@@ -45,12 +45,12 @@ public class SustainManager : MonoBehaviour
     }
 
     // Start a sustain visual for the given lane and durationSeconds.
-    public void StartSustain(int laneIndex, float durationSeconds)
+    public void StartSustain(int laneIndex, float durationSeconds, Color color, bool partOfChord)
     {
         if (sustainPrefab == null) return;
 
-        // End existing on that lane
-        if (active.TryGetValue(laneIndex, out var old))
+        // End existing on that lane if it is NOT in a chord
+        if (!partOfChord && active.TryGetValue(laneIndex, out var old))
         {
             old.ForceEnd();
             active.Remove(laneIndex);
@@ -61,6 +61,8 @@ public class SustainManager : MonoBehaviour
 
         var v = go.GetComponent<SustainVisual>();
         if (v == null) v = go.AddComponent<SustainVisual>();
+        //var sched = go.AddComponent<ScheduledTime>();
+        //sched.scheduledSeconds = startSeconds;
 
         float baseY = spawner != null ? spawner.GetStrikeLineY() : 0f;
         float spacing = PlayerPrefs.GetFloat("Hyperspeed", 5f);
@@ -68,8 +70,9 @@ public class SustainManager : MonoBehaviour
             ? laneXPositions[laneIndex]
             : laneIndex;
 
-        v.Setup(laneIndex, x, baseY, durationSeconds, spacing);
+        v.Setup(laneIndex, x, baseY, durationSeconds, spacing, color);
         active[laneIndex] = v;
+        
     }
 
     // End a sustain visual early for a lane

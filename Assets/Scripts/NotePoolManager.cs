@@ -52,6 +52,7 @@ public class NotePoolManager : MonoBehaviour
             if (pn == null) pn = inst.AddComponent<PooledNote>();
             pn.prefab = prefab;
             inst.SetActive(false);
+            inst.hideFlags = HideFlags.HideAndDontSave;
             q.Enqueue(inst);
         }
     }
@@ -78,6 +79,7 @@ public class NotePoolManager : MonoBehaviour
         if (pnNew == null) pnNew = newGo.AddComponent<PooledNote>();
         pnNew.prefab = prefab;
         newGo.SetActive(false);
+        newGo.hideFlags = HideFlags.HideAndDontSave;
         return newGo;
     }
 

@@ -9,9 +9,11 @@ using System.Text;
 using System.Linq;
 using System.IO;
 using System.Threading;
+using System.Text.RegularExpressions;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
 using TMPro;
+using System.Net.WebSockets;
 
 
 public class GameManager : MonoBehaviour
@@ -29,7 +31,11 @@ public class GameManager : MonoBehaviour
         public Queue<NoteSpawner.SyncInfo> syncInfos = new Queue<NoteSpawner.SyncInfo>();
         public Queue<NoteSpawner.NoteInfo> noteInfos = new Queue<NoteSpawner.NoteInfo>();
         public Dictionary<int, NoteSpawner.GlobalEventInfo> globalEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>();
+        public List<NoteSpawner.GlobalEventInfo> beatEvents = new List<NoteSpawner.GlobalEventInfo>();
         public int songLengthInTicks = 0;
+        public List<NoteSpawner.GlobalEventInfo> forcedNoteEvents = new List<NoteSpawner.GlobalEventInfo>();
+        public List<NoteSpawner.GlobalEventInfo> venueAnimCueEvents = new List<NoteSpawner.GlobalEventInfo>();
+        public List<NoteSpawner.LyricEventInfo> lyricEvents = new List<NoteSpawner.LyricEventInfo>();
     }
 
     public class SongEntryInfo
@@ -49,13 +55,15 @@ public class GameManager : MonoBehaviour
     }
     public string ddst;
     public string currentPart = "Guitar";
-    public int cachedSongChartCount = 0;
-    public int cachedSongEntryCount = 0;
 
     public int currentSongResolution = 480;
     public Queue<NoteSpawner.NoteInfo> currentSongNotes = new Queue<NoteSpawner.NoteInfo>();
     public Queue<NoteSpawner.SyncInfo> currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>();
     public Dictionary<int, NoteSpawner.GlobalEventInfo> currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>();
+    public List<NoteSpawner.GlobalEventInfo> currentSongBeatEvents = new List<NoteSpawner.GlobalEventInfo>();
+    public List<NoteSpawner.GlobalEventInfo> currentSongForcedNoteEvents = new List<NoteSpawner.GlobalEventInfo>();
+    public List<NoteSpawner.GlobalEventInfo> currentSongVenueCueEvents = new List<NoteSpawner.GlobalEventInfo>();
+    public List<NoteSpawner.LyricEventInfo> currentSongLyrics = new List<NoteSpawner.LyricEventInfo>();
     public int currentSongLengthInTicks = 0;
 
     public string currentSongTitle;
@@ -85,17 +93,34 @@ public class GameManager : MonoBehaviour
         ["Expert"] = new Dictionary<int,int> { {96,0}, {97,1}, {98,2}, {99,3}, {100,4}, {95,7}, {94,8} },
     };
 
-    // scene enums
-    public enum SceneIndexes
+    Dictionary<string, Dictionary<int, int>> partDrumsDifficultyMappings = new Dictionary<string, Dictionary<int,int>>
     {
-        Preloader = 0,
-        Gameplay = 1,
-        Venue = 2,
-        ScoreScene = 3,
-        Blank = 4,
-        HealthAndSafetyScene = 5,
-        MainMenu = 6,
-        AttractScene = 7
+        ["Easy"] = new Dictionary<int,int> { {65,0}, {61,1}, {62,2}, {63,3}, {64,4}, {60,7} },
+        ["Medium"] = new Dictionary<int,int> { {77,0}, {73,1}, {74,2}, {75,3}, {76,4}, {72,7} },
+        ["Hard"] = new Dictionary<int,int> { {89,0}, {85,1}, {86,2}, {87,3}, {88,4}, {84,7} },
+        ["Expert"] = new Dictionary<int,int> { {97,0}, {98,1}, {99,2}, {100,3}, {101,4}, {96,7}, {95,7} },
+    };
+
+    public void ExitGame()
+    {
+        #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+        #endif
+            UnityEngine.Application.Quit();
+    }
+
+    public IEnumerator PlayerRocksAnim()
+    {
+        TMPInstanceMaker.Instance.CreateTextObject("Song Cleared",
+            SceneManager.GetSceneByName("Gameplay").isLoaded ?
+            GameObject.Find("UI").transform :
+            transform,
+            new Vector2(960,540),
+            new Vector3(0,0,0),
+            24);
+        yield return new WaitForSeconds(6);
+        LoadingManager lm = FindAnyObjectByType<LoadingManager>();
+        lm.LoadScene("ScoreScreen");
     }
 
     // Start is called before the first frame update
@@ -121,25 +146,27 @@ public class GameManager : MonoBehaviour
     }
 
     
-    public async Task CacheSingleSong(string folder, int songID, int count)
+    public void CacheSingleSong(string folder, int songID, int count)
     {
         if (!File.Exists(folder + "/song.ini")) return;
-        await SetIniFileData(await File.ReadAllTextAsync(folder + "/song.ini"));
+        INIParser parser = new INIParser();
+        parser.Open(folder + "/song.ini");
         cachedEntries.Add(songID, new SongEntryInfo
         {
-            songTitle = currentSongTitle,
-            songArtist = currentSongArtist,
-            songAlbum = currentSongAlbum,
-            songYear = currentSongYear,
-            songLoadingPhrase = currentSongLoadingPhrase,
-            songAuthor = currentSongAuthor,
-            songLength = currentSongLength,
-            songAccentColor = currentSongAccentColor,
-            songPreviewStartTime = currentSongPreviewStartTime,
+            songTitle = parser.ReadValue("song", "name", string.Empty),
+            songArtist = parser.ReadValue("song", "artist", string.Empty),
+            songAlbum = parser.ReadValue("song", "album", string.Empty),
+            songYear = int.Parse(parser.ReadValue("song", "year", "0")),
+            songLoadingPhrase = parser.ReadValue("song", "loading_phrase", string.Empty),
+            songAuthor = parser.ReadValue("song", "charter", string.Empty),
+            songLength = int.Parse(parser.ReadValue("song", "song_length", string.Empty)),
+            songAccentColor = parser.ReadValue("song", "back_color", "#0000ff"),
+            songPreviewStartTime = int.Parse(parser.ReadValue("song", "preview_start_time", string.Empty)),
             cachedSongID = songID,
             songPath = folder,
             songNumber = count
         });
+        parser.Close();
     }
     public async Task ReadMidiFile(string path)
     {
@@ -150,7 +177,51 @@ public class GameManager : MonoBehaviour
 
         try
         {
-            await CacheMidiFile(fullPath, songID);
+            if (cachedSongs.TryGetValue(songID, out SongInfo si))
+            {
+                // Copy cached info into current song state
+                currentSongResolution = si.resolution;
+                currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>(si.syncInfos);
+                currentSongNotes = new Queue<NoteSpawner.NoteInfo>(si.noteInfos);
+                currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>(si.globalEvents);
+                currentSongBeatEvents = new List<NoteSpawner.GlobalEventInfo>(si.beatEvents);
+                currentSongVenueCueEvents = new List<NoteSpawner.GlobalEventInfo>(si.venueAnimCueEvents);
+                currentSongLyrics = new List<NoteSpawner.LyricEventInfo>(si.lyricEvents);
+                currentSongLengthInTicks = si.songLengthInTicks;
+            }
+            else
+            {
+                await CacheMidiFile(fullPath, songID);
+                if (cachedSongs.TryGetValue(songID, out SongInfo ucsi))
+                {
+                    // Copy cached info into current song state
+                    currentSongResolution = ucsi.resolution;
+                    currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>(ucsi.syncInfos);
+                    currentSongNotes = new Queue<NoteSpawner.NoteInfo>(ucsi.noteInfos);
+                    currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>(ucsi.globalEvents);
+                    currentSongBeatEvents = new List<NoteSpawner.GlobalEventInfo>(ucsi.beatEvents);
+                    currentSongVenueCueEvents = new List<NoteSpawner.GlobalEventInfo>(ucsi.venueAnimCueEvents);
+                    currentSongLyrics = new List<NoteSpawner.LyricEventInfo>(ucsi.lyricEvents);
+                    currentSongLengthInTicks = ucsi.songLengthInTicks;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("ReadMidiFile failed: " + ex.Message);
+        }
+        await Task.Yield();
+    }
+    public async Task ReadChartFile(string path)
+    {
+        // Read MIDI, cache it by a stable hash of the full path, and copy into current song queues
+        string fullPath = Path.GetFullPath(path ?? string.Empty);
+        int songID = fullPath.GetHashCode();
+        //Debug.Log(songID);
+
+        try
+        {
+            
 
             if (cachedSongs.TryGetValue(songID, out SongInfo si))
             {
@@ -159,12 +230,30 @@ public class GameManager : MonoBehaviour
                 currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>(si.syncInfos);
                 currentSongNotes = new Queue<NoteSpawner.NoteInfo>(si.noteInfos);
                 currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>(si.globalEvents);
+                currentSongBeatEvents = new List<NoteSpawner.GlobalEventInfo>(si.beatEvents);
+                currentSongForcedNoteEvents = new List<NoteSpawner.GlobalEventInfo>(si.forcedNoteEvents);
                 currentSongLengthInTicks = si.songLengthInTicks;
+            }
+            else
+            {
+                await CacheChartFile(fullPath, songID);
+                if (cachedSongs.TryGetValue(songID, out SongInfo ucsi))
+                {
+                    // Copy cached info into current song state
+                    currentSongResolution = ucsi.resolution;
+                    currentSongSyncTrack = new Queue<NoteSpawner.SyncInfo>(ucsi.syncInfos);
+                    currentSongNotes = new Queue<NoteSpawner.NoteInfo>(ucsi.noteInfos);
+                    currentSongEvents = new Dictionary<int, NoteSpawner.GlobalEventInfo>(ucsi.globalEvents);
+                    currentSongBeatEvents = new List<NoteSpawner.GlobalEventInfo>(ucsi.beatEvents);
+                    currentSongVenueCueEvents = new List<NoteSpawner.GlobalEventInfo>(ucsi.venueAnimCueEvents);
+                    currentSongLyrics = new List<NoteSpawner.LyricEventInfo>(ucsi.lyricEvents);
+                    currentSongLengthInTicks = ucsi.songLengthInTicks;
+                }
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError("ReadMidiFile failed: " + ex.Message);
+            Debug.LogError("ReadChartFile failed: " + ex.Message);
         }
         await Task.Yield();
     }
@@ -175,6 +264,7 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public async Task CacheMidiFile(string path, int songID)
     {
+        Debug.Log("Parsing MIDI file");
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
             throw new FileNotFoundException("MIDI file not found", path);
 
@@ -197,7 +287,7 @@ public class GameManager : MonoBehaviour
             // keep default
         }
 
-        int targetResolution = currentSongResolution > 0 ? currentSongResolution : 192;
+        int targetResolution = currentSongResolution > 0 ? currentSongResolution : 480;
         double scale = (double)targetResolution / Math.Max(1, midiResolution);
 
         var globalEvents = GetTextEventsFromTrackByName(midi, "EVENTS", scale);
@@ -224,28 +314,50 @@ public class GameManager : MonoBehaviour
             }
         }
         
+        
 
+        // Parse BEAT track (optional). Use MIDI note 12 = measure/bar marker, 13 = regular beat.
+        try
+        {
+            var beatEvents = GetBeatEventsFromTrackByName(midi, "BEAT", scale);
+            foreach (var be in beatEvents) info.beatEvents.Add(be);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheMidiFile: failed to parse BEAT track: " + ex.Message);
+        }
         // choose difficulty key (string) from player settings or UI
         string chosenDiff = ddst;
         string chosenPart = currentPart.ToUpper();
-        if (chosenPart == "GUITAR")
+        
+        if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
+        if (chosenPart == "DRUMS")
         {
-            if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
-            if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
+            if (partDrumsDifficultyMappings.TryGetValue(chosenDiff, out var map))
             {
-                var trackNotes = GetNotesFromTrackByName(midi, "PART GUITAR", map, scale);
+                var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
                 foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
             }
         }
-        else if (chosenPart == "BASS")
+        else
         {
-            if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
             if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
             {
-                var trackNotes = GetNotesFromTrackByName(midi, "PART BASS", map, scale);
+                var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
                 foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
             }
         }
+
+        try
+        {
+            var vocalEvents = GetNotesAndTextFromVocalTrack(midi, "PART VOCALS", scale); // use solo vocal track for now
+            foreach (var eve in vocalEvents) info.lyricEvents.Add(eve);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheMidiFile: Failed to parse lyrics: " + ex.Message);
+        }
+        
         
 
         // Set cached resolution to the target resolution we converted into
@@ -293,6 +405,16 @@ public class GameManager : MonoBehaviour
             Debug.LogWarning("CacheMidiFile: failed to parse timed events: " + ex.Message);
         }
 
+        try
+        {
+            var vAnimEvents = GetVenueTextEventsFromTrackByName(midi, "SCRIPTING", scale);
+            foreach (var vae in vAnimEvents) info.venueAnimCueEvents.Add(vae);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheMidiFile: failed to parse Venue track: " + ex.Message);
+        }
+
         // Compute max tick from collected noteInfos (already scaled)
         int maxTick = 0;
         try
@@ -318,11 +440,384 @@ public class GameManager : MonoBehaviour
 
         info.songLengthInTicks = Math.Max(1, maxTick);
 
+        // Auto-generate BEAT track events from the sync track if none were provided in the MIDI
+        try
+        {
+            bool hasHigherBeatEvents = info.beatEvents != null && info.beatEvents.Any(ev => int.TryParse(ev.value, out int noteNum) && noteNum > 13);
+            if (info.beatEvents == null || info.beatEvents.Count == 0 || !hasHigherBeatEvents)
+            {
+                if (info.beatEvents == null) info.beatEvents = new List<NoteSpawner.GlobalEventInfo>();
+
+                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: !hasHigherBeatEvents);
+                if (generated != null && generated.Count > 0)
+                {
+                    foreach (var be in generated)
+                    {
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
+                        if (!alreadyExists) info.beatEvents.Add(be);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheMidiFile: failed to generate beat events: " + ex.Message);
+        }
+
         // Store in cache (pool)
         if (cachedSongs.ContainsKey(songID)) cachedSongs[songID] = info; else cachedSongs.Add(songID, info);
 
         await Task.Yield();
     }
+
+    public async Task CacheChartFile(string path, int songID)
+    {
+        Debug.LogWarning("[CacheChartFile] Please convert your chart to a Clone Hero/Phase Shift MIDI file for best experience.");
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            throw new FileNotFoundException("Chart file not found", path);
+
+        string chartText = File.ReadAllText(path);
+        SongInfo info = new SongInfo();
+
+        // Extract all sections like [SectionName] { ... }
+        var sectionRe = new Regex("\\[\\s*(.+?)\\s*\\]\\s*\\{(.*?)\\}", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        var sections = sectionRe.Matches(chartText);
+
+        // Helper: find the body text for a section name
+        string GetSectionBody(string name)
+        {
+            foreach (Match m in sections)
+            {
+                var secName = m.Groups[1].Value.Trim();
+                if (string.Equals(secName, name, StringComparison.OrdinalIgnoreCase)) return m.Groups[2].Value;
+            }
+            return null;
+        }
+
+        // 1) Parse [Song] for Resolution and basic metadata
+        var songBody = GetSectionBody("Song");
+        if (!string.IsNullOrEmpty(songBody))
+        {
+            var kvRe = new Regex("^\\s*(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|([^\\r\\n]+))", RegexOptions.Multiline);
+            foreach (Match kv in kvRe.Matches(songBody))
+            {
+                string k = kv.Groups[1].Value.Trim();
+                string v = kv.Groups[2].Success ? kv.Groups[2].Value : kv.Groups[3].Value;
+                if (string.Equals(k, "Resolution", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (int.TryParse(v, out int res)) info.resolution = res;
+                }
+            }
+        }
+
+        // 2) Parse [SyncTrack] for tempo/time-signature entries
+        var syncBody = GetSectionBody("SyncTrack");
+        if (!string.IsNullOrEmpty(syncBody))
+        {
+            var syncLineRe = new Regex("^\\s*(\\d+)\\s*=\\s*([A-Za-z]+)\\s*(.*)$", RegexOptions.Multiline);
+            foreach (Match ln in syncLineRe.Matches(syncBody))
+            {
+                int tick = int.Parse(ln.Groups[1].Value);
+                string typ = ln.Groups[2].Value.Trim().ToUpperInvariant();
+                string rest = ln.Groups[3].Value.Trim();
+                if (typ == "B")
+                {
+                    // B <tempo in thousandth>
+                    var tok = rest.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tok.Length > 0 && float.TryParse(tok[0], out float bpmUnSolved))
+                    {
+                        float bpm = bpmUnSolved / 1000;
+                        info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = tick, bpm = bpm, timeSignature = "4" });
+                    }
+                }
+                else if (typ == "TS")
+                {
+                    // TS <numerator> [<denominator>]
+                    var tok = rest.Split(new[] { ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    string ts = tok.Length > 0 ? tok[0] : "4";
+                    if (tok.Length > 1) ts = tok[0] + "/" + tok[1]; else ts = ts + "/4";
+                    if (info.syncInfos.Count > 0)
+                    {
+                        var last = info.syncInfos.ElementAt(info.syncInfos.Count - 1);
+                        last.timeSignature = ts;
+                    }
+                    else
+                    {
+                        info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = tick, bpm = 120f, timeSignature = ts });
+                    }
+                }
+            }
+        }
+
+        // 3) Parse [Events]
+        var eventsBody = GetSectionBody("Events");
+        if (!string.IsNullOrEmpty(eventsBody))
+        {
+            var evRe = new Regex("^\\s*(\\d+)\\s*=\\s*E\\s+\"([^\"]*)\"", RegexOptions.Multiline);
+            foreach (Match em in evRe.Matches(eventsBody))
+            {
+                int tick = int.Parse(em.Groups[1].Value);
+                string txt = em.Groups[2].Value;
+                if (!info.globalEvents.ContainsKey(tick))
+                {
+                    info.globalEvents.Add(tick, new NoteSpawner.GlobalEventInfo { spawnTime = tick, spawnTimeMs = 0f, value = txt });
+                }
+                else
+                {
+                    var ex = info.globalEvents[tick];
+                    if (!string.IsNullOrEmpty(ex.value)) ex.value += "|" + txt; else ex.value = txt;
+                }
+            }
+        }
+
+        // 4) Parse difficulty instrument track (e.g. ExpertSingle) and map notes
+        string chosenDiff = ddst; if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
+        string chosenPart = currentPart.ToUpper();
+        string desiredTrack = chosenDiff + "Single";
+
+        Match chosenTrackMatch = null;
+        foreach (Match m in sections)
+        {
+            string secName = m.Groups[1].Value.Trim();
+            if (string.Equals(secName, desiredTrack, StringComparison.OrdinalIgnoreCase)) { chosenTrackMatch = m; break; }
+        }
+        // fallback: find any section that contains both the diff and "Single"
+        if (chosenTrackMatch == null)
+        {
+            foreach (Match m in sections)
+            {
+                string secName = m.Groups[1].Value.Trim();
+                if (secName.IndexOf("Single", StringComparison.OrdinalIgnoreCase) >= 0 && secName.IndexOf(chosenDiff, StringComparison.OrdinalIgnoreCase) >= 0)
+                { chosenTrackMatch = m; break; }
+            }
+        }
+
+        if (chosenTrackMatch != null)
+        {
+            var trackBody = chosenTrackMatch.Groups[2].Value;
+            var noteRe = new Regex("^\\s*(\\d+)\\s*=\\s*N\\s+(\\d+)\\s+(\\d+)", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            foreach (Match nm in noteRe.Matches(trackBody))
+            {
+                int tick = int.Parse(nm.Groups[1].Value);
+                int noteNum = int.Parse(nm.Groups[2].Value);
+                int length = int.Parse(nm.Groups[3].Value);
+
+                int fret = -1;
+                if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map) && map.TryGetValue(noteNum, out var mapped)) fret = mapped;
+                else if (noteNum >= 0 && noteNum <= 8) fret = noteNum; // chart-style fret numbers
+                else if (partGuitarDifficultyMappings.TryGetValue("Expert", out var emap) && emap.TryGetValue(noteNum, out var m2)) fret = m2; // fallback
+
+                if (fret < 0) { /* unknown mapping, skip */ continue; }
+
+                info.noteInfos.Enqueue(new NoteSpawner.NoteInfo
+                {
+                    spawnTime = tick,
+                    spawnTimeMs = 0f,
+                    length = enableSustains ? length : 0,
+                    lengthMs = 0f,
+                    fret = fret
+                });
+            }
+        }
+
+        // Ensure at least one sync entry.
+        if (info.syncInfos.Count == 0) info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = 0, bpm = 120f, timeSignature = "4" });
+
+        // Compute max tick from collected noteInfos (already in chart ticks)
+        int maxTick = 0;
+        try
+        {
+            foreach (var n in info.noteInfos)
+            {
+                int noteStart = (int)n.spawnTime;
+                int noteEnd = noteStart + n.length;
+                if (noteEnd > maxTick) maxTick = noteEnd;
+                if (noteStart > maxTick) maxTick = noteStart;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheChartFile: failed to compute maxTick: " + ex.Message);
+        }
+
+        if (maxTick == 0 && info.syncInfos.Count > 0)
+        {
+            maxTick = (int)info.syncInfos.ElementAt(info.syncInfos.Count - 1).time;
+        }
+
+        info.songLengthInTicks = Math.Max(1, maxTick);
+
+        // Auto-generate BEAT track events from the sync track if none were provided in the chart
+        try
+        {
+            bool hasHigherBeatEvents = info.beatEvents != null && info.beatEvents.Any(ev => int.TryParse(ev.value, out int noteNum) && noteNum > 13);
+            if (info.beatEvents == null || info.beatEvents.Count == 0 || !hasHigherBeatEvents)
+            {
+                if (info.beatEvents == null) info.beatEvents = new List<NoteSpawner.GlobalEventInfo>();
+
+                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: !hasHigherBeatEvents);
+                if (generated != null && generated.Count > 0)
+                {
+                    foreach (var be in generated)
+                    {
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
+                        if (!alreadyExists) info.beatEvents.Add(be);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("CacheChartFile: failed to generate beat events: " + ex.Message);
+        }
+
+        // Store in cache (pool)
+        if (cachedSongs.ContainsKey(songID)) cachedSongs[songID] = info; else cachedSongs.Add(songID, info);
+        await Task.Yield();
+    }
+
+    // Convert a chart tick to seconds using the parsed sync entries in SongInfo
+    private double GetSecondsAtTickFromSyncs(SongInfo info, int tick)
+    {
+        try
+        {
+            var syncList = info.syncInfos.ToList();
+            if (syncList == null || syncList.Count == 0)
+            {
+                double sPerTick = 60.0 / (120.0 * Math.Max(1, info.resolution));
+                return tick * sPerTick;
+            }
+
+            double totalSeconds = 0.0;
+            int prevTick = 0;
+            double prevBpm = syncList[0].bpm;
+
+            for (int i = 0; i < syncList.Count; i++)
+            {
+                var entry = syncList[i];
+                int segTick = (int)entry.time;
+                int segEnd = Math.Min(segTick, tick);
+                int delta = Math.Max(0, segEnd - prevTick);
+                if (delta > 0)
+                {
+                    totalSeconds += delta * (60.0 / (prevBpm * Math.Max(1, info.resolution)));
+                }
+                prevTick = segEnd;
+                prevBpm = entry.bpm;
+                if (segEnd >= tick) break;
+            }
+
+            if (prevTick < tick)
+            {
+                totalSeconds += (tick - prevTick) * (60.0 / (prevBpm * Math.Max(1, info.resolution)));
+            }
+
+            return totalSeconds;
+        }
+        catch
+        {
+            double sPerTick = 60.0 / (120.0 * Math.Max(1, info.resolution));
+            return tick * sPerTick;
+        }
+    }
+
+    // Generate beat and bar events (value "12"=bar, "13"=beat). When requested, also add 8th-note subdivisions.
+    private List<NoteSpawner.GlobalEventInfo> GenerateBeatEventsFromSync(SongInfo info, bool includeEighthNotes = false)
+    {
+        var outList = new List<NoteSpawner.GlobalEventInfo>();
+        try
+        {
+            var syncList = info.syncInfos.ToList();
+            if (syncList == null || syncList.Count == 0) return outList;
+
+            int resolution = Math.Max(1, info.resolution);
+
+            for (int i = 0; i < syncList.Count; i++)
+            {
+                var sync = syncList[i];
+                int segStart = (int)sync.time;
+                int segEnd = (i < syncList.Count - 1) ? (int)syncList[i + 1].time : info.songLengthInTicks;
+
+                // parse time signature (format: "N/D" or just "N")
+                int numerator = 4;
+                int denominator = 4;
+                if (!string.IsNullOrEmpty(sync.timeSignature))
+                {
+                    var parts = sync.timeSignature.Split('/');
+                    if (parts.Length >= 1) int.TryParse(parts[0], out numerator);
+                    if (parts.Length >= 2) int.TryParse(parts[1], out denominator);
+                }
+
+                if (denominator <= 0) denominator = 4;
+                if (numerator <= 0) numerator = 4;
+
+                int ticksPerBeat = Math.Max(1, resolution * 4 / denominator);
+                int beatsPerBar = Math.Max(1, numerator);
+                int ticksPerBar = ticksPerBeat * beatsPerBar;
+                int eighthNoteStep = Math.Max(1, ticksPerBeat / 2);
+
+                // start bars at the segment start; if you want alignment to zero-based bars, adjust here
+                for (int barTick = segStart; barTick < segEnd; barTick += ticksPerBar)
+                {
+                    // bar marker (12)
+                    double barSeconds = GetSecondsAtTickFromSyncs(info, barTick);
+                    outList.Add(new NoteSpawner.GlobalEventInfo
+                    {
+                        spawnTime = barTick,
+                        spawnTimeMs = (float)(barSeconds * 1000.0),
+                        value = "12"
+                    });
+
+                    // quarter-note beats inside the bar (13)
+                    for (int b = 1; b < beatsPerBar; b++)
+                    {
+                        int beatTick = barTick + b * ticksPerBeat;
+                        if (beatTick >= segEnd) break;
+                        double beatSeconds = GetSecondsAtTickFromSyncs(info, beatTick);
+                        outList.Add(new NoteSpawner.GlobalEventInfo
+                        {
+                            spawnTime = beatTick,
+                            spawnTimeMs = (float)(beatSeconds * 1000.0),
+                            value = "13"
+                        });
+                    }
+
+                    if (includeEighthNotes)
+                    {
+                        for (int step = 1; step < beatsPerBar * 2; step++)
+                        {
+                            int eighthTick = barTick + step * eighthNoteStep;
+                            if (eighthTick >= segEnd) break;
+                            if (eighthTick % ticksPerBeat == 0) continue;
+                            double eighthSeconds = GetSecondsAtTickFromSyncs(info, eighthTick);
+                            outList.Add(new NoteSpawner.GlobalEventInfo
+                            {
+                                spawnTime = eighthTick,
+                                spawnTimeMs = (float)(eighthSeconds * 1000.0),
+                                value = "14"
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Deduplicate events (spawnTime + value)
+            var seen = new HashSet<string>();
+            var uniq = new List<NoteSpawner.GlobalEventInfo>();
+            foreach (var ev in outList.OrderBy(e => e.spawnTime).ThenBy(e => e.value))
+            {
+                string key = ev.spawnTime + "_" + ev.value;
+                if (seen.Add(key)) uniq.Add(ev);
+            }
+            return uniq;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("GenerateBeatEventsFromSync failed: " + ex.Message);
+            return outList;
+        }
+    }
+
 
     private List<NoteSpawner.NoteInfo> GetNotesFromTrackByName(MidiFile midi, string trackName, Dictionary<int,int> noteToFretMap, double scale)
     {
@@ -339,36 +834,76 @@ public class GameManager : MonoBehaviour
             }
             if (string.IsNullOrEmpty(name)) continue;
             if (!name.Equals(trackName, StringComparison.OrdinalIgnoreCase)) continue;
+
             NoteDetectionSettings detectionSettings = new NoteDetectionSettings
             {
-                NoteStartDetectionPolicy = NoteStartDetectionPolicy.FirstNoteOn,
-                NoteSearchContext = NoteSearchContext.AllEventsCollections
+                NoteStartDetectionPolicy = NoteStartDetectionPolicy.FirstNoteOn
             };
-            // Get notes from this chunk only (scale ticks to target resolution)
-            var notes = trackChunk.GetNotes(detectionSettings);
+
+            // Collect notes from this chunk
+            var notes = trackChunk.GetNotes(detectionSettings).ToList();
+            var tempoMap = midi.GetTempoMap();
+
+            // Identify freestyle trigger notes (MIDI 120-124)
+            var freestyleTriggers = notes.Where(n => n.NoteNumber >= 120 && n.NoteNumber <= 124).ToList();
+            var regions = new List<(long startTick, long endTick, int startTickScaled, int lengthScaled, float startMs, float lengthMs)>();
+            foreach (var ft in freestyleTriggers)
+            {
+                long s = ft.Time;
+                long e = ft.Time + ft.Length;
+                int sScaled = (int)Math.Round(s * scale);
+                int lenScaled = (int)Math.Round(ft.Length * scale);
+                var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(s, tempoMap);
+                var metricLen = TimeConverter.ConvertTo<MetricTimeSpan>(ft.Length, tempoMap);
+                float startMs = (float)(metricStart.TotalMicroseconds / 1000.0);
+                float lengthMs = (float)(metricLen.TotalMicroseconds / 1000.0);
+                regions.Add((s, e, sScaled, lenScaled, startMs, lengthMs));
+            }
+
+            // Add regular notes that are NOT inside any freestyle region and are not trigger notes
             foreach (var note in notes)
             {
-                
-                if (noteToFretMap.TryGetValue(note.NoteNumber, out int fret))
-                {
-                    // Convert MIDI tick times to absolute seconds using tempo map, then to milliseconds
-                    var tempoMap = midi.GetTempoMap();
-                    var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
-                    var metricLength = TimeConverter.ConvertTo<MetricTimeSpan>(note.Length, tempoMap);
-                    double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
-                    double lengthSeconds = metricLength.TotalMicroseconds / 1_000_000.0;
+                if (!noteToFretMap.TryGetValue(note.NoteNumber, out int fret)) continue;
+                // Skip trigger notes themselves
+                if (note.NoteNumber >= 120 && note.NoteNumber <= 124) continue;
 
-                    result.Add(new NoteSpawner.NoteInfo
-                    {
-                        spawnTime = (int)Math.Round(note.Time * scale), // legacy tick value
-                        spawnTimeMs = (float)(startSeconds * 1000.0),
-                        length = enableSustains ? (int)Math.Round(note.Length * scale) : 0,
-                        lengthMs = enableSustains ? (float)(lengthSeconds * 1000.0) : 0,
-                        fret = fret
-                    });
-                }
+                bool insideFreestyle = regions.Any(r => note.Time >= r.startTick && note.Time < r.endTick);
+                if (insideFreestyle) continue; // don't add regular notes under freestyle
+
+                var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
+                var metricLength = TimeConverter.ConvertTo<MetricTimeSpan>(note.Length, tempoMap);
+                double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
+                double lengthSeconds = metricLength.TotalMicroseconds / 1_000_000.0;
+
+                result.Add(new NoteSpawner.NoteInfo
+                {
+                    spawnTime = (int)Math.Round(note.Time * scale), // legacy tick value
+                    spawnTimeMs = (float)(startSeconds * 1000.0),
+                    length = enableSustains ? (int)Math.Round(note.Length * scale) : 0,
+                    lengthMs = enableSustains ? (float)(lengthSeconds * 1000.0) : 0,
+                    fret = fret
+                });
             }
-            
+
+            // For each freestyle region create a parent sustain entry only (single visual)
+            foreach (var r in regions)
+            {
+                // Parent freestyle sustain marker
+                result.Add(new NoteSpawner.NoteInfo
+                {
+                    spawnTime = r.startTickScaled,
+                    spawnTimeMs = r.startMs,
+                    length = r.lengthScaled,
+                    lengthMs = r.lengthMs,
+                    fret = -1,
+                    // mark as parent so spawner can create sustain visuals
+                    isFreestyleParent = true
+                });
+            }
+
+            // Sort by absolute milliseconds (fallback to tick value if ms not present)
+            result = result.OrderBy(n => n.spawnTimeMs > 0f ? n.spawnTimeMs : n.spawnTime * 1f).ToList();
+
             // If you expect only one matching track, break here.
             break;
         }
@@ -411,168 +946,173 @@ public class GameManager : MonoBehaviour
         return result;
     }
 
-    /// <summary>
-    /// Pre-pool a list of MIDI files into the cache. Uses the full-path hash as songID.
-    /// </summary>
-    public async Task PrepoolMidiFiles(List<string> paths, int poolCount)
+    private List<NoteSpawner.GlobalEventInfo> GetBeatEventsFromTrackByName(MidiFile midi, string trackName, double scale)
     {
-        if (paths == null || paths.Count == 0) return;
-        int count = Math.Min(poolCount, paths.Count);
-        for (int i = 0; i < count; i++)
+        var result = new List<NoteSpawner.GlobalEventInfo>();
+        foreach (var trackChunk in midi.GetTrackChunks())
         {
-            string p = paths[i];
-            if (string.IsNullOrEmpty(p) || !File.Exists(p)) continue;
-            int id = Path.GetFullPath(p).GetHashCode();
-            if (!cachedSongs.ContainsKey(id))
+            var nameEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.SequenceTrackNameEvent>().FirstOrDefault();
+            string name = nameEvt?.Text;
+            if (string.IsNullOrEmpty(name))
             {
-                try { await CacheMidiFile(p, id); } catch (Exception ex) { Debug.LogWarning("PrepoolMidiFiles: " + ex.Message); }
+                var textEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.TextEvent>().FirstOrDefault();
+                name = textEvt?.Text;
             }
+            if (string.IsNullOrEmpty(name)) continue;
+            if (!name.Equals(trackName, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var notes = trackChunk.GetNotes().ToList();
+            var tempoMap = midi.GetTempoMap();
+            foreach (var note in notes)
+            {
+                var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
+                double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
+                result.Add(new NoteSpawner.GlobalEventInfo
+                {
+                    spawnTime = (int)Math.Round(note.Time * scale),
+                    spawnTimeMs = (float)(startSeconds * 1000.0),
+                    value = note.NoteNumber.ToString()
+                });
+            }
+
+            break; // assume only one BEAT track
         }
+        return result;
     }
-
-    public async Task SetIniFileData(string data)
+    private List<NoteSpawner.GlobalEventInfo> GetVenueTextEventsFromTrackByName(MidiFile midi, string trackName, double scale)
     {
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        bool inSongSection = false;
-
-        foreach (string line in lines)
+        var result = new List<NoteSpawner.GlobalEventInfo>();
+        foreach (var trackChunk in midi.GetTrackChunks())
         {
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
+            var nameEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.SequenceTrackNameEvent>().FirstOrDefault();
+            string name = nameEvt?.Text;
+            if (string.IsNullOrEmpty(name))
             {
-                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
-                continue;
+                var textEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.TextEvent>().FirstOrDefault();
+                name = textEvt?.Text;
+            }
+            if (string.IsNullOrEmpty(name)) continue;
+            if (!name.Equals(trackName, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var notes = trackChunk.GetTimedEvents().Where(e => e.Event is BaseTextEvent).ToList();
+            var tempoMap = midi.GetTempoMap();
+            foreach (var note in notes)
+            {
+                var textEvent = (BaseTextEvent)note.Event;
+                var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
+                double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
+                result.Add(new NoteSpawner.GlobalEventInfo
+                {
+                    spawnTime = (int)Math.Round(note.Time * scale),
+                    spawnTimeMs = (float)(startSeconds * 1000.0),
+                    value = textEvent.Text
+                });
+                //Debug.Log("added \"" + textEvent.Text + "\" at tick (" + (int)Math.Round(note.Time * scale) + ")");
             }
 
-            if (inSongSection)
+            break; // assume only one BEAT track
+        }
+        return result;
+    }
+    private List<NoteSpawner.LyricEventInfo> GetNotesAndTextFromVocalTrack(MidiFile midi, string trackName, double scale)
+    {
+        var result = new List<NoteSpawner.LyricEventInfo>();
+        foreach (var trackChunk in midi.GetTrackChunks())
+        {
+            var nameEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.SequenceTrackNameEvent>().FirstOrDefault();
+            string name = nameEvt?.Text;
+            if (string.IsNullOrEmpty(name))
             {
-                string[] parts = trimmedLine.Split('=');
+                var textEvt = trackChunk.Events.OfType<Melanchall.DryWetMidi.Core.TextEvent>().FirstOrDefault();
+                name = textEvt?.Text;
+            }
+            if (string.IsNullOrEmpty(name)) continue;
+            if (!name.Equals(trackName, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var notes = trackChunk.GetNotes().ToList();
+            var texts = trackChunk.GetTimedEvents().Where(e => e.Event is BaseTextEvent).ToList();
+
+            // For each text event, find notes that occur at the same MIDI tick and create lyric entries.
+            foreach (var timed in texts)
+            {
+                var baseText = timed.Event as BaseTextEvent;
+                if (baseText == null) continue;
+                long textTick = timed.Time;
+                string lyricValue = baseText.Text;
+
+                var matchingNotes = notes.Where(n => n.Time == textTick).ToList();
+                if (matchingNotes.Count == 0) continue; // only add entries when a note matches the text tick
+
+                foreach (var note in matchingNotes)
+                {
+                    string sungNote;
                     
-                if (parts.Length == 2 && parts[0].Trim() == "name" && parts[1].Trim() is string name)
-                {
-                    currentSongTitle = name.Trim();
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "artist" && parts[1].Trim() is string artist)
-                {
-                    currentSongArtist = artist.Trim();
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "album" && parts[1].Trim() is string album)
-                {
-                    currentSongAlbum = album.Trim();
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "year" && int.TryParse(parts[1].Trim(), out int year))
-                {
-                    currentSongYear = year;
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "loading_phrase" && parts[1].Trim() is string phrase)
-                {
-                    currentSongLoadingPhrase = phrase.Trim();
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "charter" && parts[1].Trim() is string author)
-                {
-                    currentSongAuthor = author.Trim();
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "song_length" && int.TryParse(parts[1].Trim(), out int length))
-                {
-                    currentSongLength = length;
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "back_color" && parts[1].Trim() is string hex)
-                {
-                    currentSongAccentColor = hex;
-                }
-                else if (parts.Length == 2 && parts[0].Trim() == "preview_start_time" && int.TryParse(parts[1].Trim(), out int startTime))
-                {
-                    currentSongPreviewStartTime = startTime;
-                }
-            }
-            await Task.Yield();
-        }
-    }
-    public async Task<string> GetSongTitle(string iniPath)
-    {
-        string data = await File.ReadAllTextAsync(iniPath);
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        bool inSongSection = false;
-
-        foreach (string line in lines)
-        {
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
-            {
-                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
-                continue;
-            }
-
-            if (inSongSection)
-            {
-                string[] parts = trimmedLine.Split('=');
+                    double freq = 440.0 * Math.Pow(2.0, (note.NoteNumber - 69) / 12.0);
+                    sungNote = freq.ToString("F0");
                     
-                if (parts.Length == 2 && parts[0].Trim() == "name" && parts[1].Trim() is string name)
-                {
-                    return name.Trim();
-                }
-                else
-                {
-                    return string.Empty;
+
+                    result.Add(new NoteSpawner.LyricEventInfo
+                    {
+                        spawnTick = (float)Math.Round(note.Time * scale),
+                        sungNote = sungNote,
+                        length = (float)Math.Round(note.Length * scale),
+                        value = lyricValue
+                    });
                 }
             }
-            else
-            {
-                return string.Empty;
-            }
+            break;
         }
-
-        return null; 
+        return result;
     }
-
-    public string GetSongLoadingPhrase(string iniPath)
+    public string GetCachedSongTitle(int cachedEntry)
     {
-        string data = File.ReadAllText(iniPath);
-        string[] lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        bool inSongSection = false;
-
-        foreach (string line in lines)
+        if (cachedEntries.TryGetValue(cachedEntry, out var song))
         {
-            string trimmedLine = line.Trim();
-
-            if (trimmedLine.StartsWith("["))
-            {
-                inSongSection = trimmedLine == "[song]" || trimmedLine == "[Song]";
-                continue;
-            }
-
-            if (inSongSection)
-            {
-                string[] parts = trimmedLine.Split('=');
-                    
-                if (parts.Length == 2 && parts[0].Trim() == "loading_phrase" && parts[1].Trim() is string name)
-                {
-                    return name.Trim();
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
-            else
-            {
-                return string.Empty;
-            }
+            return song.songTitle;
         }
-
-        return null; 
+        else
+        {
+            return null;
+        }
     }
-    public void EnableLoadSongVisual(GameObject loadingCanvas, string songIniPath)
+
+    public string GetCachedSongLoadingPhrase(int cachedEntry)
+    {
+        if (cachedEntries.TryGetValue(cachedEntry, out var song))
+        {
+            return song.songLoadingPhrase;
+        }
+        else
+        {
+            return null;
+        }
+    }
+    public void EnableLoadSongVisual(GameObject loadingCanvas, int cachedID)
     {
         if (loadingCanvas != null)
         {
-            Debug.Log("song ini path: " + songIniPath);
             loadingCanvas.SetActive(true);
-            TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay").Find("LoadingPhraseText").GetComponent<TextMeshProUGUI>();
-            textObj.text = GetSongLoadingPhrase(songIniPath);
+            if (cachedEntries.TryGetValue(cachedID, out var song))
+            {
+                TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay/LoadingPhraseText").GetComponent<TextMeshProUGUI>();
+                textObj.text = song.songLoadingPhrase;
+            }
         }
+    }
+    public void EnableLoadUnCachedSongVisual(GameObject loadingCanvas, string IniPath)
+    {
+        if (loadingCanvas != null)
+        {
+            loadingCanvas.SetActive(true);
+            TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay/LoadingPhraseText").GetComponent<TextMeshProUGUI>();
+            textObj.text = GetUnCachedSongLoadingPhrase(IniPath);
+        }
+    }
+    public string GetUnCachedSongLoadingPhrase(string iniPath)
+    {
+        INIParser ini = new INIParser();
+        ini.Open(iniPath);
+        return ini.ReadValue("song", "loading_phrase", string.Empty);
     }
     public void DisableLoadSongVisual(GameObject loadingCanvas)
     {
@@ -584,7 +1124,6 @@ public class GameManager : MonoBehaviour
 
     public IEnumerator PlaySong()
     {
-        
         UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
         GameObject gp = GameObject.Find("GuitarPlayer");
         unDestructibleLoadingPhraseScreen = GameObject.Find("SongLoadingCanvas");
@@ -592,17 +1131,23 @@ public class GameManager : MonoBehaviour
         if (uiUpdater != null)
         {
             StartCoroutine(uiUpdater.SongInfoAnim());
+            uiUpdater.InitializeUI();
+            uiUpdater.ScoreVisibility(false);
+        }
+        VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
+        if (venueAnimationPlayer != null)
+        {
+            venueAnimationPlayer.Load();
+        }
+        if (gp != null)
+        {
+            gp.transform.position = new Vector3(0, -10, 10);
         }
         if (unDestructibleLoadingPhraseScreen != null && unDestructibleLoadingPhraseScreen.activeSelf)
         {
             DisableLoadSongVisual(unDestructibleLoadingPhraseScreen);
         }
-        if (gp != null)
-        {
-            gp.transform.position = new Vector3(0, -6, 6);
-        }
-        
-        yield return new WaitForSecondsRealtime(0.1f);
+        //sFXPlayer.PlayClip("StartCheer1");
 
         if (SceneManager.GetSceneByBuildIndex(2).isLoaded)
         {
@@ -614,11 +1159,6 @@ public class GameManager : MonoBehaviour
                 yield return new WaitForSecondsRealtime(6f);
             }
         }
-
-        if (uiUpdater != null)
-        {
-            uiUpdater.InitializeUI();
-        }
         
         if (gp != null)
         {
@@ -626,26 +1166,22 @@ public class GameManager : MonoBehaviour
             highwayAnim.Play("ShowHighway");
             sFXPlayer.PlayHighwayRiseClip();
             yield return new WaitForSecondsRealtime(1f);
-            var sl = gp.transform.Find("Strikeline").GetComponent<ImprovedStrikeline>();
-            if (sl != null)
-            {
-                sl.RippleAnim();
-                sFXPlayer.PlayFretRippleUpClip();
-                yield return new WaitForSecondsRealtime(1f);
-            }
             highwayAnim.Stop();
+            NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
+            if (noteSpawner != null)
+            {
+                noteSpawner.Play();
+                inSong = true;
+            }
+            
         }
-        VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
-        if (venueAnimationPlayer != null)
+        if (uiUpdater != null)
         {
-            venueAnimationPlayer.Load();
+            uiUpdater.ScoreVisibility(true);
+            sFXPlayer.PlayScoreShowClip();
         }
-        NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
-        if (noteSpawner != null)
-        {
-            noteSpawner.Play();
-            inSong = true;
-        }
+        
+        
         
     }
 

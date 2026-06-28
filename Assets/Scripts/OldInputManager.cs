@@ -60,6 +60,9 @@ public class OldInputManager : MonoBehaviour
             {
                 var sfx = FindAnyObjectByType<SFXPlayer>();
                 sfx.PlayOverstrumClip();
+                sfx.PlayClip("Miss");
+                var ui = FindAnyObjectByType<UIUpdater>();
+                ui.UpdateForNoteMiss();
             }
             await Task.Yield();
         }
@@ -93,18 +96,23 @@ public class OldInputManager : MonoBehaviour
             {
                 if (player.GetButtonDown("Green"))
                 {
-                    if (menuManager.quickplayPanel.activeSelf)
+                    if (menuManager.startPanel.activeSelf)
                     {
-                        menuManager.Submit(1);
+                        menuManager.Submit(2);
                     }
                     else
                     {
-                        menuManager.Submit(0);
+                        menuManager.Submit(1);
                     }
+                    
                 }
                 if (player.GetButtonDown("Red"))
                 {
                     menuManager.Exit();
+                }
+                if (player.GetButtonDown("Orange"))
+                {
+                    menuManager.Submit(4);
                 }
                 if (menuManager.quickplayPanel.activeSelf)
                 {
@@ -135,60 +143,84 @@ public class OldInputManager : MonoBehaviour
             if (player.GetButtonDown("Orange")) await InputNoteDown(4);
             if (player.GetButtonUp("Orange")) await InputNoteUp(4);
 
-            if (player.GetButtonSinglePressDown("StrumUp")) await InputStrum();
-            if (player.GetButtonSinglePressDown("StrumDown")) await InputStrum();
+            if (player.GetButtonDown("StrumUp")) await InputStrum();
+            if (player.GetButtonDown("StrumDown")) await InputStrum();
 
             if (player.GetButtonUp("Start")) PauseGame();
             if (player.GetButtonUp("Select")) ReleaseSP();
 
             whammyAmount = player.GetAxis("Whammy");
             tiltAmount = player.GetAxis("Tilt");
+            if (tiltAmount == 1)
+            {
+                ReleaseSP();
+            }
         }
         
     }
     public void ReleaseSP()
     {
-        Debug.Log("add special phrase release code here");
+        // automatically handled by just releasing whenever star power hits 100% just like in regular roBeats
+        if (SceneManager.GetSceneByBuildIndex(1).isLoaded)
+        {
+            StarMeter spmeter = FindAnyObjectByType<StarMeter>();
+            UIUpdater uIUpdater = FindAnyObjectByType<UIUpdater>();
+            if (spmeter != null && uIUpdater != null)
+            {
+                if (spmeter.value >= 50 && !uIUpdater.inStar)
+                {
+                    uIUpdater.StarPowerToggle(true);
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
     }
     public void PauseGame()
     {
-        MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-        if (isPaused)
+        if (SceneManager.GetSceneByBuildIndex(1).isLoaded)
         {
-            if (musicPlayer != null)
+            MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+            if (isPaused)
             {
-                musicPlayer.resumeAudio();
+                if (musicPlayer != null)
+                {
+                    musicPlayer.resumeAudio();
+                }
+                //currentTimeScale = 1.0f; // Resume game
+                if (pauseMenu != null)
+                {
+                    pauseMenu.SetActive(false);
+                }
+                ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+                if (strikeline != null)
+                {
+                    strikeline.ResetAnims();
+                }
+                isPaused = false;
             }
-            currentTimeScale = 1.0f; // Resume game
-            if (pauseMenu != null)
+            else
             {
-                pauseMenu.SetActive(false);
+                if (musicPlayer != null)
+                {
+                    musicPlayer.pauseAudio();
+                }
+                //currentTimeScale = 1.0f; // Pause game
+                if (pauseMenu != null)
+                {
+                    pauseMenu.SetActive(true);
+                }
+                ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
+                if (strikeline != null)
+                {
+                    strikeline.ResetAnims();
+                }
+                isPaused = true;
             }
-            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
-            if (strikeline != null)
-            {
-                strikeline.ResetAnims();
-            }
-            isPaused = false;
         }
-        else
-        {
-            if (musicPlayer != null)
-            {
-                musicPlayer.pauseAudio();
-            }
-            currentTimeScale = 0.0f; // Pause game
-            if (pauseMenu != null)
-            {
-                pauseMenu.SetActive(true);
-            }
-            ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
-            if (strikeline != null)
-            {
-                strikeline.ResetAnims();
-            }
-            isPaused = true;
-        }
+        
     }
     void OnLevelLoaded(Scene scene, LoadSceneMode mode)
     {

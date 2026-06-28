@@ -13,6 +13,8 @@ public class LoadingManager : MonoBehaviour
     private AsyncOperation asyncLoad;
     Color invisibleColor;
 
+    public static string PreviousSceneName { get; private set; } = "";
+
     void Start()
     {
         if (loadingImage != null)
@@ -26,10 +28,23 @@ public class LoadingManager : MonoBehaviour
             DontDestroyOnLoad(loadingCanvas.gameObject); // Persist across scenes
         }
     }
-    public async void LoadScene(string sceneName, LoadSceneMode mode = LoadSceneMode.Single, bool enableFade = true)
+    public async void LoadScene(string sceneName, LoadSceneMode mode = LoadSceneMode.Single)
     {
         await System.Threading.Tasks.Task.Delay(500); // Small delay to ensure UI updates
+        PreviousSceneName = SceneManager.GetActiveScene().name;
         StartCoroutine(LoadAsynchronously(sceneName, mode));
+    }
+
+    public void LoadPreviousScene()
+    {
+        if (!string.IsNullOrEmpty(PreviousSceneName))
+        {
+            StartCoroutine(LoadAsynchronously(PreviousSceneName));
+        }
+        else
+        {
+            Debug.LogWarning("No previous scene recorded!");
+        }
     }
 
     IEnumerator FadeOutCoroutine()
@@ -81,7 +96,7 @@ public class LoadingManager : MonoBehaviour
     }
 
 
-    IEnumerator LoadAsynchronously(string sceneName, LoadSceneMode mode)
+    IEnumerator LoadAsynchronously(string sceneName, LoadSceneMode mode = LoadSceneMode.Single)
     {
         if (loadingCanvas != null)
         {

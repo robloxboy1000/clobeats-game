@@ -69,7 +69,12 @@ public class SongLoader : MonoBehaviour
             }
             else
             {
-                textAsset = System.IO.File.ReadAllText(path);
+                var gm = FindAnyObjectByType<GameManager>();
+                if (gm != null)
+                {
+                    await gm.ReadChartFile(path);
+                }
+                textAsset = string.Empty;
             }
         }
         catch

@@ -16,30 +16,17 @@ public class MenuManager : MonoBehaviour
     public GameObject quickplayPanel;
     public GameObject exitgamePanel;
     public GameObject logoObject;
-    public TMPro.TextMeshProUGUI hoverHelpText;
     public GameObject optionsPanel;
     public GameObject onlineIndicatorPanel;
-    string hoverHelpFilePath;
-    public Dictionary<string, string> hoverHelpStrings;
-    public Dictionary<int, string> menuButtons;
     private GameObject UGUIListHelper;
-
-    public Button playSongUIButton;
-    public Button playSongOnlineUIButton;
     public GameObject songInfoPanel;
-
     public GameObject cbFeedPanel;
     public GameObject loadingPanel;
     public GameObject loadingPreviewImage;
-
     public Color accentColor;
-
-    public bool isOnline = false;
     public string currentPreviewingSongPath = string.Empty;
     public int currentPreviewingID = 0;
 
-
-    
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -53,50 +40,12 @@ public class MenuManager : MonoBehaviour
         quickplayPanel = menuCanvas.transform.Find("QuickPlayPanel").gameObject;
         songInfoPanel = quickplayPanel.transform.Find("SongInfoPanel").gameObject;
         loadingPanel = menuCanvas.transform.Find("LoadingPanel").gameObject;
-        playSongUIButton = songInfoPanel.transform.Find("PlaySongButton").gameObject.GetComponent<Button>();
-        playSongUIButton.onClick.AddListener(async () =>
-        {
-            LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
-            if (loadingManager != null)
-            {
-                PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
-                PlayerPrefs.Save();
-                SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-                GameManager gameManager = FindAnyObjectByType<GameManager>();
-                if (songFolderLoader != null)
-                {
-                    gameManager.currentSongID = currentPreviewingID - 1;
-                    songFolderLoader.songFolderPath = currentPreviewingSongPath;
-                    await songFolderLoader.Load();
-                }
-                else
-                {
-                    Debug.LogError("SongFolderLoader not found in scene!");
-                }
-                if (gameManager != null)
-                {
-                    gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
-                }
-                MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-                if (musicPlayer != null)
-                {
-                    if (musicPlayer.previewAudioPlaying)
-                    {
-                        musicPlayer.StopPreviewAudio();
-                    }
-                }
-                loadingManager.LoadScene("Gameplay");
-            }
-        });
-        playSongOnlineUIButton = songInfoPanel.transform.Find("PlaySongOnlineButton").gameObject.GetComponent<Button>();
         loadingPreviewImage = songInfoPanel.transform.Find("AlbumImage").gameObject.transform.Find("LoadingImage").gameObject;
         logoObject = menuCanvas.transform.Find("Logo").gameObject;
         exitgamePanel = menuCanvas.transform.Find("ExitGamePanel").gameObject;
         optionsPanel = menuCanvas.transform.Find("OptionsPanel").gameObject;
         onlineIndicatorPanel = menuCanvas.transform.Find("OnlineIndicatorPanel").gameObject;
         UGUIListHelper = FindFirstObjectByType<UGUIMenuList>().gameObject;
-
-
         foreach (Transform child in mainMenuPanel.transform)
         {
             if (child.gameObject.GetComponent<Button>() != null)
@@ -180,7 +129,12 @@ public class MenuManager : MonoBehaviour
     {
         if (menuIndex == 1)
         {
-            if (playSongUIButton.interactable)
+            if (!quickplayPanel.activeSelf)
+            {
+                quickplayPanel.SetActive(true);
+                mainMenuPanel.SetActive(false);
+            }
+            else
             {
                 LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
                 if (loadingManager != null)
@@ -199,10 +153,12 @@ public class MenuManager : MonoBehaviour
                     {
                         Debug.LogError("SongFolderLoader not found in scene!");
                     }
-                    
+
                     if (gameManager != null)
                     {
-                        gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+                        Debug.Log("[MenuManager.Submit] unDestructibleLoadingPhraseScreen shown");
+                        //gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, gameManager.currentSongID);
+                        gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
                     }
                     MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
                     if (musicPlayer != null)
@@ -214,6 +170,16 @@ public class MenuManager : MonoBehaviour
                     }
                     loadingManager.LoadScene("Gameplay");
                 }
+            }
+            
+        }
+        else if (menuIndex == 4)
+        {
+            if (!optionsPanel.activeSelf)
+            {
+                optionsPanel.SetActive(true);
+                mainMenuPanel.SetActive(false);
+                logoObject.SetActive(false);
             }
         }
         else
@@ -228,6 +194,7 @@ public class MenuManager : MonoBehaviour
                 startPanel.SetActive(false);
                 mainMenuPanel.SetActive(true);
             }
+            
         }
     }
     public void Exit()
@@ -267,56 +234,4 @@ public class MenuManager : MonoBehaviour
             #endif
         }
     }
-
-    public void ScrollMainDown()
-    {
-        UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
-        {
-            
-        }
-    }
-    
-
-
-    public async Task<Dictionary<string, string>> ReadXmlToDictionary(string filePath)
-    {
-        try
-        {
-            // Load the XML document from the file path
-            XDocument doc = await Task.Run ( () => XDocument.Load(filePath) );
-
-            // Use LINQ to select elements and convert to a dictionary
-            Dictionary<string, string> settingsDict = doc.Root
-                .Elements("Entry") // Select all 'Setting' elements under the root
-                .ToDictionary(
-                    el => (string)el.Attribute("key"),   // Key: the value of the 'key' attribute
-                    el => (string)el.Attribute("value")  // Value: the value of the 'value' attribute
-                );
-
-            return settingsDict;
-        }
-        catch (System.IO.FileNotFoundException)
-        {
-            Debug.LogError($"Error: The file '{filePath}' was not found.");
-            return null;
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"An error occurred: {ex.Message}");
-            return null;
-        }
-    }
-
-    public void ShowHelpText(string key)
-    {
-        if (hoverHelpStrings.ContainsKey(key))
-        {
-            hoverHelpText.text = hoverHelpStrings[key];
-        }
-        else
-        {
-            hoverHelpText.text = "Hover over an option to see more info.";
-        }
-    }
-
 }

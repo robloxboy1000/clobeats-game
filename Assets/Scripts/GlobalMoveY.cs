@@ -7,9 +7,7 @@ public class GlobalMoveY : MonoBehaviour
 {
     public List<GameObject> objectsToMove;
     public float speed = 5f;
-    public bool isMoving = false;
-    bool musicStarted = false;
-    const float EPS = 0.01f;
+
     // cached references to avoid per-object/find overhead
     ImprovedStrikeline sl;
     MusicPlayer mp;
@@ -57,7 +55,7 @@ public class GlobalMoveY : MonoBehaviour
             }
         }
 
-        if (!isMoving) return;
+        //if (!isMoving) return;
 
         // Ensure cached global refs are present
         if (sl == null) sl = FindAnyObjectByType<ImprovedStrikeline>();
@@ -107,28 +105,23 @@ public class GlobalMoveY : MonoBehaviour
             }
             
             float twend = lim.hitWindowSeconds * spacingFactor;
-            if (obj.transform.position.y < -twend)
+            if (obj.name.ToLower().Contains("sustainvisual"))
             {
-                NotePoolManager.Instance.Return(obj);
-                LaneManager.Instance.UnregisterNote(obj);
-                objectsToMove.RemoveAt(i);
-                var note = obj.GetComponent<PooledNote>();
-                if (note != null)
-                {
-                    sl.MissNote();
-                }
                 continue;
             }
-
-            if (!musicStarted && obj.CompareTag("FirstBar") && sl != null)
+            else
             {
-                float strikeY = sl.transform.position.y;
-                if (t.position.y <= strikeY + EPS)
+                if (obj.transform.position.y < -twend)
                 {
-                    //mp.dspSongStart = AudioSettings.dspTime + 0.25;
-                    //mp?.PlayScheduled(mp.dspSongStart);
-                    //if (nd != null) nd.isPlaying = true;
-                    musicStarted = true;
+                    NotePoolManager.Instance.Return(obj);
+                    LaneManager.Instance.UnregisterNote(obj);
+                    objectsToMove.RemoveAt(i);
+                    var note = obj.GetComponent<PooledNote>();
+                    if (note != null)
+                    {
+                        sl.MissNote();
+                    }
+                    continue;
                 }
             }
         }
