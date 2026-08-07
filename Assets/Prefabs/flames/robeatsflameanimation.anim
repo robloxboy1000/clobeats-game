@@ -42,7 +42,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.r
+    attribute: material._BaseColor.r
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -72,7 +72,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.g
+    attribute: material._BaseColor.g
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -102,7 +102,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.b
+    attribute: material._BaseColor.b
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -141,7 +141,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.a
+    attribute: material._BaseColor.a
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -171,7 +171,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.r
+    attribute: material._BaseColor.r
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -201,7 +201,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.g
+    attribute: material._BaseColor.g
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -231,7 +231,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.b
+    attribute: material._BaseColor.b
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -270,7 +270,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.a
+    attribute: material._BaseColor.a
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -330,7 +330,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.r
+    attribute: material._BaseColor.r
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -360,7 +360,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.g
+    attribute: material._BaseColor.g
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -390,7 +390,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.b
+    attribute: material._BaseColor.b
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -429,7 +429,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.a
+    attribute: material._BaseColor.a
     path: Sphere
     classID: 23
     script: {fileID: 0}
@@ -459,7 +459,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.r
+    attribute: material._BaseColor.r
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -489,7 +489,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.g
+    attribute: material._BaseColor.g
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -519,7 +519,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.b
+    attribute: material._BaseColor.b
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}
@@ -558,7 +558,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: material._Color.a
+    attribute: material._BaseColor.a
     path: Sphere/Cylinder
     classID: 23
     script: {fileID: 0}

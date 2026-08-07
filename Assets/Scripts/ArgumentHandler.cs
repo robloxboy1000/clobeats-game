@@ -17,10 +17,14 @@ public class ArgumentHandler : MonoBehaviour
                 LaneInputManager laneInputManager = FindAnyObjectByType<LaneInputManager>();
                 laneInputManager.autoPlayEnabled = true;
             }
-            else if (arg == "--disablePreLoading")
+            else if (arg == "--debug")
             {
                 PlayerPrefsLoader pPl = FindAnyObjectByType<PlayerPrefsLoader>();
                 pPl.autoLoad = false;
+            }
+            else if (arg == "--path")
+            {
+                
             }
         }
     }

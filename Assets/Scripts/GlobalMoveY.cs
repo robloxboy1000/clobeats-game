@@ -113,7 +113,15 @@ public class GlobalMoveY : MonoBehaviour
             {
                 if (obj.transform.position.y < -twend)
                 {
-                    NotePoolManager.Instance.Return(obj);
+                    if (PlayerPrefs.GetInt("EnableLite", 0) == 0)
+                    {
+                        NotePoolManager.Instance.Return(obj);
+                    }
+                    else
+                    {
+                        Destroy(obj);
+                    }
+                    
                     LaneManager.Instance.UnregisterNote(obj);
                     objectsToMove.RemoveAt(i);
                     var note = obj.GetComponent<PooledNote>();

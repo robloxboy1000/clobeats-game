@@ -16,12 +16,11 @@ public class VenueAnimationPlayer : MonoBehaviour
         MIDI
     }
     public AnimationType type = AnimationType.MIDI;
-    public bool limitFramerate = false;
-    public float cameraFramerateLimit = 60;
-    public Camera mainCamera = null;
-    public Camera highwayCamera;
+
+    public GameObject mainCamera = null;
     public string cameraAnimationFile;
     public float currentTick = -1f;
+    public float currentRealtimeSecs = -1f;
     NoteSpawner ns;
 
     // --- Scripting support ---
@@ -39,7 +38,7 @@ public class VenueAnimationPlayer : MonoBehaviour
 
     // function registry: name -> action(args)
     Dictionary<string, Action<List<string>>> fnRegistry = new Dictionary<string, Action<List<string>>>();
-    float lastTickForScripts = 0f;
+    float lastSecondForScripts = 0f;
     float lastTickForMIDICues = 0f;
     float lastTickForLyrics = 0f;
 
@@ -49,7 +48,6 @@ public class VenueAnimationPlayer : MonoBehaviour
 
     void Start()
     {
-        if (mainCamera == null) mainCamera = Camera.main;
         ns = FindAnyObjectByType<NoteSpawner>();
     }
 
@@ -57,14 +55,9 @@ public class VenueAnimationPlayer : MonoBehaviour
     {
         try
         {
-            if (mainCamera == null)
-            {
-                mainCamera = Camera.main;
-                mainCamera.gameObject.SetActive(toggle);
-            }
             if (mainCamera != null)
             {
-                mainCamera.gameObject.SetActive(toggle);
+                mainCamera.SetActive(toggle);
             }
         }
         catch (Exception ex)
@@ -116,6 +109,51 @@ public class VenueAnimationPlayer : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError("[VenueAnimationPlayer.TryCueCamAnim] Failed to cue camera animation: " + ex.Message);
+        }
+    }
+
+    public GameObject TrySpawnNewCamera(int ID, AnimationClip animationClip, Vector3 position, Vector3 rotation, bool includeFrameLimit = true, int framerateLimit = 60)
+    {
+        try
+        {
+            GameObject cameraObj = new GameObject("VenueCamera_" + ID);
+            Camera cam = cameraObj.AddComponent<Camera>();
+            cameraObj.transform.position = position;
+            cameraObj.transform.rotation = Quaternion.Euler(rotation);
+            if (includeFrameLimit)
+            {
+                CameraEffects effects = cameraObj.AddComponent<CameraEffects>();
+                effects.fps = framerateLimit;
+            }
+            if (animationClip)
+            {
+                Animation camAnim = cameraObj.AddComponent<Animation>();
+                camAnim.clip = animationClip;
+                camAnim.AddClip(animationClip, animationClip.name);
+                camAnim.Play(animationClip.name);
+            }
+            return cameraObj;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[VenueAnimationPlayer.TrySpawnNewCamera] Failed to spawn camera: " + ex.Message);
+            return null;
+        }
+    }
+
+    public void TryDeleteSpawnedCamera(int ID)
+    {
+        try
+        {
+            GameObject cameraObj = GameObject.Find("VenueCamera_" + ID);
+            if (cameraObj)
+            {
+                Destroy(cameraObj);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[VenueAnimationPlayer.TryDeleteSpawnedCamera] Failed to delete spawned camera: " + ex.Message);
         }
     }
 
@@ -175,26 +213,10 @@ public class VenueAnimationPlayer : MonoBehaviour
 
         Instance = this;
         RegisterBuiltins();
-
-        if (limitFramerate)
-        {
-            if (mainCamera)
-            {
-                mainCamera.enabled = false;
-                StartCoroutine(LimitFramerateByDeltaTime(1 / cameraFramerateLimit));
-            }
-        }
     }
 
-    public System.Collections.IEnumerator LimitFramerateByDeltaTime(float time)
-    {
-        while (limitFramerate)
-        {
-            if (mainCamera) mainCamera.Render();
-            yield return new WaitForSecondsRealtime(time);
-        }
-        yield return null;
-    }
+
+    
 
     // Load scripts and events from a JSON file (runtime)
     public void LoadScriptsFromFile(string path)
@@ -227,31 +249,44 @@ public class VenueAnimationPlayer : MonoBehaviour
     void Update()
     {
         GameManager gameManager = FindAnyObjectByType<GameManager>();
+        if (SceneManager.GetSceneByBuildIndex(2).isLoaded)
+        {
+            if (!mainCamera)
+            {
+                mainCamera = TrySpawnNewCamera(Mathf.Abs(GetHashCode()), null, new Vector3(0,0,0), new Vector3(0,180,0),false);
+            }
+        }
+        
         
         if (ns == null) ns = FindAnyObjectByType<NoteSpawner>();
         if (ns != null)
         {
             currentTick = ns.currentTick; // follow tempo map for MIDI venue cues
         }
+        MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        if (musicPlayer)
+        {
+            currentRealtimeSecs = (float)musicPlayer.currentTimeDSP;
+        }
 
         // scripting: detect seek backwards and reset executed flags
         if (scriptEvents != null && scriptEvents.Count > 0)
         {
-            if (currentTick < lastTickForScripts)
+            if (currentRealtimeSecs < lastSecondForScripts)
             {
                 foreach (var ev in scriptEvents) ev.executed = false;
             }
 
             foreach (var ev in scriptEvents)
             {
-                if (!ev.executed && currentTick >= ev.tick)
+                if (!ev.executed && currentRealtimeSecs >= ev.tick)
                 {
                     ExecuteScriptEvent(ev);
                     ev.executed = true;
                 }
             }
 
-            lastTickForScripts = currentTick;
+            lastSecondForScripts = currentRealtimeSecs;
         }
 
         if (gameManager.currentSongVenueCueEvents != null && gameManager.currentSongVenueCueEvents.Count > 0)
@@ -284,7 +319,9 @@ public class VenueAnimationPlayer : MonoBehaviour
             {
                 if (!ev.passed && currentTick >= ev.spawnTick)
                 {
-                    Debug.Log(ev.value + " (Note=" + ev.sungNote + ", Length=" + ev.length + ")"); // log lyrics to console for now
+                    if (ev.sungNote == 3520 || ev.value.StartsWith("[")) continue; // ignore "[play]" notes
+                    //Debug.Log(ev.value + " (Freq=" + ev.sungNote + ", StartTick=" + ev.spawnTick +", EndTick=" + (ev.spawnTick + ev.length) + ")"); // log lyrics to console for now
+                    Debug.Log("$beep," + ev.sungNote + "," + ev.lengthMs); // custom debug console synth
                     //NAudioBeepSynth.PlayToneNAudio(double.Parse(ev.sungNote), (int)ev.length);
                     ev.passed = true;
                 }
@@ -312,10 +349,11 @@ public class VenueAnimationPlayer : MonoBehaviour
             if (mainCamera) mainCamera.transform.rotation = Quaternion.Euler(x, y, z);
         };
 
-        fnRegistry["venue.camera.focal"] = (args) =>
+        fnRegistry["venue.camera.fov"] = (args) =>
         {
             float f = ParseF(args, 0);
-            if (mainCamera) mainCamera.focalLength = f;
+            Camera cam = mainCamera.GetComponent<Camera>();
+            cam.fieldOfView = f;
         };
 
         fnRegistry["venue.camera.cue"] = (args) =>
@@ -353,12 +391,12 @@ public class VenueAnimationPlayer : MonoBehaviour
             if (camera) camera.transform.rotation = Quaternion.Euler(x, y, z);
         };
 
-        fnRegistry["highway.camera.focal"] = (args) =>
+        fnRegistry["highway.camera.fov"] = (args) =>
         {
             float f = ParseF(args, 0);
             GameObject camera = GameObject.Find("Highway_cam");
             Camera camera1 = camera.GetComponent<Camera>();
-            if (camera) camera1.focalLength = f;
+            if (camera) camera1.fieldOfView = f;
         };
 
         fnRegistry["highway.camera.cue"] = (args) =>
@@ -419,20 +457,60 @@ public class VenueAnimationPlayer : MonoBehaviour
             if (go != null) go.SetActive(bool.TryParse(args[1], out var b) && b);
         };
 
-        fnRegistry["venue.lighting.stage"] = (args) =>
+        fnRegistry["venue.lighting.stage.light4.center.default"] = (args) =>
         {
-            int id = int.Parse(args[0]);
-            float bright = ParseF(args, 1);
-            float rotX = ParseF(args, 2);
-            float rotY = ParseF(args, 3);
-            float colR = ParseF(args, 4);
-            float colG = ParseF(args, 5);
-            float colB = ParseF(args, 6);
+            if (args.Count == 0) return;
+            float bright = ParseF(args, 0);
+            float colR = ParseF(args, 1);
+            float colG = ParseF(args, 2);
+            float colB = ParseF(args, 3);
             LightingManager lightingManager = FindAnyObjectByType<LightingManager>();
             if (lightingManager)
-            lightingManager.StageLight(id,
+            lightingManager.StageLight(0,
             bright,
-            new Vector2(rotX, rotY),
+            new Vector2(90, 0),
+            new Color(colR, colG, colB));
+        };
+        fnRegistry["venue.lighting.stage.light3.center.default"] = (args) =>
+        {
+            if (args.Count == 0) return;
+            float bright = ParseF(args, 0);
+            float colR = ParseF(args, 1);
+            float colG = ParseF(args, 2);
+            float colB = ParseF(args, 3);
+            LightingManager lightingManager = FindAnyObjectByType<LightingManager>();
+            if (lightingManager)
+            lightingManager.StageLight(1,
+            bright,
+            new Vector2(90, 0),
+            new Color(colR, colG, colB));
+        };
+        fnRegistry["venue.lighting.stage.light2.center.default"] = (args) =>
+        {
+            if (args.Count == 0) return;
+            float bright = ParseF(args, 0);
+            float colR = ParseF(args, 1);
+            float colG = ParseF(args, 2);
+            float colB = ParseF(args, 3);
+            LightingManager lightingManager = FindAnyObjectByType<LightingManager>();
+            if (lightingManager)
+            lightingManager.StageLight(2,
+            bright,
+            new Vector2(90, 0),
+            new Color(colR, colG, colB));
+        };
+        fnRegistry["venue.lighting.stage.light1.center.default"] = (args) =>
+        {
+            if (args.Count == 0) return;
+            float bright = ParseF(args, 0);
+            float colR = ParseF(args, 1);
+            float colG = ParseF(args, 2);
+            float colB = ParseF(args, 3);
+            LightingManager lightingManager = FindAnyObjectByType<LightingManager>();
+            if (lightingManager)
+            lightingManager.StageLight(3,
+            bright,
+            new Vector2(90, 0),
             new Color(colR, colG, colB));
         };
 
@@ -440,10 +518,10 @@ public class VenueAnimationPlayer : MonoBehaviour
         {
             if (args.Count > 0) return;
             MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-            musicPlayer.EndSong(false);
+            StartCoroutine(musicPlayer.EndSong(false));
             GameManager gameManager = FindAnyObjectByType<GameManager>();
             gameManager.ResetAllValues();
-            gameManager.ExitGame();
+            gameManager.ExitGame(false);
         };
 
 
@@ -469,30 +547,39 @@ public class VenueAnimationPlayer : MonoBehaviour
     {
         try
         {
-        if (ev == null) return;
-        List<string> evSplit = ev.Split("|").ToList();
-        List<string> argSplits = new List<string>();
-        if (evSplit[1] != null)
-        {
-            argSplits = evSplit[1].Split(",").ToList();
-        }
-        // find script def by name
-        var def = scripts.Find(s => s.name == evSplit[0]);
-        if (def != null)
-        {
-            
-            ExecuteScriptBody(def.body, argSplits.ToArray());
-        }
-        else
-        {
+            if (string.IsNullOrEmpty(ev)) return;
+            // format: "function|arg1,arg2" or just "function"
+            string funcName;
+            string argsText = string.Empty;
+            int sep = ev.IndexOf('|');
+            if (sep >= 0)
+            {
+                funcName = ev.Substring(0, sep);
+                if (sep + 1 < ev.Length) argsText = ev.Substring(sep + 1);
+            }
+            else
+            {
+                funcName = ev;
+            }
+
+            // parse arguments using the existing ParseArgs (handles quoted strings)
+            List<string> argSplits = ParseArgs(argsText);
+
+            // find script def by name
+            var def = scripts.Find(s => s.name == funcName);
+            if (def != null)
+            {
+                ExecuteScriptBody(def.body, argSplits.ToArray());
+                return;
+            }
+
             // allow calling a single function name directly
-            if (fnRegistry.TryGetValue(evSplit[0], out var fn)) fn(argSplits != null ? argSplits : new List<string>());
-            else Debug.LogWarning("Script or function not found: " + evSplit[0]);
-        }
+            if (fnRegistry.TryGetValue(funcName, out var fn)) fn(argSplits != null ? argSplits : new List<string>());
+            else Debug.LogWarning("Script or function not found: " + funcName);
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[VenueAnimationPlayer.ExecuteScriptByString] An error occoured when parsing script string: " + ex.Message);
+            Debug.LogWarning("[VenueAnimationPlayer.ExecuteScriptByString] An error occured when parsing script string: " + ex.Message);
         }
     }
     void CueAnimEvent(NoteSpawner.GlobalEventInfo ev)

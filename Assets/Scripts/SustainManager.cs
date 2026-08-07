@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 // Manages sustain visuals when they are instantiated separately from note objects.
@@ -19,6 +20,7 @@ public class SustainManager : MonoBehaviour
     Dictionary<int, SustainVisual> active = new Dictionary<int, SustainVisual>();
 
     NoteSpawner spawner;
+    ImprovedStrikeline strikeline;
 
     void Awake()
     {
@@ -42,6 +44,19 @@ public class SustainManager : MonoBehaviour
         if (g == null) return;
         g.SetActive(false);
         pool.Enqueue(g);
+    }
+
+    public void Prewarm(int count)
+    {
+        if (sustainPrefab != null && pool.Count == 0)
+        {
+            for (int i = 0; i < count * Mathf.CeilToInt(1.25f); i++)
+            {
+                var go = Instantiate(sustainPrefab);
+                go.SetActive(false);
+                pool.Enqueue(go);
+            }
+        }
     }
 
     // Start a sustain visual for the given lane and durationSeconds.
@@ -94,5 +109,10 @@ public class SustainManager : MonoBehaviour
             active.Remove(laneIndex);
         }
         ReturnToPool(v.gameObject);
+        if (strikeline != null)
+        {
+            strikeline.DisableSustainSparks(laneIndex - 2);
+            strikeline.SLTopHit(laneIndex);
+        }
     }
 }

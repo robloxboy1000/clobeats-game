@@ -6,7 +6,9 @@ public class NoteVisualChanger : MonoBehaviour
     {
         Forced,
         HOPO,
-        Tap
+        Tap,
+        Any,
+        FretRelease
     }
 
     public NoteType currentNoteType;
@@ -14,6 +16,7 @@ public class NoteVisualChanger : MonoBehaviour
     public GameObject noteObject;
     public GameObject hopoNoteObject;
     public GameObject tapNoteObject;
+    public GameObject fretReleaseNoteObject;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -38,6 +41,10 @@ public class NoteVisualChanger : MonoBehaviour
             {
                 tapNoteObject.SetActive(false);
             }
+            if (fretReleaseNoteObject != null)
+            {
+                fretReleaseNoteObject.SetActive(false);
+            }
         }
         if (currentNoteType == NoteType.HOPO)
         {
@@ -53,6 +60,10 @@ public class NoteVisualChanger : MonoBehaviour
             {
                 tapNoteObject.SetActive(false);
             }
+            if (fretReleaseNoteObject != null)
+            {
+                fretReleaseNoteObject.SetActive(false);
+            }
         }
         if (currentNoteType == NoteType.Tap)
         {
@@ -67,6 +78,29 @@ public class NoteVisualChanger : MonoBehaviour
             if (tapNoteObject != null)
             {
                 tapNoteObject.SetActive(true);
+            }
+            if (fretReleaseNoteObject != null)
+            {
+                fretReleaseNoteObject.SetActive(false);
+            }
+        }
+        if (currentNoteType == NoteType.FretRelease)
+        {
+            if (noteObject != null)
+            {
+                noteObject.SetActive(false);
+            }
+            if (hopoNoteObject != null)
+            {
+                hopoNoteObject.SetActive(false);
+            }
+            if (tapNoteObject != null)
+            {
+                tapNoteObject.SetActive(false);
+            }
+            if (fretReleaseNoteObject != null)
+            {
+                fretReleaseNoteObject.SetActive(true);
             }
         }
     }

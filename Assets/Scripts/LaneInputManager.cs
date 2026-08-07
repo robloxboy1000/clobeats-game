@@ -47,6 +47,7 @@ public class LaneInputManager : MonoBehaviour
     GameObject note = null;
 
     MusicPlayer mp;
+    OldInputManager oim;
     public float secondsUntil;
 
 
@@ -54,6 +55,7 @@ public class LaneInputManager : MonoBehaviour
     {
         spawner = FindAnyObjectByType<NoteSpawner>();
         mp = FindAnyObjectByType<MusicPlayer>();
+        oim = FindAnyObjectByType<OldInputManager>();
         if (hitWindowPrefab != null)
         {
             hitWindowInstance = Instantiate(hitWindowPrefab, transform);
@@ -136,19 +138,20 @@ public class LaneInputManager : MonoBehaviour
             TryHitLane(7, true, NoteVisualChanger.NoteType.Forced, true);
             TryHitLane(8, true, NoteVisualChanger.NoteType.Forced, true);
         }
+        if (oim.gamepadMode)
+        {
+            TryHitLane(7, true, NoteVisualChanger.NoteType.Forced, true);
+        }
     }
 
     // Input handlers to wire from the Input System
     public void OnFretPressed(int laneIndex)
     {
         heldLanes.Add(laneIndex);
-        if (uiUpdater.savednotesHit > 0)
+        if (oim.gamepadMode)
         {
-            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.HOPO, true);
-        }
-        else
-        {
-            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Tap, true);
+            if (!TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true))
+            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
         }
     }
 
@@ -156,6 +159,10 @@ public class LaneInputManager : MonoBehaviour
     {
         heldLanes.Remove(laneIndex);
         EndSustainForLane(laneIndex);
+        if (oim.gamepadMode)
+        {
+            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.FretRelease, true);
+        }
     }
 
     // Called when the player strums; will attempt to hit all currently held frets (chords)
@@ -179,7 +186,7 @@ public class LaneInputManager : MonoBehaviour
             Dictionary<int, bool> laneBools = new Dictionary<int, bool>();
             foreach (var lane in lanes)
             {
-                laneBools.Add(lane, TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced | NoteVisualChanger.NoteType.HOPO | NoteVisualChanger.NoteType.Tap, true));
+                laneBools.TryAdd(lane, TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced, true));
             }
             if (laneBools.ContainsValue(false))
             {
@@ -195,11 +202,11 @@ public class LaneInputManager : MonoBehaviour
     // Backwards-compatible single-fret hit (e.g., mapping a single key without a strum action)
     public void OnFretHit(int laneIndex)
     {
-        TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Forced | NoteVisualChanger.NoteType.HOPO | NoteVisualChanger.NoteType.Tap, true);
+        TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
     }
     public void OnLaneHeldCountChanged()
     {
-        OnStrum();
+        
     }
 
     bool TryHitLane(int laneIndex, bool autoHit = false, NoteVisualChanger.NoteType noteType = NoteVisualChanger.NoteType.Forced, bool isChord = false)
@@ -216,7 +223,7 @@ public class LaneInputManager : MonoBehaviour
         // Prefer scheduled song time if available (more accurate and synced to audio DSP clock)
         var sched = note.GetComponent<ScheduledTime>();
         mp = FindAnyObjectByType<MusicPlayer>();
-        float currentSongSeconds = mp != null ? (float)mp.GetElapsedTime() : Time.time;
+        float currentSongSeconds = mp != null ? (float)mp.GetElapsedTimeDsp() : Time.time;
         var visual = note.GetComponent<NoteVisualChanger>();
             
         if (sched != null)
@@ -242,6 +249,10 @@ public class LaneInputManager : MonoBehaviour
                 {
                     LaneManager.Instance.UnregisterNote(note);
                 }
+                else if (noteType == NoteVisualChanger.NoteType.Any)
+                {
+                    LaneManager.Instance.UnregisterNote(note);
+                }
                 else
                 {
                     return false;
@@ -258,7 +269,7 @@ public class LaneInputManager : MonoBehaviour
                 activeSustains.Add(new ActiveSustain
                 {
                     note = note,
-                    endTime = spawner.GetTimeInSecondsAtTick(spawner.currentTick) + sustainComp.durationSeconds,
+                    endTime = (float)mp.currentTimeDSP + sustainComp.durationSeconds,
                     lane = laneIndex
                 });
                 // Optionally: play sustain start FX / scoring events here
@@ -266,7 +277,7 @@ public class LaneInputManager : MonoBehaviour
                 {
                     strikeline.HitNote(laneIndex - 2); // zero-based xOffset
                     strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
-                    strikeline.SLTopHit(laneIndex);
+                    strikeline.SLTopHold(laneIndex);
                 }
                 int visualLaneInd = 0;
                 switch (laneIndex)
@@ -310,26 +321,7 @@ public class LaneInputManager : MonoBehaviour
             //Debug.Log("AutoHit lane " + laneIndex + " note with " + secondsUntil + " seconds until strike line.");
 
             var sustainComp = note.GetComponent<SustainedNote>();
-            if (visual != null)
-            {
-                if (!autoHit)
-                {
-                    if (visual.currentNoteType == noteType)
-                    {
-                        LaneManager.Instance.UnregisterNote(note);
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    LaneManager.Instance.UnregisterNote(note);
-                }
-                
-            }
-
+            LaneManager.Instance.UnregisterNote(note);
             Color sustainColor = Color.white;
 
             if (sustainComp != null && sustainComp.durationSeconds > 0f)
@@ -339,7 +331,7 @@ public class LaneInputManager : MonoBehaviour
                 activeSustains.Add(new ActiveSustain
                 {
                     note = note,
-                    endTime = spawner.GetTimeInSecondsAtTick(spawner.currentTick) + sustainComp.durationSeconds,
+                    endTime = (float)mp.currentTimeDSP + sustainComp.durationSeconds,
                     lane = laneIndex
                 });
                 // Optionally: play sustain start FX / scoring events here
@@ -347,7 +339,7 @@ public class LaneInputManager : MonoBehaviour
                 {
                     strikeline.HitNote(laneIndex - 2); // zero-based xOffset
                     strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
-                    strikeline.SLTopHit(laneIndex);
+                    strikeline.SLTopHold(laneIndex);
                 }
                 int visualLaneInd = 0;
                 switch (laneIndex)
@@ -406,7 +398,7 @@ public class LaneInputManager : MonoBehaviour
             }
 
             // If sustain time elapsed, end it
-            if (spawner.GetTimeInSecondsAtTick(spawner.currentTick) >= s.endTime)
+            if (mp.currentTimeDSP >= s.endTime)
             {
                 //Debug.Log(s.lane + " ended");
                 if (spawner != null)
@@ -417,6 +409,7 @@ public class LaneInputManager : MonoBehaviour
                 if (strikeline != null)
                 {
                     strikeline.DisableSustainSparks(s.lane - 2);
+                    strikeline.SLTopHit(s.lane);
                 }
                 if (SustainManager.Instance != null)
                 {
@@ -428,7 +421,7 @@ public class LaneInputManager : MonoBehaviour
                 // sustain is ongoing; scoring / FX per-frame can be handled here
                 if (uiUpdater != null)
                 {
-                    uiUpdater.UpdateForSustainHold(uiUpdater.inStar ? Time.deltaTime * 40f : Time.deltaTime * 20f); // e.g., score for holding sustain
+                    uiUpdater.UpdateForSustainHold(uiUpdater.inStar ? Time.deltaTime * 80f : Time.deltaTime * 40f); // e.g., score for holding sustain
                 }
             }
         }
@@ -446,7 +439,8 @@ public class LaneInputManager : MonoBehaviour
                 activeSustains.RemoveAt(i);
                 if (strikeline != null)
                 {
-                    strikeline.DisableSustainSparks(laneIndex - 2);
+                    strikeline.DisableSustainSparks(laneIndex);
+                    strikeline.SLTopHit(laneIndex);
                 }
                 if (SustainManager.Instance != null)
                 {

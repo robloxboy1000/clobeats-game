@@ -1,26 +1,43 @@
-using UnityEngine;
-using UnityEngine.UI;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System;
-using UnityEngine.EventSystems;
-using System.Threading.Tasks;
-using Melanchall.DryWetMidi.Core;
 using System.Linq;
-using Rewired.Integration.UnityUI;
-using UnityEngine.UIElements;
+using System.Threading.Tasks;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class UGUIMenuList : MonoBehaviour
 {
-    // Reference to your list item prefab (must be in Assets)
-    public GameObject listItemPrefab;
+    private static readonly string[] SupportedAudioFormats = { ".wav", ".ogg", ".mp3", ".opus" };
+    private static readonly string[] SupportedImageFormats = { ".jpg", ".jpeg", ".png", ".dds", ".webp" };
 
-    
-    // Reference to the content container (where items will be instantiated)
+    [Header("List")]
+    public GameObject listItemPrefab;
     public Transform contentContainer;
     public Transform rootTransform;
+    public ScrollRect scrollRect;
+    public Button regenerateItemsButton;
+    public bool rebuildOnEnable = true;
+    public bool wrapSelection = true;
+    public bool autoScrollToSelection = true;
+    public float scrollPadding = 8f;
+    public bool clickPlaysSelection = false;
+
+    [Header("Preview")]
+    public MenuManager menuManager;
+    public RawImage albumImage;
+    public TextMeshProUGUI songTitleText;
+    public TextMeshProUGUI songArtistText;
+    public Texture placeholderAlbumTexture;
+    public bool playPreviewAudio = true;
+
+    [Header("Selection Style")]
+    public Color selectedItemColor = new Color(0.18f, 0.52f, 1f, 1f);
+    public Color selectedTextColor = Color.white;
+
     public List<string> itemNames = new List<string>();
-    List<GameObject> instantiatedListItems = new List<GameObject>();
 
     public class ListObject
     {
@@ -28,230 +45,624 @@ public class UGUIMenuList : MonoBehaviour
         public int songID;
     }
 
-    Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
+    private class SongMenuItem
+    {
+        public GameManager.SongEntryInfo entry;
+        public GameObject view;
+        public Button button;
+        public Graphic background;
+        public TextMeshProUGUI titleText;
+        public Color normalBackgroundColor;
+        public Color normalTextColor;
+    }
 
-    public UnityEngine.UI.Button regenerateItemsButton;
+    private readonly List<SongMenuItem> items = new List<SongMenuItem>();
+    private readonly List<GameObject> instantiatedListItems = new List<GameObject>();
+    private readonly Dictionary<int, SongMenuItem> itemsBySongNumber = new Dictionary<int, SongMenuItem>();
+    private readonly Dictionary<int, SongMenuItem> itemsByCachedId = new Dictionary<int, SongMenuItem>();
+    private readonly Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
 
-    private int _privcurrentSelectedItem;
+    private int selectedIndex = -1;
+    private int rebuildVersion;
+
     public int currentSelectedItem
     {
-        get => _privcurrentSelectedItem;
-        set
-        {
-            if (_privcurrentSelectedItem != value) // Only trigger if the value actually changes
-            {
-                _privcurrentSelectedItem = value;
-                OnSelectedChanged(); // Call your method here
-            }
-        }
+        get => selectedIndex;
+        set => SelectAt(value);
     }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    private void Awake()
     {
-        
-    }
+        ResolveReferences();
 
-    async void OnEnable()
-    {
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
-        await ClearItemObjects();
-        itemNames.Clear();
-        // cachedEntries is a Dictionary<int, SongEntryInfo> — iterate values to list entries
-        foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
-        {
-            await AddEntry(entry.Value);
-        }
-        SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-        songFolderLoader.ClearValues();
-    }
-
-    void Awake()
-    {
         if (regenerateItemsButton != null)
         {
-            regenerateItemsButton.onClick.AddListener(async () =>
-            {
-                GameManager gameManager = FindAnyObjectByType<GameManager>();
-                await ClearItemObjects();
-                itemNames.Clear();
-                foreach (var entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
-                {
-                    await AddEntry(entry.Value);
-                }
-                SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-                songFolderLoader.ClearValues();
-            });
+            regenerateItemsButton.onClick.AddListener(Refresh);
         }
     }
 
-
-    // Update is called once per frame
-    void Update()
+    private async void OnEnable()
     {
-        
+        if (rebuildOnEnable)
+        {
+            await RebuildAsync();
+        }
+    }
+
+    private void OnDisable()
+    {
+        rebuildVersion++;
+    }
+
+    public void Refresh()
+    {
+        _ = RebuildAsync();
+    }
+
+    public async Task RebuildAsync()
+    {
+        int version = ++rebuildVersion;
+        ResolveReferences();
+        await ClearItemObjects();
+
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        if (gameManager == null)
+        {
+            Debug.LogWarning("Cannot build song list because GameManager was not found.");
+            return;
+        }
+
+        foreach (KeyValuePair<int, GameManager.SongEntryInfo> entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
+        {
+            if (version != rebuildVersion)
+            {
+                return;
+            }
+
+            await AddEntryAsync(entry.Value);
+        }
+
+        SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+        if (songFolderLoader != null)
+        {
+            songFolderLoader.ClearValues();
+        }
+
+        if (version == rebuildVersion && items.Count > 0)
+        {
+            SelectAt(0, true);
+        }
+    }
+
+    public void SelectNext()
+    {
+        SelectAt(selectedIndex + 1);
+    }
+
+    public void SelectPrevious()
+    {
+        SelectAt(selectedIndex - 1);
+    }
+
+    public bool SelectBySongNumber(int songNumber)
+    {
+        if (!itemsBySongNumber.TryGetValue(songNumber, out SongMenuItem item))
+        {
+            return false;
+        }
+
+        SelectItem(item, true);
+        return true;
+    }
+
+    public bool SelectByCachedSongId(int cachedSongId)
+    {
+        if (!itemsByCachedId.TryGetValue(cachedSongId, out SongMenuItem item))
+        {
+            return false;
+        }
+
+        SelectItem(item, true);
+        return true;
+    }
+
+    public void SelectAt(int index)
+    {
+        SelectAt(index, true);
+    }
+
+    public void ConfirmSelection()
+    {
+        if (menuManager != null)
+        {
+            menuManager.Submit(1);
+        }
+    }
+
+    public bool TryGetSelectedSong(out string songPath, out int cachedSongId)
+    {
+        songPath = string.Empty;
+        cachedSongId = 0;
+
+        if (selectedIndex < 0 || selectedIndex >= items.Count)
+        {
+            return false;
+        }
+
+        GameManager.SongEntryInfo entry = items[selectedIndex].entry;
+        if (entry == null)
+        {
+            return false;
+        }
+
+        songPath = entry.songPath;
+        cachedSongId = entry.cachedSongID;
+        return !string.IsNullOrEmpty(songPath) && cachedSongId > 0;
     }
 
     public void OnSelectedChanged()
     {
-        CheckSelectedEntry(currentSelectedItem);
+        SelectAt(currentSelectedItem);
     }
 
-    async Task ClearItemObjects()
+    public void CheckSelectedEntry(int id)
     {
-        if (instantiatedListItems != null)
+        if (SelectBySongNumber(id))
         {
-            try
-            {
-                // Iterate over a copy to allow safe removal
-                foreach (GameObject obj in instantiatedListItems.ToList())
-                {
-                    if (obj != null)
-                    {
-                        Destroy(obj);
-                    }
-                    await Task.Yield();
-                }
-                instantiatedListItems.Clear();
-            }
-            catch
-            {
-                
-            }
+            return;
+        }
+
+        if (SelectByCachedSongId(id))
+        {
+            return;
+        }
+
+        SelectAt(id);
+    }
+
+    private void SelectAt(int index, bool updatePreview)
+    {
+        if (items.Count == 0)
+        {
+            selectedIndex = -1;
+            UpdateSelectionVisuals();
+            return;
+        }
+
+        int resolvedIndex = wrapSelection
+            ? WrapIndex(index, items.Count)
+            : Mathf.Clamp(index, 0, items.Count - 1);
+
+        SelectItem(items[resolvedIndex], updatePreview);
+    }
+
+    private void SelectItem(SongMenuItem item, bool updatePreview, bool forcePreview = false)
+    {
+        if (item == null)
+        {
+            return;
+        }
+
+        int index = items.IndexOf(item);
+        if (index < 0)
+        {
+            return;
+        }
+
+        bool changed = selectedIndex != index;
+        selectedIndex = index;
+        UpdateSelectionVisuals();
+        //FocusSelectedItem(item);
+        ScrollToSelectedItem();
+
+        if (updatePreview && (changed || forcePreview))
+        {
+            PreviewSelectedItem(item);
         }
     }
-    async Task AddEntry(GameManager.SongEntryInfo item)
+
+    private async Task ClearItemObjects()
     {
-        MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-        // Instantiate a new item for each entry in the data list
-        if (Path.GetFileName(item.songPath).StartsWith("sub_")) return;
-        var songFolderFiles = await Task.Run(() => Directory.GetFiles(item.songPath));
-        List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
-        var songMatch = songFolderFiles
-            .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-            .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
-        if (songMatch != null)
-        if (!File.Exists(songMatch.path)) return;
-            
-        // Instantiate the prefab inside the specified container
-        GameObject newItem = Instantiate(listItemPrefab, contentContainer);
-        instantiatedListItems.Add(newItem);
-            
-        // Find the text component within the new item and set its value
-        // (You might need a dedicated script for complex prefabs)
-        GameObject songTitleTextObject = newItem.transform.Find("Marqee1").Find("SongtitleText").gameObject;
-
-        TMPro.TextMeshProUGUI songTitleText = songTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
-
-        GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(item.cachedSongID);
-        if (songEntry != null)
+        foreach (GameObject item in instantiatedListItems.ToList())
         {
-            if (songTitleText != null)
+            if (item != null)
             {
-                songTitleText.text = songEntry.songTitle;
+                Destroy(item);
             }
+
+            await Task.Yield();
         }
-        newItem.name = songEntry.songNumber.ToString();
-        itemPaths.Add(songEntry.songNumber, new ListObject
+
+        instantiatedListItems.Clear();
+        itemNames.Clear();
+        items.Clear();
+        itemsBySongNumber.Clear();
+        itemsByCachedId.Clear();
+        itemPaths.Clear();
+        selectedIndex = -1;
+    }
+
+    private async Task AddEntryAsync(GameManager.SongEntryInfo entry)
+    {
+        if (entry == null || string.IsNullOrEmpty(entry.songPath))
         {
-            songPath = songEntry.songPath,
-            songID = songEntry.cachedSongID
+            return;
+        }
+
+        if (Path.GetFileName(entry.songPath).StartsWith("sub_", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!await HasPlayableAudioAsync(entry.songPath))
+        {
+            return;
+        }
+
+        if (listItemPrefab == null || contentContainer == null)
+        {
+            Debug.LogWarning("Song list is missing a list item prefab or content container.");
+            return;
+        }
+
+        GameObject view = Instantiate(listItemPrefab, contentContainer);
+        view.name = entry.songNumber.ToString();
+        instantiatedListItems.Add(view);
+
+        SongMenuItem item = new SongMenuItem
+        {
+            entry = entry,
+            view = view,
+            button = view.GetComponent<Button>(),
+            background = view.GetComponent<Graphic>(),
+            titleText = FindTitleText(view.transform)
+        };
+
+        if (item.button == null)
+        {
+            item.button = view.AddComponent<Button>();
+        }
+
+        if (item.background == null)
+        {
+            item.background = item.button.targetGraphic;
+        }
+
+        if (item.titleText != null)
+        {
+            item.titleText.text = string.IsNullOrWhiteSpace(entry.songTitle) ? Path.GetFileName(entry.songPath) : entry.songTitle;
+            item.normalTextColor = item.titleText.color;
+        }
+
+        if (item.background != null)
+        {
+            item.normalBackgroundColor = item.background.color;
+        }
+
+        item.button.onClick.AddListener(() =>
+        {
+            SelectItem(item, true, true);
+            if (clickPlaysSelection)
+            {
+                ConfirmSelection();
+            }
         });
+
+        AddSelectionTriggers(view, item);
+
+        items.Add(item);
+        itemNames.Add(item.titleText != null ? item.titleText.text : view.name);
+        itemsBySongNumber[entry.songNumber] = item;
+        itemsByCachedId[entry.cachedSongID] = item;
+        itemPaths[entry.songNumber] = new ListObject
+        {
+            songPath = entry.songPath,
+            songID = entry.cachedSongID
+        };
+
         await Task.Yield();
     }
 
-    public async void CheckSelectedEntry(int id)
+    private void PreviewSelectedItem(SongMenuItem item)
     {
-        if (itemPaths.TryGetValue(id, out ListObject listObject))
+        if (item == null || item.entry == null)
         {
-            await OnItemClicked(listObject.songPath, listObject.songID);
+            return;
+        }
+
+        GameManager.SongEntryInfo entry = item.entry;
+        if (songTitleText != null)
+        {
+            songTitleText.text = string.IsNullOrWhiteSpace(entry.songTitle) ? "Unknown Title" : entry.songTitle;
+        }
+
+        if (songArtistText != null)
+        {
+            songArtistText.text = string.IsNullOrWhiteSpace(entry.songArtist) ? "Unknown Artist" : entry.songArtist;
+        }
+
+        if (albumImage != null)
+        {
+            albumImage.texture = LoadAlbumTexture(entry.songPath);
+        }
+
+        if (menuManager != null)
+        {
+            menuManager.SetCurrentPreview(entry.songPath, entry.cachedSongID);
+        }
+
+        if (playPreviewAudio)
+        {
+            PlayPreviewAudio(entry);
         }
     }
 
-    
-    async Task OnItemClicked(string name, int id)
+    private void PlayPreviewAudio(GameManager.SongEntryInfo entry)
     {
-        Debug.Log($"Clicked on: {name}, {id}");
-        GameObject songInfoPanel = rootTransform.Find("SongInfoPanel").gameObject;
-        if (songInfoPanel != null)
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
+
+        if (gameManager == null || musicPlayer == null)
         {
-            GameObject albumImage = songInfoPanel.transform.Find("AlbumImage").gameObject;
-            GameObject sipSongTitleTextObject = songInfoPanel.transform.Find("SIPSongTitleText").gameObject;
-            GameObject sipSongArtistTextObject = songInfoPanel.transform.Find("SIPSongArtistText").gameObject;
-            TMPro.TextMeshProUGUI sipSongArtistText = sipSongArtistTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-            TMPro.TextMeshProUGUI sipSongTitleText = sipSongTitleTextObject.GetComponent<TMPro.TextMeshProUGUI>();
-            RawImage albumTexture = albumImage.GetComponent<RawImage>();
-            GameManager gameManager = FindAnyObjectByType<GameManager>();
-            try
-            {
-                string[] detectedImages = Directory.GetFiles(name);
-                List<string> supportedImages = new List<string> { "jpg","jpeg","png","dds","webp" };
-                var imageMatch = detectedImages
-                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                    .FirstOrDefault(x => supportedImages.Contains(x.ext));
-                if (imageMatch != null)
-                {
-                    Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(imageMatch.path);
-                    if (loadedTexture != null)
-                    {
-                        albumTexture.texture = loadedTexture;
-                    }
-                    else
-                    {
-                        albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("Fallback to placeholder album because: " + ex.Message);
-                albumTexture.texture = Resources.Load<Texture>("newAlbumPlaceholder");
-            }
-            GameManager.SongEntryInfo songEntry = gameManager.GetCachedSongEntry(id);
-            if (songEntry != null)
-            {
-                if (name != songEntry.songPath) return;
-                sipSongArtistText.text = songEntry.songArtist;
-                sipSongTitleText.text = songEntry.songTitle;
+            return;
+        }
 
-                var songFolderFiles = await Task.Run(() => Directory.GetFiles(songEntry.songPath));
-                List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3" };
-                var songMatch = songFolderFiles
-                    .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
-                    .FirstOrDefault(x => x.name == "song" && supportedFormats.Contains(x.ext));
+        if (!gameManager.cachedAudioClips.TryGetValue(entry.cachedSongID, out AudioClip clip))
+        {
+            return;
+        }
 
-                MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
-                if (musicPlayer != null)
-                {
-                    if (musicPlayer.previewAudioPlaying)
-                    {
-                        musicPlayer.StopPreviewAudio();
-                        //await Task.Delay(1000);
-                        if (songMatch != null)
-                        if (File.Exists(songMatch.path))
-                        {
-                            //StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
-                        }
-                    }
-                    else
-                    {
-                        //await Task.Delay(1000);
-                        if (songMatch != null)
-                        if (File.Exists(songMatch.path))
-                        {
-                            //StartCoroutine(musicPlayer.PlayPreviewAudio(songMatch.path, songEntry.songPreviewStartTime));
-                        }
-                    }
-                }
-            }
-            MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-            if (menuManager != null)
+        if (musicPlayer.previewAudioPlaying)
+        {
+            musicPlayer.StopPreviewAudio();
+        }
+
+        StartCoroutine(musicPlayer.PlayPooledPreviewAudio(clip, entry.songPreviewStartTime));
+    }
+
+    private Texture LoadAlbumTexture(string songPath)
+    {
+        Texture fallback = placeholderAlbumTexture != null
+            ? placeholderAlbumTexture
+            : Resources.Load<Texture>("newAlbumPlaceholder");
+
+        try
+        {
+            string imagePath = Directory.GetFiles(songPath)
+                .FirstOrDefault(path => SupportedImageFormats.Contains(Path.GetExtension(path).ToLowerInvariant()));
+
+            if (string.IsNullOrEmpty(imagePath))
             {
-                menuManager.currentPreviewingSongPath = name;
-                menuManager.currentPreviewingID = id;
+                return fallback;
+            }
+
+            Texture2D loadedTexture = AlbumLoader.LoadImageFromFile(imagePath);
+            return loadedTexture != null ? loadedTexture : fallback;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Fallback to placeholder album because: " + ex.Message);
+            return fallback;
+        }
+    }
+
+    private async Task<bool> HasPlayableAudioAsync(string songPath)
+    {
+        try
+        {
+            string[] files = await Task.Run(() => Directory.GetFiles(songPath));
+            return files.Any(path =>
+                string.Equals(Path.GetFileNameWithoutExtension(path), "song", StringComparison.OrdinalIgnoreCase)
+                && SupportedAudioFormats.Contains(Path.GetExtension(path).ToLowerInvariant()));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("Skipping song folder because it could not be scanned: " + ex.Message);
+            return false;
+        }
+    }
+
+    private void UpdateSelectionVisuals()
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            SongMenuItem item = items[i];
+            bool selected = i == selectedIndex;
+
+            if (item.background != null)
+            {
+                item.background.color = selected ? selectedItemColor : item.normalBackgroundColor;
+            }
+
+            if (item.titleText != null)
+            {
+                item.titleText.color = selected ? selectedTextColor : item.normalTextColor;
             }
         }
+    }
+
+    private void FocusSelectedItem(SongMenuItem item)
+    {
+        if (item == null || item.view == null || EventSystem.current == null)
+        {
+            return;
+        }
+
+        //EventSystem.current.SetSelectedGameObject(item.view);
+    }
+
+    private void ScrollToSelectedItem()
+    {
+        if (!autoScrollToSelection || scrollRect == null || items.Count <= 1 || selectedIndex < 0)
+        {
+            return;
+        }
+
+        SongMenuItem selectedItem = items[selectedIndex];
+        RectTransform content = scrollRect.content;
+        RectTransform viewport = scrollRect.viewport != null
+            ? scrollRect.viewport
+            : scrollRect.GetComponent<RectTransform>();
+        RectTransform selectedRect = selectedItem.view != null
+            ? selectedItem.view.transform as RectTransform
+            : null;
+
+        if (content == null || viewport == null || selectedRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+
+        Bounds viewportBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(content, viewport);
+        Bounds selectedBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(content, selectedRect);
+        float scrollableHeight = content.rect.height - viewportBounds.size.y;
+
+        if (scrollableHeight <= 0f)
+        {
+            return;
+        }
+
+        float paddedViewportMin = viewportBounds.min.y + scrollPadding;
+        float paddedViewportMax = viewportBounds.max.y - scrollPadding;
+        float targetNormalizedPosition = scrollRect.verticalNormalizedPosition;
+
+        if (selectedBounds.min.y < paddedViewportMin)
+        {
+            float targetViewportMin = selectedBounds.min.y - scrollPadding;
+            targetNormalizedPosition = (targetViewportMin - content.rect.yMin) / scrollableHeight;
+        }
+        else if (selectedBounds.max.y > paddedViewportMax)
+        {
+            float targetViewportMin = selectedBounds.max.y + scrollPadding - viewportBounds.size.y;
+            targetNormalizedPosition = (targetViewportMin - content.rect.yMin) / scrollableHeight;
+        }
+        else
+        {
+            return;
+        }
+
+        scrollRect.StopMovement();
+        scrollRect.verticalNormalizedPosition = Mathf.Clamp01(targetNormalizedPosition);
+    }
+
+    private void AddSelectionTriggers(GameObject view, SongMenuItem item)
+    {
+        EventTrigger trigger = view.GetComponent<EventTrigger>();
+        if (trigger == null)
+        {
+            trigger = view.AddComponent<EventTrigger>();
+        }
+
+        EventTrigger.Entry pointerEnter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        pointerEnter.callback.AddListener(_ => SelectItem(item, true));
+        trigger.triggers.Add(pointerEnter);
+
+        EventTrigger.Entry select = new EventTrigger.Entry { eventID = EventTriggerType.Select };
+        select.callback.AddListener(_ => SelectItem(item, true));
+        trigger.triggers.Add(select);
+    }
+
+    private void ResolveReferences()
+    {
+        if (menuManager == null)
+        {
+            menuManager = FindAnyObjectByType<MenuManager>();
+        }
+
+        if (scrollRect == null && contentContainer != null)
+        {
+            scrollRect = contentContainer.GetComponentInParent<ScrollRect>();
+        }
+
+        if (scrollRect == null)
+        {
+            scrollRect = GetComponentInChildren<ScrollRect>(true);
+        }
+
+        if (contentContainer == null && scrollRect != null)
+        {
+            contentContainer = scrollRect.content;
+        }
+
+        if (rootTransform == null && menuManager != null && menuManager.quickplayPanel != null)
+        {
+            rootTransform = menuManager.quickplayPanel.transform;
+        }
+
+        Transform songInfoPanel = rootTransform != null ? FindDeepChild(rootTransform, "SongInfoPanel") : null;
+        if (songInfoPanel != null)
+        {
+            if (albumImage == null)
+            {
+                Transform album = FindDeepChild(songInfoPanel, "AlbumImage");
+                albumImage = album != null ? album.GetComponent<RawImage>() : null;
+            }
+
+            if (songTitleText == null)
+            {
+                Transform title = FindDeepChild(songInfoPanel, "SIPSongTitleText");
+                songTitleText = title != null ? title.GetComponent<TextMeshProUGUI>() : null;
+            }
+
+            if (songArtistText == null)
+            {
+                Transform artist = FindDeepChild(songInfoPanel, "SIPSongArtistText");
+                songArtistText = artist != null ? artist.GetComponent<TextMeshProUGUI>() : null;
+            }
+        }
+    }
+
+    private static TextMeshProUGUI FindTitleText(Transform root)
+    {
+        Transform marquee = root.Find("Marqee1/SongtitleText");
+        if (marquee != null)
+        {
+            return marquee.GetComponent<TextMeshProUGUI>();
+        }
+
+        Transform namedText = FindDeepChild(root, "SongtitleText");
+        if (namedText != null)
+        {
+            return namedText.GetComponent<TextMeshProUGUI>();
+        }
+
+        return root.GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private static Transform FindDeepChild(Transform root, string childName)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        foreach (Transform child in root)
+        {
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform match = FindDeepChild(child, childName);
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static int WrapIndex(int index, int count)
+    {
+        if (count <= 0)
+        {
+            return -1;
+        }
+
+        int wrapped = index % count;
+        return wrapped < 0 ? wrapped + count : wrapped;
     }
 }

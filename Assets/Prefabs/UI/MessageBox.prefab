@@ -626,7 +626,6 @@ GameObject:
   - component: {fileID: 281009205655076431}
   - component: {fileID: 7479842023727284788}
   - component: {fileID: 7050865802614334053}
-  - component: {fileID: 3018804357363059195}
   m_Layer: 5
   m_Name: DismissButton2
   m_TagString: Untagged
@@ -736,16 +735,3 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &3018804357363059195
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8238858142354466196}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 56493025a9e7cc843b2eed0b9e3a6b2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  myButton: {fileID: 7050865802614334053}

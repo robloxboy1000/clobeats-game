@@ -1,15 +1,50 @@
-using UnityEngine.UI;
-using UnityEngine;
 using System;
-using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using System.IO;
-using System.Xml.Linq;
-using System.Linq;
 using System.Threading.Tasks;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class MenuManager : MonoBehaviour
 {
+    private const string StartMenuId = "start";
+    private const string MainMenuId = "main";
+    private const string QuickPlayMenuId = "quickplay";
+    private const string OptionsMenuId = "options";
+    private const string ExitMenuId = "exit";
+
+    public enum MenuAction
+    {
+        None,
+        ShowMenu,
+        StartGame,
+        PlaySelectedSong,
+        Back,
+        ConfirmExit,
+        QuitGame
+    }
+
+    [Serializable]
+    public class MenuScreen
+    {
+        public string id;
+        public GameObject panel;
+        public bool showLogo = true;
+        public Selectable firstSelected;
+    }
+
+    [Serializable]
+    public class MenuButtonBinding
+    {
+        public Button button;
+        public MenuAction action = MenuAction.ShowMenu;
+        public string targetMenuId;
+        public int legacySubmitIndex = -1;
+    }
+
+    [Header("Scene References")]
     public GameObject menuCanvas;
     public GameObject startPanel;
     public GameObject mainMenuPanel;
@@ -18,220 +53,591 @@ public class MenuManager : MonoBehaviour
     public GameObject logoObject;
     public GameObject optionsPanel;
     public GameObject onlineIndicatorPanel;
-    private GameObject UGUIListHelper;
     public GameObject songInfoPanel;
     public GameObject cbFeedPanel;
     public GameObject loadingPanel;
     public GameObject loadingPreviewImage;
-    public Color accentColor;
+
+    [Header("Flexible Menu Setup")]
+    public string firstMenuId = StartMenuId;
+    public List<MenuScreen> menuScreens = new List<MenuScreen>();
+    public List<MenuButtonBinding> menuButtons = new List<MenuButtonBinding>();
+    public bool useDefaultSceneLayout = true;
+    public bool selectFirstControlOnOpen = true;
+
+    [Header("Song Selection")]
+    public UGUIMenuList songList;
+    public Color accentColor = Color.blue;
     public string currentPreviewingSongPath = string.Empty;
     public int currentPreviewingID = 0;
 
+    private readonly Dictionary<string, MenuScreen> screensById = new Dictionary<string, MenuScreen>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, MenuButtonBinding> legacySubmitBindings = new Dictionary<int, MenuButtonBinding>();
+    private string currentMenuId = string.Empty;
+    private bool isLaunchingSong;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    private void Awake()
     {
-        
-    }
-    void Awake()
-    {
-        startPanel = menuCanvas.transform.Find("StartPanel").gameObject;
-        mainMenuPanel = menuCanvas.transform.Find("MainMenuPanel").gameObject;
-        quickplayPanel = menuCanvas.transform.Find("QuickPlayPanel").gameObject;
-        songInfoPanel = quickplayPanel.transform.Find("SongInfoPanel").gameObject;
-        loadingPanel = menuCanvas.transform.Find("LoadingPanel").gameObject;
-        loadingPreviewImage = songInfoPanel.transform.Find("AlbumImage").gameObject.transform.Find("LoadingImage").gameObject;
-        logoObject = menuCanvas.transform.Find("Logo").gameObject;
-        exitgamePanel = menuCanvas.transform.Find("ExitGamePanel").gameObject;
-        optionsPanel = menuCanvas.transform.Find("OptionsPanel").gameObject;
-        onlineIndicatorPanel = menuCanvas.transform.Find("OnlineIndicatorPanel").gameObject;
-        UGUIListHelper = FindFirstObjectByType<UGUIMenuList>().gameObject;
-        foreach (Transform child in mainMenuPanel.transform)
-        {
-            if (child.gameObject.GetComponent<Button>() != null)
-            {
-                var button = child.gameObject.GetComponent<Button>();
-                if (button == null) child.gameObject.AddComponent<Button>();
-                if (child.gameObject.name == "quickplay")
-                {
-                    button.onClick.AddListener(() => OpenQPPanel());
-                }
-                else if (child.gameObject.name == "options")
-                {
-                    button.onClick.AddListener(() => OpenOptionsPanel());
-                }
-            }
-        }
-        
-        
-        if (mainMenuPanel != null)
-        mainMenuPanel.SetActive(false);
-        if (quickplayPanel != null)
-        quickplayPanel.SetActive(false);
-        if (startPanel != null)
-        startPanel.SetActive(true);
-        if (exitgamePanel != null)
-        exitgamePanel.SetActive(false);
-        if (optionsPanel != null)
-        optionsPanel.SetActive(false);
-        if (onlineIndicatorPanel != null)
-        onlineIndicatorPanel.SetActive(false);
-        if (cbFeedPanel != null)
-        cbFeedPanel.SetActive(true);
-        if (loadingPanel != null)
-        loadingPanel.SetActive(false);
-        if (loadingPreviewImage != null)
-        loadingPreviewImage.SetActive(false);
+        ResolveSceneReferences();
+        BuildDefaultConfiguration();
+        RebuildLookups();
+        WireButtons();
+        SetPassivePanels();
+        ShowMenu(string.IsNullOrWhiteSpace(firstMenuId) ? StartMenuId : firstMenuId);
     }
 
-    private void OpenQPPanel()
+    public void OpenMenu(string menuId)
     {
-        mainMenuPanel.SetActive(false);
-        quickplayPanel.SetActive(true);
-        logoObject.SetActive(false);
+        ShowMenu(menuId);
     }
 
-    private void OpenOptionsPanel()
+    public void OpenQuickPlayPanel()
     {
-        mainMenuPanel.SetActive(false);
-        optionsPanel.SetActive(true);
-        logoObject.SetActive(false);
+        ShowMenu(QuickPlayMenuId);
     }
 
-
-
-    // Update is called once per frame
-    void Update()
+    public void OpenOptionsPanel()
     {
-
+        ShowMenu(OptionsMenuId);
     }
 
-    void OnEnable()
+    public bool IsMenuOpen(string menuId)
     {
-         
+        return string.Equals(currentMenuId, menuId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void SetCurrentPreview(string songPath, int cachedSongId)
+    {
+        currentPreviewingSongPath = songPath ?? string.Empty;
+        currentPreviewingID = cachedSongId;
     }
 
     public async Task ConnectionSuccessful()
     {
-        string username = FindAnyObjectByType<GeneralSettingsObject>().username;
-        string serverAddress = FindAnyObjectByType<GeneralSettingsObject>().serverAddress;
+        GeneralSettingsObject settings = FindAnyObjectByType<GeneralSettingsObject>();
+        string username = settings != null ? settings.username : string.Empty;
+        string serverAddress = settings != null ? settings.serverAddress : string.Empty;
+
+        if (onlineIndicatorPanel == null)
+        {
+            return;
+        }
+
+        onlineIndicatorPanel.SetActive(true);
+        TextMeshProUGUI textObject = FindChildComponent<TextMeshProUGUI>(onlineIndicatorPanel.transform, "Text");
+        if (textObject != null)
+        {
+            textObject.text = "Connected as " + username + " to " + serverAddress;
+        }
+
+        await Task.Delay(3000);
         if (onlineIndicatorPanel != null)
         {
-            onlineIndicatorPanel.SetActive(true);
-            TMPro.TextMeshProUGUI textObject = onlineIndicatorPanel.transform.Find("Text").gameObject.GetComponent<TMPro.TextMeshProUGUI>();
-            textObject.text = $"Connected as {username} to {serverAddress}";
-            await Task.Delay(3000);
             onlineIndicatorPanel.SetActive(false);
         }
     }
 
     public async void Submit(int menuIndex = 0)
     {
+        if (isLaunchingSong)
+        {
+            return;
+        }
+
         if (menuIndex == 1)
         {
-            if (!quickplayPanel.activeSelf)
+            if (quickplayPanel != null && quickplayPanel.activeSelf)
             {
-                quickplayPanel.SetActive(true);
-                mainMenuPanel.SetActive(false);
+                await PlaySelectedSongAsync();
+                return;
             }
             else
             {
-                LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
-                if (loadingManager != null)
-                {
-                    PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
-                    PlayerPrefs.Save();
-                    SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-                    GameManager gameManager = FindAnyObjectByType<GameManager>();
-                    if (songFolderLoader != null)
-                    {
-                        gameManager.currentSongID = currentPreviewingID - 1;
-                        songFolderLoader.songFolderPath = currentPreviewingSongPath;
-                        await songFolderLoader.Load();
-                    }
-                    else
-                    {
-                        Debug.LogError("SongFolderLoader not found in scene!");
-                    }
+                ShowMenu(QuickPlayMenuId);
+                return;
+            }
+        }
 
-                    if (gameManager != null)
-                    {
-                        Debug.Log("[MenuManager.Submit] unDestructibleLoadingPhraseScreen shown");
-                        //gameManager.EnableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen, gameManager.currentSongID);
-                        gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
-                    }
-                    MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-                    if (musicPlayer != null)
-                    {
-                        if (musicPlayer.previewAudioPlaying)
-                        {
-                            musicPlayer.StopPreviewAudio();
-                        }
-                    }
-                    loadingManager.LoadScene("Gameplay");
-                }
-            }
-            
-        }
-        else if (menuIndex == 4)
+        if (menuIndex == 4)
         {
-            if (!optionsPanel.activeSelf)
-            {
-                optionsPanel.SetActive(true);
-                mainMenuPanel.SetActive(false);
-                logoObject.SetActive(false);
-            }
+            ShowMenu(OptionsMenuId);
+            return;
         }
-        else
+
+        if (legacySubmitBindings.TryGetValue(menuIndex, out MenuButtonBinding binding))
         {
-            if (exitgamePanel.activeSelf)
-            {
-                exitgamePanel.SetActive(false);
-                mainMenuPanel.SetActive(true);
-            }
-            else if (startPanel.activeSelf)
-            {
-                startPanel.SetActive(false);
-                mainMenuPanel.SetActive(true);
-            }
-            
+            //await RunMenuActionAsync(binding.action, binding.targetMenuId);
+            return;
+        }
+
+        if (IsMenuOpen(ExitMenuId) || (exitgamePanel != null && exitgamePanel.activeSelf))
+        {
+            ShowMenu(MainMenuId);
+        }
+        else if (IsMenuOpen(StartMenuId) || (startPanel != null && startPanel.activeSelf))
+        {
+            ShowMenu(MainMenuId);
         }
     }
+
+    public void SubmitCurrentSelection()
+    {
+        if (EventSystem.current == null || EventSystem.current.currentSelectedGameObject == null)
+        {
+            //Submit();
+            return;
+        }
+
+        Button button = EventSystem.current.currentSelectedGameObject.GetComponent<Button>();
+        if (button != null && button.IsInteractable())
+        {
+            //button.onClick.Invoke();
+            return;
+        }
+
+        //Submit();
+    }
+
+    public void SelectNextControl()
+    {
+        SelectSiblingControl(1);
+    }
+
+    public void SelectPreviousControl()
+    {
+        SelectSiblingControl(-1);
+    }
+
     public void Exit()
     {
-        if (quickplayPanel.activeSelf)
+        if (IsMenuOpen(QuickPlayMenuId) || (quickplayPanel != null && quickplayPanel.activeSelf))
         {
-            quickplayPanel.SetActive(false);
-            mainMenuPanel.SetActive(true);
-            logoObject.SetActive(true);
+            StopPreviewAudio();
             accentColor = Color.blue;
-            MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
-            if (musicPlayer != null)
+            ShowMenu(MainMenuId);
+        }
+        else if (IsMenuOpen(OptionsMenuId) || (optionsPanel != null && optionsPanel.activeSelf))
+        {
+            ShowMenu(MainMenuId);
+        }
+        else if (IsMenuOpen(MainMenuId) || (mainMenuPanel != null && mainMenuPanel.activeSelf))
+        {
+            ShowMenu(ExitMenuId);
+        }
+        else if (IsMenuOpen(ExitMenuId) || (exitgamePanel != null && exitgamePanel.activeSelf))
+        {
+            QuitGame();
+        }
+        else if (IsMenuOpen(StartMenuId) || (startPanel != null && startPanel.activeSelf))
+        {
+            ShowMenu(MainMenuId);
+        }
+    }
+
+    public async Task PlaySelectedSongAsync()
+    {
+        if (quickplayPanel != null && !quickplayPanel.activeSelf)
+        {
+            return;
+        }
+        if (isLaunchingSong)
+        {
+            return;
+        }
+
+        if ((string.IsNullOrEmpty(currentPreviewingSongPath) || currentPreviewingID <= 0) && songList != null)
+        {
+            if (songList.TryGetSelectedSong(out string selectedPath, out int selectedId))
             {
-                if (musicPlayer.previewAudioPlaying)
-                {
-                    musicPlayer.StopPreviewAudio();
-                }
+                SetCurrentPreview(selectedPath, selectedId);
             }
         }
-        else if (optionsPanel.activeSelf)
+
+        if (string.IsNullOrEmpty(currentPreviewingSongPath) || currentPreviewingID <= 0)
         {
-            optionsPanel.SetActive(false);
-            mainMenuPanel.SetActive(true);
-            logoObject.SetActive(true);
+            Debug.LogWarning("No song is selected yet.");
+            return;
         }
-        else if (mainMenuPanel.activeSelf)
+
+        isLaunchingSong = true;
+        try
         {
-            mainMenuPanel.SetActive(false);
-            exitgamePanel.SetActive(true);
+            LoadingManager loadingManager = FindAnyObjectByType<LoadingManager>();
+            SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+            GameManager gameManager = FindAnyObjectByType<GameManager>();
+
+            if (loadingManager == null)
+            {
+                Debug.LogError("LoadingManager not found in scene.");
+                return;
+            }
+
+            if (songFolderLoader == null)
+            {
+                Debug.LogError("SongFolderLoader not found in scene.");
+                return;
+            }
+
+            if (gameManager == null)
+            {
+                Debug.LogError("GameManager not found in scene.");
+                return;
+            }
+
+            PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
+            PlayerPrefs.Save();
+
+            gameManager.currentSongID = currentPreviewingID - 1;
+            songFolderLoader.songFolderPath = currentPreviewingSongPath;
+            await songFolderLoader.Load();
+
+            Debug.Log("[MenuManager] Loading selected song. (Include loading visual)");
+            await gameManager.EnableLoadUnCachedSongVisual(
+                gameManager.unDestructibleLoadingPhraseScreen,
+                Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+
+            StopPreviewAudio();
+            loadingManager.LoadScene("Gameplay");
         }
-        else if (exitgamePanel.activeSelf)
+        finally
         {
-            #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-            #else
-            UnityEngine.Application.Quit();
-            #endif
+            isLaunchingSong = false;
         }
+    }
+
+    private void ResolveSceneReferences()
+    {
+        if (menuCanvas == null)
+        {
+            menuCanvas = GameObject.Find("MenuCanvas");
+        }
+
+        Transform canvas = menuCanvas != null ? menuCanvas.transform : null;
+        startPanel = startPanel != null ? startPanel : FindChildGameObject(canvas, "StartPanel");
+        mainMenuPanel = mainMenuPanel != null ? mainMenuPanel : FindChildGameObject(canvas, "MainMenuPanel");
+        quickplayPanel = quickplayPanel != null ? quickplayPanel : FindChildGameObject(canvas, "QuickPlayPanel");
+        exitgamePanel = exitgamePanel != null ? exitgamePanel : FindChildGameObject(canvas, "ExitGamePanel");
+        logoObject = logoObject != null ? logoObject : FindChildGameObject(canvas, "Logo");
+        optionsPanel = optionsPanel != null ? optionsPanel : FindChildGameObject(canvas, "OptionsPanel");
+        onlineIndicatorPanel = onlineIndicatorPanel != null ? onlineIndicatorPanel : FindChildGameObject(canvas, "OnlineIndicatorPanel");
+        loadingPanel = loadingPanel != null ? loadingPanel : FindChildGameObject(canvas, "LoadingPanel");
+
+        if (songInfoPanel == null && quickplayPanel != null)
+        {
+            songInfoPanel = FindChildGameObject(quickplayPanel.transform, "SongInfoPanel");
+        }
+
+        if (loadingPreviewImage == null && songInfoPanel != null)
+        {
+            GameObject albumImage = FindChildGameObject(songInfoPanel.transform, "AlbumImage");
+            loadingPreviewImage = albumImage != null ? FindChildGameObject(albumImage.transform, "LoadingImage") : null;
+        }
+
+        if (songList == null)
+        {
+            songList = FindFirstObjectByType<UGUIMenuList>();
+        }
+    }
+
+    private void BuildDefaultConfiguration()
+    {
+        if (!useDefaultSceneLayout)
+        {
+            return;
+        }
+
+        AddScreenIfMissing(StartMenuId, startPanel, true);
+        AddScreenIfMissing(MainMenuId, mainMenuPanel, true);
+        AddScreenIfMissing(QuickPlayMenuId, quickplayPanel, false);
+        AddScreenIfMissing(OptionsMenuId, optionsPanel, false);
+        AddScreenIfMissing(ExitMenuId, exitgamePanel, true);
+
+        if (menuButtons.Count == 0)
+        {
+            AddButtonBinding(FindButton(mainMenuPanel, "quickplay"), MenuAction.ShowMenu, QuickPlayMenuId, 1);
+            AddButtonBinding(FindButton(mainMenuPanel, "options"), MenuAction.ShowMenu, OptionsMenuId, 4);
+        }
+    }
+
+    private void AddScreenIfMissing(string id, GameObject panel, bool showLogo)
+    {
+        if (panel == null || string.IsNullOrWhiteSpace(id))
+        {
+            return;
+        }
+
+        for (int i = 0; i < menuScreens.Count; i++)
+        {
+            if (string.Equals(menuScreens[i].id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                if (menuScreens[i].panel == null)
+                {
+                    menuScreens[i].panel = panel;
+                }
+
+                return;
+            }
+        }
+
+        menuScreens.Add(new MenuScreen
+        {
+            id = id,
+            panel = panel,
+            showLogo = showLogo,
+            firstSelected = panel.GetComponentInChildren<Selectable>(true)
+        });
+    }
+
+    private void AddButtonBinding(Button button, MenuAction action, string targetMenuId, int legacySubmitIndex)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        menuButtons.Add(new MenuButtonBinding
+        {
+            button = button,
+            action = action,
+            targetMenuId = targetMenuId,
+            legacySubmitIndex = legacySubmitIndex
+        });
+    }
+
+    private void RebuildLookups()
+    {
+        screensById.Clear();
+        legacySubmitBindings.Clear();
+
+        foreach (MenuScreen screen in menuScreens)
+        {
+            if (screen == null || string.IsNullOrWhiteSpace(screen.id) || screen.panel == null)
+            {
+                continue;
+            }
+
+            screensById[screen.id] = screen;
+        }
+
+        foreach (MenuButtonBinding binding in menuButtons)
+        {
+            if (binding == null || binding.legacySubmitIndex < 0)
+            {
+                continue;
+            }
+
+            legacySubmitBindings[binding.legacySubmitIndex] = binding;
+        }
+    }
+
+    private void WireButtons()
+    {
+        foreach (MenuButtonBinding binding in menuButtons)
+        {
+            if (binding == null || binding.button == null)
+            {
+                continue;
+            }
+
+            MenuButtonBinding capturedBinding = binding;
+            binding.button.onClick.AddListener(async () =>
+            {
+                await RunMenuActionAsync(capturedBinding.action, capturedBinding.targetMenuId);
+            });
+        }
+    }
+
+    private async Task RunMenuActionAsync(MenuAction action, string targetMenuId)
+    {
+        try
+        {
+            switch (action)
+            {
+                case MenuAction.ShowMenu:
+                    ShowMenu(targetMenuId);
+                    break;
+                case MenuAction.StartGame:
+                    ShowMenu(MainMenuId);
+                    break;
+                case MenuAction.PlaySelectedSong:
+                    await PlaySelectedSongAsync();
+                    break;
+                case MenuAction.Back:
+                    Exit();
+                    break;
+                case MenuAction.ConfirmExit:
+                    ShowMenu(ExitMenuId);
+                    break;
+                case MenuAction.QuitGame:
+                    QuitGame();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+    }
+
+    private void ShowMenu(string menuId)
+    {
+        if (string.IsNullOrWhiteSpace(menuId))
+        {
+            return;
+        }
+
+        if (screensById.Count == 0)
+        {
+            RebuildLookups();
+        }
+
+        if (!screensById.TryGetValue(menuId, out MenuScreen targetScreen))
+        {
+            Debug.LogWarning("Menu screen not configured: " + menuId);
+            return;
+        }
+
+        foreach (MenuScreen screen in screensById.Values)
+        {
+            if (screen.panel != null)
+            {
+                screen.panel.SetActive(screen == targetScreen);
+            }
+        }
+
+        currentMenuId = targetScreen.id;
+
+        if (logoObject != null)
+        {
+            logoObject.SetActive(targetScreen.showLogo);
+        }
+
+        if (selectFirstControlOnOpen && EventSystem.current != null)
+        {
+            Selectable selected = targetScreen.firstSelected != null
+                ? targetScreen.firstSelected
+                : targetScreen.panel.GetComponentInChildren<Selectable>(true);
+
+            EventSystem.current.SetSelectedGameObject(selected != null ? selected.gameObject : null);
+        }
+    }
+
+    private void SetPassivePanels()
+    {
+        if (onlineIndicatorPanel != null)
+        {
+            onlineIndicatorPanel.SetActive(false);
+        }
+
+        if (cbFeedPanel != null)
+        {
+            cbFeedPanel.SetActive(true);
+        }
+
+        if (loadingPanel != null)
+        {
+            loadingPanel.SetActive(false);
+        }
+
+        if (loadingPreviewImage != null)
+        {
+            loadingPreviewImage.SetActive(false);
+        }
+    }
+
+    private void SelectSiblingControl(int direction)
+    {
+        if (EventSystem.current == null || string.IsNullOrEmpty(currentMenuId))
+        {
+            return;
+        }
+
+        if (!screensById.TryGetValue(currentMenuId, out MenuScreen screen) || screen.panel == null)
+        {
+            return;
+        }
+
+        Selectable[] controls = screen.panel.GetComponentsInChildren<Selectable>(false);
+        if (controls == null || controls.Length == 0)
+        {
+            return;
+        }
+
+        GameObject current = EventSystem.current.currentSelectedGameObject;
+        int currentIndex = -1;
+        for (int i = 0; i < controls.Length; i++)
+        {
+            if (controls[i] != null && controls[i].gameObject == current)
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        int nextIndex = currentIndex < 0 ? 0 : WrapIndex(currentIndex + direction, controls.Length);
+        EventSystem.current.SetSelectedGameObject(controls[nextIndex].gameObject);
+    }
+
+    private void StopPreviewAudio()
+    {
+        MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
+        if (musicPlayer != null && musicPlayer.previewAudioPlaying)
+        {
+            musicPlayer.StopPreviewAudio();
+        }
+    }
+
+    private void QuitGame()
+    {
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        gameManager.ExitGame(true);
+    }
+
+    private static Button FindButton(GameObject root, string objectName)
+    {
+        GameObject child = root != null ? FindChildGameObject(root.transform, objectName) : null;
+        return child != null ? child.GetComponent<Button>() : null;
+    }
+
+    private static GameObject FindChildGameObject(Transform root, string objectName)
+    {
+        if (root == null || string.IsNullOrEmpty(objectName))
+        {
+            return null;
+        }
+
+        Transform direct = root.Find(objectName);
+        if (direct != null)
+        {
+            return direct.gameObject;
+        }
+
+        foreach (Transform child in root)
+        {
+            GameObject match = FindChildGameObject(child, objectName);
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static T FindChildComponent<T>(Transform root, string objectName) where T : Component
+    {
+        GameObject child = FindChildGameObject(root, objectName);
+        return child != null ? child.GetComponent<T>() : null;
+    }
+
+    private static int WrapIndex(int index, int count)
+    {
+        if (count <= 0)
+        {
+            return -1;
+        }
+
+        int wrapped = index % count;
+        return wrapped < 0 ? wrapped + count : wrapped;
     }
 }

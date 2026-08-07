@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Leguar.LowHealth;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -43,6 +44,17 @@ public class NewRockMeter : MonoBehaviour
 
         // Invoke the event to notify listeners of the value change
         onValueChanged.Invoke(currentValue);
+
+        LowHealthController healthController = FindAnyObjectByType<LowHealthController>();
+        if (healthController)
+        {
+            healthController.SetPlayerHealthInstantly(currentValue / maxValue);
+        }
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        if (currentValue <= 0f && gameManager.allowFail)
+        {
+            gameManager.FailSong();
+        }
     }
     private void UpdateIndicators()
     {

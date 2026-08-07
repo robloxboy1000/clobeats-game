@@ -15,9 +15,15 @@ public class HighwayTextureChanger : MonoBehaviour
 
     void Awake()
     {
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string dataPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "highways";
+        string[] highways = Directory.GetFiles(dataPath);
+        System.Random random = new System.Random();
+        int randomIndex = random.Next(highways.Length);
+        string randomHighway = highways[randomIndex];
         foreach (SpriteRenderer sprite in sprites)
         {
-            sprite.sprite = AlbumLoader.LoadSpriteFromFile(Path.GetFullPath(Application.streamingAssetsPath + "\\highway.png"));
+            sprite.sprite = AlbumLoader.LoadSpriteFromFile(randomHighway);
         }
     }
 

@@ -16,11 +16,10 @@ public class SustainVisual : MonoBehaviour
         Vector3 s = transform.localScale;
         s.y = height;
         transform.localScale = s;
-        var mp = FindAnyObjectByType<MusicPlayer>();
-        endTime = (float)mp.GetElapsedTime() + duration;
+        var ns = FindAnyObjectByType<NoteSpawner>();
+        endTime = ns.GetTimeInSecondsAtTick(ns.currentTick) + duration;
         sustColor = color;
         gameObject.SetActive(true);
-        var ns = FindAnyObjectByType<NoteSpawner>();
         ns.AddObjectToGlobalMoveY(gameObject);
     }
 
@@ -33,7 +32,7 @@ public class SustainVisual : MonoBehaviour
     void Update()
     {
         var mp = FindAnyObjectByType<MusicPlayer>();
-        if ((float)mp.GetElapsedTime() >= endTime)
+        if ((float)mp.currentTimeDSP >= endTime)
         {
             NotifyFinished();
         }
@@ -46,6 +45,7 @@ public class SustainVisual : MonoBehaviour
 
     void NotifyFinished()
     {
+        
         if (SustainManager.Instance != null)
         {
             SustainManager.Instance.NotifyVisualFinished(laneIndex, this);

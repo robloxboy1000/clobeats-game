@@ -12,6 +12,7 @@ public class OldInputManager : MonoBehaviour
     private LaneInputManager laneInputManager;
     public bool isPaused = false;
     public bool denyInput = false;
+    public bool gamepadMode = false;
     public float currentTimeScale = 1;
     public float whammyAmount = -1;
     public float tiltAmount = -1;
@@ -96,22 +97,29 @@ public class OldInputManager : MonoBehaviour
             {
                 if (player.GetButtonDown("Green"))
                 {
+                    Debug.Log("Green button pressed");
                     if (menuManager.startPanel.activeSelf)
                     {
                         menuManager.Submit(2);
                     }
-                    else
+                    else if (menuManager.quickplayPanel.activeSelf)
                     {
                         menuManager.Submit(1);
+                    }
+                    else
+                    {
+                        menuManager.SubmitCurrentSelection();
                     }
                     
                 }
                 if (player.GetButtonDown("Red"))
                 {
+                    Debug.Log("Red button pressed");
                     menuManager.Exit();
                 }
                 if (player.GetButtonDown("Orange"))
                 {
+                    Debug.Log("Orange button pressed");
                     menuManager.Submit(4);
                 }
                 if (menuManager.quickplayPanel.activeSelf)
@@ -119,12 +127,23 @@ public class OldInputManager : MonoBehaviour
                     if (player.GetButtonSinglePressDown("StrumDown"))
                     {
                         UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
-                        menuList.currentSelectedItem++;
+                        if (menuList != null) menuList.SelectNext();
                     }
                     else if (player.GetButtonSinglePressDown("StrumUp"))
                     {
                         UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
-                        menuList.currentSelectedItem--;
+                        if (menuList != null) menuList.SelectPrevious();
+                    }
+                }
+                else
+                {
+                    if (player.GetButtonSinglePressDown("StrumDown"))
+                    {
+                        menuManager.SelectNextControl();
+                    }
+                    else if (player.GetButtonSinglePressDown("StrumUp"))
+                    {
+                        menuManager.SelectPreviousControl();
                     }
                 }
                 
@@ -132,29 +151,48 @@ public class OldInputManager : MonoBehaviour
         }
         else
         {
-            if (player.GetButtonDown("Green")) await InputNoteDown(0);
-            if (player.GetButtonUp("Green")) await InputNoteUp(0);
-            if (player.GetButtonDown("Red")) await InputNoteDown(1);
-            if (player.GetButtonUp("Red")) await InputNoteUp(1);
-            if (player.GetButtonDown("Yellow")) await InputNoteDown(2);
-            if (player.GetButtonUp("Yellow")) await InputNoteUp(2);
-            if (player.GetButtonDown("Blue")) await InputNoteDown(3);
-            if (player.GetButtonUp("Blue")) await InputNoteUp(3);
-            if (player.GetButtonDown("Orange")) await InputNoteDown(4);
-            if (player.GetButtonUp("Orange")) await InputNoteUp(4);
-
-            if (player.GetButtonDown("StrumUp")) await InputStrum();
-            if (player.GetButtonDown("StrumDown")) await InputStrum();
-
-            if (player.GetButtonUp("Start")) PauseGame();
-            if (player.GetButtonUp("Select")) ReleaseSP();
-
-            whammyAmount = player.GetAxis("Whammy");
-            tiltAmount = player.GetAxis("Tilt");
-            if (tiltAmount == 1)
+            if (!gamepadMode)
             {
-                ReleaseSP();
+                if (player.GetButtonDown("Green")) await InputNoteDown(0);
+                if (player.GetButtonUp("Green")) await InputNoteUp(0);
+                if (player.GetButtonDown("Red")) await InputNoteDown(1);
+                if (player.GetButtonUp("Red")) await InputNoteUp(1);
+                if (player.GetButtonDown("Yellow")) await InputNoteDown(2);
+                if (player.GetButtonUp("Yellow")) await InputNoteUp(2);
+                if (player.GetButtonDown("Blue")) await InputNoteDown(3);
+                if (player.GetButtonUp("Blue")) await InputNoteUp(3);
+                if (player.GetButtonDown("Orange")) await InputNoteDown(4);
+                if (player.GetButtonUp("Orange")) await InputNoteUp(4);
+
+                if (player.GetButtonDown("StrumUp")) await InputStrum();
+                if (player.GetButtonDown("StrumDown")) await InputStrum();
+
+                if (player.GetButtonUp("Start")) PauseGame();
+                if (player.GetButtonUp("Select")) ReleaseSP();
+
+                whammyAmount = player.GetAxis("Whammy");
+                tiltAmount = player.GetAxis("Tilt");
+                if (tiltAmount == 1)
+                {
+                    ReleaseSP();
+                }
             }
+            else
+            {
+                if (player.GetButtonDown("Green")) await InputNoteDown(0);
+                if (player.GetButtonUp("Green")) await InputNoteUp(0);
+                if (player.GetButtonDown("Red")) await InputNoteDown(1);
+                if (player.GetButtonUp("Red")) await InputNoteUp(1);
+                if (player.GetButtonDown("Yellow")) await InputNoteDown(2);
+                if (player.GetButtonUp("Yellow")) await InputNoteUp(2);
+                if (player.GetButtonDown("Blue")) await InputNoteDown(3);
+                if (player.GetButtonUp("Blue")) await InputNoteUp(3);
+                if (player.GetButtonDown("Orange")) await InputNoteDown(4);
+                if (player.GetButtonUp("Orange")) await InputNoteUp(4);
+                if (player.GetButtonUp("Start")) PauseGame();
+                if (player.GetButtonUp("Select")) ReleaseSP();
+            }
+            
         }
         
     }

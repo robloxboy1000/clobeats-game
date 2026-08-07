@@ -47,7 +47,7 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _userData:
     configVars:
-      updateLoop: 1
+      updateLoop: 7
       alwaysUseUnityInput: 0
       windowsStandalonePrimaryInputSource: 0
       osx_primaryInputSource: 0
@@ -242,7 +242,7 @@ MonoBehaviour:
       _descriptiveName: Green Fret
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 1
@@ -251,7 +251,7 @@ MonoBehaviour:
       _descriptiveName: Red Fret
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 2
@@ -260,7 +260,7 @@ MonoBehaviour:
       _descriptiveName: Yellow Fret
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 3
@@ -269,7 +269,7 @@ MonoBehaviour:
       _descriptiveName: Blue Fret
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 4
@@ -278,7 +278,7 @@ MonoBehaviour:
       _descriptiveName: Orange Fret
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 7
@@ -287,7 +287,7 @@ MonoBehaviour:
       _descriptiveName: Start / Pause Button
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 8
@@ -296,7 +296,7 @@ MonoBehaviour:
       _descriptiveName: Select
       _positiveDescriptiveName: 
       _negativeDescriptiveName: 
-      _behaviorId: 1
+      _behaviorId: 2
       _userAssignable: 1
       _categoryId: 0
     - _id: 9
@@ -428,7 +428,7 @@ MonoBehaviour:
       _buttonShortPressTime: 0.25
       _buttonShortPressExpiresIn: 0
       _buttonLongPressTime: 0
-      _buttonLongPressExpiresIn: 0.01
+      _buttonLongPressExpiresIn: 0.001
       _buttonDeadZone: 0.5
       _buttonDownBuffer: 0
       _buttonRepeatRate: 30

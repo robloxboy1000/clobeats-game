@@ -29,21 +29,10 @@ public class TMPInstanceMaker : MonoBehaviour
         }
     }
     public Dictionary<int, GameObject> textObjects = new Dictionary<int, GameObject>();
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 
     public int CreateTextObject(string text, Transform parent, Vector2 position, Vector3 rotation, float size)
     {
-        int hashCode = text.GetHashCode();
+        int hashCode = Mathf.Abs(text.GetHashCode());
         GameObject textObject = new GameObject(hashCode.ToString());
         textObject.transform.SetParent(parent);
         textObject.transform.position = position;

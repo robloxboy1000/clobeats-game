@@ -14,16 +14,22 @@ using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
 using TMPro;
 using System.Net.WebSockets;
+using UnityEngine.Networking;
 
 
 public class GameManager : MonoBehaviour
 {
+    public float audioOffsetSeconds = 0.04f;
     public bool enableSustains = true;
-    public bool thirtyFPSCap = false;
+    public bool initialized = false;
+    public bool allowFail = true;
+    [Tooltip("Change this to the actual server you want to connect to.")]
+    public string serverIPAddr = "pixlplaya5.xyz";
     public List<string> songFolders;
 
     public Dictionary<int, SongInfo> cachedSongs = new Dictionary<int, SongInfo>();
     public Dictionary<int, SongEntryInfo> cachedEntries = new Dictionary<int, SongEntryInfo>();
+    public Dictionary<int, AudioClip> cachedAudioClips = new Dictionary<int, AudioClip>();
 
     public class SongInfo
     {
@@ -101,7 +107,22 @@ public class GameManager : MonoBehaviour
         ["Expert"] = new Dictionary<int,int> { {97,0}, {98,1}, {99,2}, {100,3}, {101,4}, {96,7}, {95,7} },
     };
 
-    public void ExitGame()
+    public void ExitGame(bool ask)
+    {
+        if (ask)
+        {
+            MessageBox.Instance.Show("Are you sure you want to exit the game?<br>All unsaved data will be lost.", "Message", ForceExitGame);
+        }
+        else
+        {
+            #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+            #endif
+            UnityEngine.Application.Quit();
+        }
+        
+    }
+    public void ForceExitGame()
     {
         #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -119,8 +140,7 @@ public class GameManager : MonoBehaviour
             new Vector3(0,0,0),
             24);
         yield return new WaitForSeconds(6);
-        LoadingManager lm = FindAnyObjectByType<LoadingManager>();
-        lm.LoadScene("ScoreScreen");
+        ForceExitGame();
     }
 
     // Start is called before the first frame update
@@ -131,6 +151,12 @@ public class GameManager : MonoBehaviour
     void Awake()
     {
         DontDestroyOnLoad(this.gameObject);
+        if (unDestructibleLoadingPhraseScreen == null)
+        {
+            Instantiate(unDestructibleLoadingPhraseScreen);
+            DontDestroyOnLoad(unDestructibleLoadingPhraseScreen);
+            unDestructibleLoadingPhraseScreen.SetActive(false);
+        }
     }
 
     public SongEntryInfo GetCachedSongEntry(int id)
@@ -168,11 +194,49 @@ public class GameManager : MonoBehaviour
         });
         parser.Close();
     }
+    public IEnumerator CacheAudioFile(string filePath, int songID)
+    {
+        string uriPath = new System.Uri(filePath).AbsoluteUri;
+        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(uriPath, AudioType.UNKNOWN))
+        {
+            yield return uwr.SendWebRequest();
+            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
+            {
+                Debug.LogError("Error loading audio clip: " + uwr.error);
+            }
+            else
+            {
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
+                if (clip != null)
+                {
+                    cachedAudioClips.Add(songID, clip);
+                }
+            }
+        }
+    }
+    public string FindSongInPath(string path)
+    {
+        SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
+        // Find a file named "song" with a supported extension and set the audio path
+        string[] songFiles = Directory.GetFiles(path);
+        var songMatch = songFiles
+            .Select(f => new { path = f, name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant() })
+            .FirstOrDefault(x => x.name == "song" && songFolderLoader.supportedFormats.Contains(x.ext));
+
+        if (songMatch != null)
+        {
+            return songMatch.path;
+        }
+        else
+        {
+            return string.Empty;
+        }
+    }
     public async Task ReadMidiFile(string path)
     {
         // Read MIDI, cache it by a stable hash of the full path, and copy into current song queues
         string fullPath = Path.GetFullPath(path ?? string.Empty);
-        int songID = fullPath.GetHashCode();
+        int songID = Mathf.Abs(fullPath.GetHashCode());
         //Debug.Log(songID);
 
         try
@@ -204,6 +268,11 @@ public class GameManager : MonoBehaviour
                     currentSongLyrics = new List<NoteSpawner.LyricEventInfo>(ucsi.lyricEvents);
                     currentSongLengthInTicks = ucsi.songLengthInTicks;
                 }
+                else
+                {
+                    Debug.LogError("[ReadMidiFile] Failed to read MIDI file.");
+                    MessageBox.Instance.Show("Failed to read MIDI file.", "Error", null);
+                }
             }
         }
         catch (Exception ex)
@@ -216,7 +285,7 @@ public class GameManager : MonoBehaviour
     {
         // Read MIDI, cache it by a stable hash of the full path, and copy into current song queues
         string fullPath = Path.GetFullPath(path ?? string.Empty);
-        int songID = fullPath.GetHashCode();
+        int songID = Mathf.Abs(fullPath.GetHashCode());
         //Debug.Log(songID);
 
         try
@@ -248,6 +317,11 @@ public class GameManager : MonoBehaviour
                     currentSongVenueCueEvents = new List<NoteSpawner.GlobalEventInfo>(ucsi.venueAnimCueEvents);
                     currentSongLyrics = new List<NoteSpawner.LyricEventInfo>(ucsi.lyricEvents);
                     currentSongLengthInTicks = ucsi.songLengthInTicks;
+                }
+                else
+                {
+                    Debug.LogError("[ReadChartFile] Failed to read chart file.");
+                    MessageBox.Instance.Show("Failed to read Chart file.", "Error", null);
                 }
             }
         }
@@ -326,26 +400,33 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogWarning("CacheMidiFile: failed to parse BEAT track: " + ex.Message);
         }
-        // choose difficulty key (string) from player settings or UI
-        string chosenDiff = ddst;
-        string chosenPart = currentPart.ToUpper();
-        
-        if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
-        if (chosenPart == "DRUMS")
+        try
         {
-            if (partDrumsDifficultyMappings.TryGetValue(chosenDiff, out var map))
+            // choose difficulty key (string) from player settings or UI
+            string chosenDiff = ddst;
+            string chosenPart = currentPart.ToUpper();
+        
+            if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
+            if (chosenPart == "DRUMS")
             {
-                var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
-                foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+                if (partDrumsDifficultyMappings.TryGetValue(chosenDiff, out var map))
+                {
+                    var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
+                    foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+                }
+            }
+            else
+            {
+                if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
+                {
+                    var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
+                    foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
+                }
             }
         }
-        else
+        catch (Exception ex)
         {
-            if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
-            {
-                var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
-                foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
-            }
+            Debug.LogWarning("[GameManager.CacheMidiFile] Failed to parse notes: " + ex.Message);
         }
 
         try
@@ -355,7 +436,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheMidiFile: Failed to parse lyrics: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheMidiFile] Failed to parse lyrics: " + ex.Message);
         }
         
         
@@ -380,6 +461,7 @@ public class GameManager : MonoBehaviour
                         bpm = bpm,
                         timeSignature = "4"
                     });
+                    Debug.Log("[GameManager.CacheMidiFile] parsed Tempo entry: \"" + bpm + "\" at tick " + tick);
                 }
                 else if (te.Event is Melanchall.DryWetMidi.Core.TimeSignatureEvent tse)
                 {
@@ -397,12 +479,13 @@ public class GameManager : MonoBehaviour
                     {
                         info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = tick, bpm = 120f, timeSignature = ts });
                     }
+                    Debug.Log("[GameManager.CacheMidiFile] parsed Time Signature entry: \"" + ts + "\" at tick " + tick);
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheMidiFile: failed to parse timed events: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheMidiFile] failed to parse tempo map: " + ex.Message);
         }
 
         try
@@ -412,7 +495,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheMidiFile: failed to parse Venue track: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheMidiFile] failed to parse Venue/Scripting track: " + ex.Message);
         }
 
         // Compute max tick from collected noteInfos (already scaled)
@@ -429,7 +512,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheMidiFile: failed to compute maxTick: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheMidiFile] failed to compute maxTick: " + ex.Message);
         }
 
         // If we didn't get any explicit length from notes, fall back to last sync time
@@ -453,7 +536,7 @@ public class GameManager : MonoBehaviour
                 {
                     foreach (var be in generated)
                     {
-                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime);
                         if (!alreadyExists) info.beatEvents.Add(be);
                     }
                 }
@@ -461,7 +544,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheMidiFile: failed to generate beat events: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheMidiFile] failed to generate beat events: " + ex.Message);
         }
 
         // Store in cache (pool)
@@ -506,6 +589,7 @@ public class GameManager : MonoBehaviour
                 if (string.Equals(k, "Resolution", StringComparison.OrdinalIgnoreCase))
                 {
                     if (int.TryParse(v, out int res)) info.resolution = res;
+                    Debug.Log("[GameManager.CacheChartFile] parsed resolution: " + res);
                 }
             }
         }
@@ -528,6 +612,7 @@ public class GameManager : MonoBehaviour
                     {
                         float bpm = bpmUnSolved / 1000;
                         info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = tick, bpm = bpm, timeSignature = "4" });
+                        Debug.Log("[GameManager.CacheChartFile] parsed Tempo entry: \"" + bpm + "\" at tick " + tick);
                     }
                 }
                 else if (typ == "TS")
@@ -545,6 +630,7 @@ public class GameManager : MonoBehaviour
                     {
                         info.syncInfos.Enqueue(new NoteSpawner.SyncInfo { time = tick, bpm = 120f, timeSignature = ts });
                     }
+                    Debug.Log("[GameManager.CacheChartFile] parsed Time Signature entry: \"" + ts + "\" at tick " + tick);
                 }
             }
         }
@@ -567,6 +653,7 @@ public class GameManager : MonoBehaviour
                     var ex = info.globalEvents[tick];
                     if (!string.IsNullOrEmpty(ex.value)) ex.value += "|" + txt; else ex.value = txt;
                 }
+                Debug.Log("[GameManager.CacheChartFile] parsed Event entry: \"" + txt + "\" at tick " + tick);
             }
         }
 
@@ -617,6 +704,7 @@ public class GameManager : MonoBehaviour
                     lengthMs = 0f,
                     fret = fret
                 });
+                Debug.Log("[GameManager.CacheChartFile] parsed Note entry: \"fret=" + fret + ", length=" + length + "\" at tick " + tick);
             }
         }
 
@@ -637,7 +725,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheChartFile: failed to compute maxTick: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheChartFile] failed to compute maxTick: " + ex.Message);
         }
 
         if (maxTick == 0 && info.syncInfos.Count > 0)
@@ -660,7 +748,7 @@ public class GameManager : MonoBehaviour
                 {
                     foreach (var be in generated)
                     {
-                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime);
                         if (!alreadyExists) info.beatEvents.Add(be);
                     }
                 }
@@ -668,7 +756,7 @@ public class GameManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("CacheChartFile: failed to generate beat events: " + ex.Message);
+            Debug.LogWarning("[GameManager.CacheChartFile] failed to generate beat events: " + ex.Message);
         }
 
         // Store in cache (pool)
@@ -883,6 +971,7 @@ public class GameManager : MonoBehaviour
                     lengthMs = enableSustains ? (float)(lengthSeconds * 1000.0) : 0,
                     fret = fret
                 });
+                Debug.Log("[GameManager.CacheMidiFile.GetNotesFromTrackByName] parsed Note entry: \"fret=" + fret + ", length=" + (enableSustains ? (int)Math.Round(note.Length * scale) : 0) + "\" at tick " + (int)Math.Round(note.Time * scale));
             }
 
             // For each freestyle region create a parent sustain entry only (single visual)
@@ -1045,17 +1134,23 @@ public class GameManager : MonoBehaviour
 
                 foreach (var note in matchingNotes)
                 {
-                    string sungNote;
+                    int sungNote;
                     
                     double freq = 440.0 * Math.Pow(2.0, (note.NoteNumber - 69) / 12.0);
-                    sungNote = freq.ToString("F0");
-                    
+                    sungNote = Mathf.RoundToInt((float)freq);
+                    var tempoMap = midi.GetTempoMap();
+                    var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
+                    var metricLength = TimeConverter.ConvertTo<MetricTimeSpan>(note.Length, tempoMap);
+                    double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
+                    double lengthSeconds = metricLength.TotalMicroseconds / 1_000_000.0;
 
                     result.Add(new NoteSpawner.LyricEventInfo
                     {
                         spawnTick = (float)Math.Round(note.Time * scale),
+                        spawnTickMs = (float)(startSeconds * 1000.0),
                         sungNote = sungNote,
                         length = (float)Math.Round(note.Length * scale),
+                        lengthMs = (int)(lengthSeconds * 1000.0),
                         value = lyricValue
                     });
                 }
@@ -1099,13 +1194,23 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-    public void EnableLoadUnCachedSongVisual(GameObject loadingCanvas, string IniPath)
+    public async Task EnableLoadUnCachedSongVisual(GameObject loadingCanvas, string IniPath)
     {
         if (loadingCanvas != null)
         {
             loadingCanvas.SetActive(true);
             TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay/LoadingPhraseText").GetComponent<TextMeshProUGUI>();
-            textObj.text = GetUnCachedSongLoadingPhrase(IniPath);
+            string ldgphr = GetUnCachedSongLoadingPhrase(IniPath);
+            if (ldgphr != string.Empty)
+            {
+                textObj.text = ldgphr;
+            }
+            else
+            {
+                string serverLoad = await GetStringFromAddr($"http://{serverIPAddr}/clobeats/getRandLdgPhr.php");
+                string serverLoadReplaced = serverLoad.Replace("%SERVERNAME%", serverIPAddr, StringComparison.OrdinalIgnoreCase);
+                textObj.text = serverLoadReplaced;
+            }
         }
     }
     public string GetUnCachedSongLoadingPhrase(string iniPath)
@@ -1126,7 +1231,6 @@ public class GameManager : MonoBehaviour
     {
         UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
         GameObject gp = GameObject.Find("GuitarPlayer");
-        unDestructibleLoadingPhraseScreen = GameObject.Find("SongLoadingCanvas");
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
         if (uiUpdater != null)
         {
@@ -1139,35 +1243,23 @@ public class GameManager : MonoBehaviour
         {
             venueAnimationPlayer.Load();
         }
-        if (gp != null)
-        {
-            gp.transform.position = new Vector3(0, -10, 10);
-        }
         if (unDestructibleLoadingPhraseScreen != null && unDestructibleLoadingPhraseScreen.activeSelf)
         {
             DisableLoadSongVisual(unDestructibleLoadingPhraseScreen);
         }
         //sFXPlayer.PlayClip("StartCheer1");
-
+        
         if (SceneManager.GetSceneByBuildIndex(2).isLoaded)
         {
-            GameObject venue = GameObject.Find("3DVenue_Camera");
-            if (venue != null)
-            {
-                Animation venueAnim = venue.GetComponent<Animation>();
-                venueAnim.Play("VenueEntry");
-                yield return new WaitForSecondsRealtime(6f);
-            }
+            VenueAnimationPlayer vap = FindAnyObjectByType<VenueAnimationPlayer>();
+            AnimationClip vEntry = Resources.Load<AnimationClip>("VenueEntry");
+            vap.TrySpawnNewCamera(Mathf.Abs(GetHashCode()), vEntry, new Vector3(1000,0,-1100), new Vector3(0,180,0), false);
         }
-        
+
         if (gp != null)
         {
-            Animation highwayAnim = gp.GetComponent<Animation>();
-            highwayAnim.Play("ShowHighway");
-            sFXPlayer.PlayHighwayRiseClip();
-            yield return new WaitForSecondsRealtime(1f);
-            highwayAnim.Stop();
             NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
+            gp.transform.position = new Vector3(0, 0, 0);
             if (noteSpawner != null)
             {
                 noteSpawner.Play();
@@ -1180,9 +1272,18 @@ public class GameManager : MonoBehaviour
             uiUpdater.ScoreVisibility(true);
             sFXPlayer.PlayScoreShowClip();
         }
+        yield return null;
         
         
-        
+    }
+
+    public void FailSong()
+    {
+        MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+        StartCoroutine(musicPlayer.EndSong(false));
+        SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
+        sFXPlayer.PlaySongFailedClip();
+        ForceExitGame();
     }
 
     public void ResetAllValues()
@@ -1227,8 +1328,7 @@ public class GameManager : MonoBehaviour
             }
             catch (Exception ex)
             {
-                Debug.LogError("Server error occoured: " + ex.Message);
-                return null;
+                return "Server error occoured: " + ex.Message;
             }
         }
     }
@@ -1295,15 +1395,6 @@ public class GameManager : MonoBehaviour
     {
         ddst = PlayerPrefs.GetString("SelectedDifficulty");
         currentPart = PlayerPrefs.GetString("SelectedPart");
-        thirtyFPSCap = PlayerPrefs.GetInt("ThirtyFPSCap", 0) == 1;
-        if (thirtyFPSCap)
-        {
-            Application.targetFrameRate = 30;
-        }
-        else
-        {
-            Application.targetFrameRate = -1;
-        }
     }
     
 }

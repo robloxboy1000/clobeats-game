@@ -29,20 +29,15 @@ public class PlayerPrefsLoader : MonoBehaviour
     private TMPro.TMP_Dropdown qualityDropdown;
     private TMPro.TextMeshProUGUI resolutionText;
     public bool autoLoad = false;
-
     public GameObject blankImage;
     public GameObject indefiniteLoadingScreen;
     public List<string> songItemNames = new List<string>();
     bool isFullscreen = true;
-    // Start is called before the first frame update
-    void Start()
-    {
-        
 
-    }
     async void Awake()
     {
-        
+        QualitySettings.SetQualityLevel(2); // force normal quality
+        Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow); // force fullscreen
         pathInputField = gameObject.transform.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
         if (pathInputField != null)
         {
@@ -53,19 +48,16 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             speedInputField.value = PlayerPrefs.GetFloat("Hyperspeed", 5f);
         }
-
         venueToggle = gameObject.transform.Find("VenueToggle").GetComponent<Toggle>();
         if (venueToggle != null)
         {
             venueToggle.isOn = PlayerPrefs.GetInt("EnableVenue", 1) == 1;
         }
-
         enableThirtyFPSCapToggle = gameObject.transform.Find("enableThirtyFPSCapToggle").GetComponent<Toggle>();
         if (enableThirtyFPSCapToggle != null)
         {
             enableThirtyFPSCapToggle.isOn = PlayerPrefs.GetInt("ThirtyFPSCap", 0) == 1;
         }
-
         difficultyDropdown = gameObject.transform.Find("DifficultyDropdown").GetComponent<TMPro.TMP_Dropdown>();
         if (difficultyDropdown != null)
         {
@@ -99,7 +91,6 @@ public class PlayerPrefsLoader : MonoBehaviour
                 partDropdown.value = savedPart;
             }
         }
-
         qualityDropdown = gameObject.transform.Find("QualityDropdown").GetComponent<TMPro.TMP_Dropdown>();
         if (qualityDropdown != null)
         {
@@ -107,20 +98,17 @@ public class PlayerPrefsLoader : MonoBehaviour
             if (savedQuality >= 0 && savedQuality < qualityDropdown.options.Count)
             {
                 qualityDropdown.value = savedQuality;
-                //QualitySettings.SetQualityLevel(savedQuality);
             }
             qualityDropdown.onValueChanged.AddListener((index) =>
             {
                 QualitySettings.SetQualityLevel(index);
             });
         }
-
         resolutionText = gameObject.transform.Find("ResolutionText").GetComponent<TMPro.TextMeshProUGUI>();
         if (resolutionText != null)
         {
             resolutionText.text = Display.displays[0].renderingWidth + " x " + Display.displays[0].renderingHeight + " @ " + Screen.currentResolution.refreshRateRatio + "Hz";
         }
-
         enableBarBeatsToggle = gameObject.transform.Find("EnableBarBeatsToggle").GetComponent<Toggle>();
         if (enableBarBeatsToggle != null)
         {
@@ -148,7 +136,19 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
             
         }
-
+        Toggle liteToggle = gameObject.transform.Find("enableLiteToggle").GetComponent<Toggle>();
+        if (liteToggle != null)
+        {
+            liteToggle.isOn = PlayerPrefs.GetInt("EnableLite", 0) == 1;
+            if (liteToggle.isOn)
+            {
+                PlayerPrefs.SetInt("EnableLite", 1);
+            }
+            else
+            {
+                PlayerPrefs.SetInt("EnableLite", 0);
+            }
+        }
         clearSettingsButton = gameObject.transform.Find("ClearSettingsButton").GetComponent<Button>();
         if (clearSettingsButton != null)
         {
@@ -169,19 +169,9 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             toggleFullscreenButton.onClick.AddListener(() =>
             {
-                
-                if (isFullscreen)
-                {
-                    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, false);
-                }
-                else
-                {
-                    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
-                }
-                
+                FullScreen();
             });
         }
-
         playButton = gameObject.transform.Find("PlayButton").GetComponent<Button>();
         playButton.onClick.AddListener(async () =>
         {
@@ -197,8 +187,12 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("GraphicsQuality", qualityDropdown.value);
             PlayerPrefs.Save();
-
-            SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
+            GameManager gameManager = FindAnyObjectByType<GameManager>();
+            if (gameManager != null)
+            {
+                await gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(pathInputField.text, "song.ini"));
+            }
+            SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
             if (songFolderLoader != null)
             {
                 songFolderLoader.songFolderPath = pathInputField.text;
@@ -208,24 +202,19 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 Debug.LogError("SongFolderLoader not found in scene!");
             }
-
-            GameManager gameManager = FindAnyObjectByType<GameManager>();
-            if (gameManager != null)
+            
+            SceneManager.LoadScene("Gameplay"); // load synchronously
+            
+            NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
+            if (noteSpawner)
             {
-                gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+                await noteSpawner.Load();
+                await Task.Delay(1000);
+                await noteSpawner.InitGameplay();
             }
 
-            LoadingManager loader = FindFirstObjectByType<LoadingManager>();
-            if (loader != null)
-            {
-                loader.LoadScene("Gameplay");
-            }
-            else
-            {
-                Debug.LogError("LoadingManager not found in scene!");
-            }
+            
         });
-        
         mainMenuButton = gameObject.transform.Find("LoadMainMenuButton").GetComponent<Button>();
         mainMenuButton.onClick.AddListener(async () =>
         {
@@ -241,7 +230,6 @@ public class PlayerPrefsLoader : MonoBehaviour
             PlayerPrefs.SetInt("ThirtyFPSCap", enableThirtyFPSCapToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("GraphicsQuality", qualityDropdown.value);
             PlayerPrefs.Save();
-
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
             if (loader != null)
             {
@@ -249,47 +237,21 @@ public class PlayerPrefsLoader : MonoBehaviour
                 {
                     loader.LoadScene("MainMenu");
                 }
-                
             }
             else
             {
                 Debug.LogError("LoadingManager not found in scene!");
             }
         });
-
         Button enterVenueButton = gameObject.transform.Find("EnterVenueButton").GetComponent<Button>();
         if (enterVenueButton)
         {
-            enterVenueButton.onClick.AddListener( () =>
+            enterVenueButton.onClick.AddListener( async () =>
             {
-                LoadingManager loader = FindFirstObjectByType<LoadingManager>();
-                if (loader != null)
-                {
-                    loader.LoadScene("v_PaddedRoom_JT");
-                }
-                else
-                {
-                    Debug.LogError("LoadingManager not found in scene!");
-                }
+                MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+                await musicPlayer.TestFullAudio();
             });
         }
-        TMP_InputField seekToInputField = gameObject.transform.Find("SeekToField").GetComponent<TMP_InputField>();
-        if (seekToInputField)
-        {
-            
-        }
-
-        GameManager gameManager = FindAnyObjectByType<GameManager>();
-        DontDestroyOnLoad(gameManager.unDestructibleLoadingPhraseScreen);
-        gameManager.DisableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen);
-        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        
-        gameManager.savePath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "save";
-        if (!Directory.Exists(gameManager.savePath))
-        {
-            Directory.CreateDirectory(gameManager.savePath);
-        }
-
         if (autoLoad)
         {
             Debug.Log("Auto Load enabled.");
@@ -303,9 +265,17 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
             PlayerPrefs.SetInt("EnableVenue", 1);
             PlayerPrefs.SetInt("EnableAutoplay", 0);
-            PlayerPrefs.GetInt("EnableVSync", 0);
+            PlayerPrefs.SetInt("EnableVSync", 0);
             Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
-            await LoadGame();
+            
+            if (await LoadGame())
+            {
+                Debug.Log("Loading successful.");
+            }
+            else
+            {
+                Debug.LogWarning("Loading failed.");
+            }
         }
         else
         {
@@ -319,16 +289,54 @@ public class PlayerPrefsLoader : MonoBehaviour
                 indefiniteLoadingScreen.SetActive(false);
             }
         }
+        
+        LoadAllSFX();
+        
+    }
 
+    void OnEnable()
+    {
+        InitLoadingScreen();
+    }
+
+    public void InitLoadingScreen()
+    {
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
+        if (!gameManager.initialized)
+        {
+            GameObject loadscreen = Instantiate(gameManager.unDestructibleLoadingPhraseScreen);
+            DontDestroyOnLoad(loadscreen);
+            gameManager.unDestructibleLoadingPhraseScreen = loadscreen;
+            gameManager.DisableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen);
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            gameManager.savePath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "save";
+            if (!Directory.Exists(gameManager.savePath))
+            {
+                Directory.CreateDirectory(gameManager.savePath);
+            }
+            gameManager.initialized = true;
+        }
+    }
+
+    public void LoadAllSFX()
+    {
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
         if (sFXPlayer != null)
         {
-            foreach (AudioClip clip in Resources.LoadAll<AudioClip>("SFX"))
+            if (sFXPlayer.loadedAudioClips.Count == 0)
             {
-                sFXPlayer.LoadActualClip(clip);
+                foreach (AudioClip clip in Resources.LoadAll<AudioClip>("SFX"))
+                {
+                    sFXPlayer.LoadActualClip(clip);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("All sound effects are already loaded.");
             }
         }
     }
+
     public async Task<bool> LoadGame(bool loadMainMenu = true)
     {
         if (indefiniteLoadingScreen != null)
@@ -348,61 +356,12 @@ public class PlayerPrefsLoader : MonoBehaviour
             return false;
         }
     }
+
     public async Task<bool> LoadWholeGame(bool loadMainMenu = true)
     {
         Debug.Log("Loading game...");
-        songItemNames.Clear();
-        if (songItemNames.Count == 0)
-        {
-            try
-            {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string songFoldersPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
-                
-                
-                GameManager gameManager = FindAnyObjectByType<GameManager>();
-                if (!Directory.Exists(songFoldersPath))
-                {
-                    Directory.CreateDirectory(songFoldersPath);
-                }
-                    
-                string[] directories = Directory.GetDirectories(songFoldersPath);
-                if (directories != null)
-                {
-                    int ind = 0;
-                    TextMeshProUGUI loadingText = indefiniteLoadingScreen.transform.Find("LoadingText").GetComponent<TextMeshProUGUI>();
-                    loadingText.text = "Loading songs: (" + ind + " songs)";
-                    
-                    foreach (string dir in directories)
-                    {
-                        int hash = dir.GetHashCode();
-                        int number = ind;
-                        gameManager.songFolders.Add(dir);
-                        songItemNames.Add(dir);
-                        gameManager.CacheSingleSong(dir, hash, number);
-                        ind++;
-                        loadingText.text = "Loading songs: (" + ind + " songs)";
-                        await Task.Yield();
-                    }
-                }
-                
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("Song listing failed: " + ex);
-                //RegenerateCacheFile();
-                return false;
-            }
-        }
-        else
-        {
-            return false;
-        }
-        
-
-        Shader.WarmupAllShaders();
-        ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
-        shaderOven.shaders.WarmUp();
+        await LoadPart1(); // loads local songs
+        LoadPart2(); // loads shaders
         if (indefiniteLoadingScreen != null)
         {
             indefiniteLoadingScreen.SetActive(false);
@@ -430,9 +389,83 @@ public class PlayerPrefsLoader : MonoBehaviour
         
     }
 
+    public async Task<bool> LoadPart1()
+    {
+        songItemNames.Clear();
+        if (songItemNames.Count == 0)
+        {
+            try
+            {
+                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                string songFoldersPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
+                GameManager gameManager = FindAnyObjectByType<GameManager>();
+                if (!Directory.Exists(songFoldersPath))
+                {
+                    Directory.CreateDirectory(songFoldersPath);
+                }
+                string[] directories = Directory.GetDirectories(songFoldersPath);
+                if (directories != null)
+                {
+                    int ind = 0;
+                    TextMeshProUGUI loadingText = indefiniteLoadingScreen.transform.Find("LoadingText").GetComponent<TextMeshProUGUI>();
+                    loadingText.text = "Loading songs: (" + ind + " songs)";
+                    foreach (string dir in directories)
+                    {
+                        int hash = Mathf.Abs(dir.GetHashCode());
+                        int number = ind;
+                        gameManager.songFolders.Add(dir);
+                        songItemNames.Add(dir);
+                        gameManager.CacheSingleSong(dir, hash, number);
+                        StartCoroutine(gameManager.CacheAudioFile(gameManager.FindSongInPath(dir), hash));
+                        Debug.Log("Cached song dir \"" + dir + "\" with absolute hash code " + hash);
+                        ind++;
+                        loadingText.text = "Loading songs: (" + ind + " songs)";
+                        await Task.Yield();
+                    }
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Song listing failed: " + ex);
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public void LoadPart2()
+    {
+        Shader.WarmupAllShaders();
+        ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
+        shaderOven.shaders.WarmUp();
+    }
+
+    void FullScreen()
+    {
+        if (isFullscreen)
+        {
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            isFullscreen = false;
+        }
+        else
+        {
+            Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
+            isFullscreen = true;
+        }
+    }
+
     // Update is called once per frame
     void Update()
     {
+        GameManager gm = FindAnyObjectByType<GameManager>();
         if (playButton != null)
         {
             if (!string.IsNullOrEmpty(pathInputField.text) && System.IO.Directory.Exists(pathInputField.text))
@@ -440,23 +473,6 @@ public class PlayerPrefsLoader : MonoBehaviour
             else
             playButton.interactable = false;
         }
-        if (pathInputField != null)
-        {
-            SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-            if (songFolderLoader != null)
-            {
-                if (songFolderLoader.songFolderPath != pathInputField.text)
-                {
-                    if (System.IO.Directory.Exists(pathInputField.text))
-                    {
-                        songFolderLoader.songFolderPath = pathInputField.text;
-                        //songFolderLoader.Load();
-                    }
-                }
-                
-            }
-        }
-
         if (resolutionText != null)
         {
             resolutionText.text = Display.displays[0].renderingWidth + " x " + Display.displays[0].renderingHeight + " @ " + Screen.currentResolution.refreshRateRatio + "Hz";
@@ -466,10 +482,78 @@ public class PlayerPrefsLoader : MonoBehaviour
             LaneInputManager laneInputManager = FindAnyObjectByType<LaneInputManager>();
             laneInputManager.autoPlayEnabled = autoplayToggle.isOn;
         }
-        TMP_InputField seekToInputField = gameObject.transform.Find("SeekToField").GetComponent<TMP_InputField>();
-        if (seekToInputField)
+        Toggle vSyncToggle = gameObject.transform.Find("enableVSyncToggle").GetComponent<Toggle>();
+        if (vSyncToggle != null)
         {
-            PlayerPrefs.SetFloat("PracticeModeSeekTo", float.Parse(seekToInputField.text));
+            if (vSyncToggle.isOn)
+            {
+                if (enableThirtyFPSCapToggle != null)
+                {
+                    if (enableThirtyFPSCapToggle.isOn)
+                    {
+                        enableThirtyFPSCapToggle.isOn = false;
+                    }
+                    enableThirtyFPSCapToggle.interactable = false;
+                }
+                QualitySettings.vSyncCount = 1;
+            }
+            else
+            {
+                if (enableThirtyFPSCapToggle != null)
+                {
+                    enableThirtyFPSCapToggle.interactable = true;
+                }
+                QualitySettings.vSyncCount = 0;
+            }
+            
+        }
+        Toggle liteToggle = gameObject.transform.Find("enableLiteToggle").GetComponent<Toggle>();
+        if (liteToggle != null)
+        {
+            if (liteToggle.isOn)
+            {
+                PlayerPrefs.SetInt("EnableLite", 1);
+            }
+            else
+            {
+                PlayerPrefs.SetInt("EnableLite", 0);
+            }
+        }
+        Toggle vidToggle = gameObject.transform.Find("enableVideoToggle").GetComponent<Toggle>();
+        if (vidToggle != null)
+        {
+            if (vidToggle.isOn)
+            {
+                PlayerPrefs.SetInt("EnableVideo", 1);
+            }
+            else
+            {
+                PlayerPrefs.SetInt("EnableVideo", 0);
+            }
+        }
+        Toggle failToggle = gameObject.transform.Find("enableFailToggle").GetComponent<Toggle>();
+        if (failToggle != null)
+        {
+            if (failToggle.isOn)
+            {
+                gm.allowFail = true;
+            }
+            else
+            {
+                gm.allowFail = false;
+            }
+        }
+
+        if (enableThirtyFPSCapToggle != null)
+        {
+            if (enableThirtyFPSCapToggle.isOn)
+            {
+                UnityEngine.Application.targetFrameRate = 30;
+            }
+            else
+            {
+                UnityEngine.Application.targetFrameRate = -1;
+            }
         }
     }
 }

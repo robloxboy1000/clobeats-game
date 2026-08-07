@@ -98,6 +98,112 @@ public class MusicPlayer : MonoBehaviour
             bassInitialized = false;
         }
     }
+
+    public async Task TestFullAudio()
+    {
+        Debug.Log("[MusicPlayer.TestFullAudio] Testing BASS Audio");
+        await Task.Delay(Mathf.CeilToInt((float)await TestBASSAudio(Path.Combine(Application.streamingAssetsPath, "soundcheck.wav")) * 1000));
+        Debug.Log("[MusicPlayer.TestFullAudio] Testing Unity Audio");
+        await Task.Delay(Mathf.CeilToInt(TestUnityAudio(Path.Combine(Application.streamingAssetsPath, "soundcheck.wav")) * 1000));
+    }
+
+    public async Task<double> TestBASSAudio(string audioPath)
+    {
+        int testStream = await LoadRegularAudio(audioPath);
+        if (testStream != 0)
+        {
+            Bass.ChannelPlay(testStream);
+            long byteLength = Bass.ChannelGetLength(testStream);
+            double secsLength = Bass.ChannelBytes2Seconds(testStream, byteLength);
+            return secsLength;
+        }
+        else
+        {
+            Debug.LogError("[MusicPlayer.TestBASS] Failed to test BASS audio playback: " + Bass.LastError);
+            return 0.0;
+        }
+    }
+
+    public float TestUnityAudio(string audioPath)
+    {
+        AudioClip testClip = LoadUnityAudioFile(audioPath);
+        GameObject go = new GameObject("TestClip");
+        go.transform.SetParent(this.transform, false);
+        var src = go.AddComponent<AudioSource>();
+        src.playOnAwake = false;
+        src.spatialBlend = 0f;
+        src.clip = testClip;
+        src.volume = 1;
+        src.Play();
+        return testClip.length;
+    }
+    public AudioClip LoadUnityAudioFile(string filePath)
+    {
+        string uriPath = new System.Uri(filePath).AbsoluteUri;
+        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(uriPath, AudioType.UNKNOWN))
+        {
+            uwr.SendWebRequest();
+            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
+            {
+                Debug.LogError("Error loading audio clip: " + uwr.error);
+                return null;
+            }
+            else
+            {
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
+                if (clip != null)
+                {
+                    return clip;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+        }
+    }
+
+    public async Task<int> LoadRegularAudio(string audioClipPath)
+    {
+        if (audioClipPath != null)
+        {
+            if (!bassInitialized) InitBASS();
+            if (bassInitialized)
+            {
+                Debug.Log("Loading regular audio (ManagedBass) from path: " + audioClipPath);
+                try
+                {
+                    await Task.Yield();
+                    // Create stream for file path
+                    int streamHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Prescan);
+                    if (streamHandle == 0)
+                    { 
+                        Debug.LogError("Failed to create BASS stream: " + Bass.LastError);
+                        MessageBox.Instance.Show("Failed to create BASS stream: " + Bass.LastError + "<br>Audio playback Failed.", "Error", null);
+                        return 0;
+                    }
+                    else
+                    {
+                        return streamHandle;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError("Exception creating BASS stream: " + ex.Message);
+                    return 0;
+                }
+            }
+            else
+            {
+                return 0;
+            }
+        }
+        else
+        {
+            Debug.LogError("No AudioClip provided to loadAudio.");
+            return 0;
+        }
+    }
     public async Task loadSongAudio(string audioClipPath)
     {
         if (audioClipPath != null)
@@ -113,7 +219,7 @@ public class MusicPlayer : MonoBehaviour
                     if (songStreamHandle != 0) { Bass.StreamFree(songStreamHandle); songStreamHandle = 0; }
                     // Create stream for file path
                     songStreamHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Prescan);
-                    if (songStreamHandle == 0) { Debug.LogError("Failed to create BASS stream: " + Bass.LastError); MessageBox.Instance.Show("Failed to create BASS stream: " + Bass.LastError + "<br>Audio playback Failed.");}
+                    if (songStreamHandle == 0) { Debug.LogError("Failed to create BASS stream: " + Bass.LastError); MessageBox.Instance.Show("Failed to create BASS stream: " + Bass.LastError + "<br>Audio playback Failed.", "Error", null);}
                 }
                 catch (Exception ex)
                 {
@@ -171,7 +277,7 @@ public class MusicPlayer : MonoBehaviour
                     else
                     {
                         Debug.LogError("No MIDI output devices available on system.");
-                        MessageBox.Instance.Show("No MIDI output devices available.");
+                        MessageBox.Instance.Show("No MIDI output devices available.", "Error", null);
                         return;
                     }
                 }
@@ -182,7 +288,7 @@ public class MusicPlayer : MonoBehaviour
             catch (Exception ex)
             {
                 Debug.LogError("Failed to create MIDI playback: " + ex.Message);
-                MessageBox.Instance.Show("Failed to create MIDI playback: " + ex.Message + "<br>Audio playback Failed.");
+                MessageBox.Instance.Show("Failed to create MIDI playback: " + ex.Message + "<br>Audio playback Failed.", "Error", null);
                 return;
             }
         }
@@ -310,37 +416,26 @@ public class MusicPlayer : MonoBehaviour
         return Math.Max(0.0, GetElapsedTimeDsp());
     }
 
-    public IEnumerator PlayPreviewAudio(string filePath, float startPoint = 0, AudioType audioType = AudioType.OGGVORBIS)
+    public IEnumerator PlayPooledPreviewAudio(AudioClip audioClip, float startPoint = 0)
     {
-        string uriPath = new System.Uri(filePath).AbsoluteUri;
-        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(uriPath, audioType))
+        if (audioClip != null)
         {
-            yield return uwr.SendWebRequest(); // Wait for the request to complete
-            yield return Task.Yield();
-            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError("Error loading audio clip: " + uwr.error);
-            }
-            else
-            {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
-                if (clip != null)
-                {
-                    previewAudioStream.clip = clip;
-                    previewAudioStream.time = startPoint / 1000;
-                    previewAudioStream.volume = 0;
-                    
-                    StartCoroutine(FadeInCoroutine());
-                    previewAudioPlaying = true;
-                }
-            }
+            previewAudioStream.clip = audioClip;
+            previewAudioStream.time = startPoint / 1000;
+            previewAudioStream.volume = 1;
+            previewAudioStream.Play();
+            previewAudioPlaying = true;
+            yield return null;
         }
     }
     public void StopPreviewAudio()
     {
         if (previewAudioStream != null)
         {
-            StartCoroutine(FadeOutCoroutine());
+            previewAudioStream.Stop();
+            previewAudioStream.clip = null;
+            previewAudioStream.time = 0;
+            previewAudioPlaying = false;
         }
     }
     IEnumerator FadeOutCoroutine()
@@ -504,6 +599,37 @@ public class MusicPlayer : MonoBehaviour
         pausedElapsedDsp = GetElapsedTimeDsp();
         isPaused = true;
     }
+    public void MuteAllAudio(bool toggle)
+    {
+        if (toggle)
+        {
+            if (bassInitialized)
+            {
+                if (songStreamHandle != 0)
+                {
+                    try { Bass.ChannelSetAttribute(songStreamHandle, ChannelAttribute.Volume, 0.0); } catch { }
+                }
+            }
+            if (previewAudioPlaying)
+            {
+                previewAudioStream.volume = 0f;
+            }
+        }
+        else
+        {
+            if (bassInitialized)
+            {
+                if (songStreamHandle != 0)
+                {
+                    try { Bass.ChannelSetAttribute(songStreamHandle, ChannelAttribute.Volume, 1.0); } catch { }
+                }
+            }
+            if (previewAudioPlaying)
+            {
+                previewAudioStream.volume = 1f;
+            }
+        }
+    }
     public void RestartAt(double time)
     {
         if (isPaused) return;
@@ -521,8 +647,8 @@ public class MusicPlayer : MonoBehaviour
         {
             try
             {
-                midiPlayback.MoveToTime(new MetricTimeSpan(TimeSpan.FromSeconds(time)));
                 midiPlayback.Stop();
+                midiPlayback.MoveToTime(new MetricTimeSpan(TimeSpan.FromSeconds(time)));
                 midiPlayback.Start();
             }
             catch (Exception ex)

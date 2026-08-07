@@ -21,6 +21,9 @@ public class SongFolderLoader : MonoBehaviour
     public string authorName = "Unset";
     public int previewStartTime = 0;
     public int songLength = 0;
+    public string songAudioClipPath;
+    public string chartFilePath;
+    public string songVideoClipPath;
     public bool songVideoClipPathSet = false;
     public UnityEngine.Color songAccentColor;
     public List<string> supportedFormats = new List<string> { "wav", "ogg", "mp3", "opus", "mid", "midi" };
@@ -49,6 +52,8 @@ public class SongFolderLoader : MonoBehaviour
         }
     }
 
+    
+
     public async Task Load()
     {
         if (string.IsNullOrEmpty(songFolderPath) || !Directory.Exists(songFolderPath))
@@ -73,7 +78,7 @@ public class SongFolderLoader : MonoBehaviour
 
                 if (songMatch != null)
                 {
-                    songLoader.songAudioClipPath = songMatch.path;
+                    songAudioClipPath = songMatch.path;
                 }
 
 
@@ -84,12 +89,12 @@ public class SongFolderLoader : MonoBehaviour
 
                 if (File.Exists(songFolderPath + Path.DirectorySeparatorChar + "notes.chart"))
                 {
-                    songLoader.chartFilePath = songFolderPath + Path.DirectorySeparatorChar + "notes.chart";
+                    chartFilePath = songFolderPath + Path.DirectorySeparatorChar + "notes.chart";
                 }
                 else if (midiMatch != null)
                 {
                     // use MIDI as chart source
-                    songLoader.chartFilePath = midiMatch.path;
+                    chartFilePath = midiMatch.path;
                 }
                 if (File.Exists(songFolderPath + Path.DirectorySeparatorChar + "scripts.json"))
                 {
@@ -102,15 +107,15 @@ public class SongFolderLoader : MonoBehaviour
                 
                 if (videoMatch != null)
                 {
-                    songLoader.songVideoClipPath = videoMatch.path;
+                    songVideoClipPath = videoMatch.path;
                     songVideoClipPathSet = true;
                 }
                 else
                 {
-                    songLoader.songVideoClipPath = string.Empty;
+                    songVideoClipPath = string.Empty;
                     songVideoClipPathSet = false;
                 }
-                await songLoader.SetSongData(songLoader.chartFilePath, songLoader.songAudioClipPath, songLoader.songVideoClipPath);
+                await songLoader.SetSongData(chartFilePath);
                 await Task.Yield();
             }
             catch (Exception ex)

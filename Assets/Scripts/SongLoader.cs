@@ -7,11 +7,7 @@ public class SongLoader : MonoBehaviour
 {
     public static SongLoader Instance { get; private set; }
 
-    public string chartFilePath;
-
-    public string songAudioClipPath;
-
-    public string songVideoClipPath;
+    public string chartFolderPath;
 
     public bool songDataSet = false;
 
@@ -31,29 +27,19 @@ public class SongLoader : MonoBehaviour
         
     }
 
-    public async Task SetSongData(string chartPath, 
-    string audioPath = "",  
-    string videoPath = "")
+    public async Task SetSongData(string chartFolder)
     {
-        chartFilePath = chartPath;
-        songAudioClipPath = audioPath;
-        songVideoClipPath = videoPath;
+        chartFolderPath = chartFolder;
         songDataSet = true;
         await Task.Yield();
     }
 
 
-    public async Task LoadSongData(System.Action<string, 
-    string, 
-    string> onLoaded)
+    public async Task LoadSongData()
     {
-        string textAsset;
-        string audioClip;
-        string videoClip;
-
         try
         {
-            string path = System.IO.Path.GetFullPath(chartFilePath ?? string.Empty);
+            string path = System.IO.Path.GetFullPath(chartFolderPath ?? string.Empty);
             // If chartFilePath is a MIDI, delegate to GameManager MIDI reader
             string ext = string.IsNullOrEmpty(path) ? string.Empty : System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
             if (ext == "mid" || ext == "midi")
@@ -64,8 +50,6 @@ public class SongLoader : MonoBehaviour
                 {
                     await gm.ReadMidiFile(path);
                 }
-                // leave textAsset empty (system will use GameManager's caches)
-                textAsset = string.Empty;
             }
             else
             {
@@ -74,31 +58,12 @@ public class SongLoader : MonoBehaviour
                 {
                     await gm.ReadChartFile(path);
                 }
-                textAsset = string.Empty;
             }
         }
         catch
         {
-            textAsset = string.Empty;
+
         }
-        try
-        {
-            audioClip = System.IO.Path.GetFullPath(songAudioClipPath);
-            
-        }
-        catch
-        {
-            audioClip = string.Empty;
-        }
-        try
-        {
-            videoClip = System.IO.File.Exists(System.IO.Path.GetFullPath(songVideoClipPath)) ? System.IO.Path.GetFullPath(songVideoClipPath) : string.Empty;
-        }
-        catch
-        {
-            videoClip = string.Empty;
-        }
-        onLoaded?.Invoke(textAsset, audioClip, videoClip);
-        await Task.CompletedTask;    
+        await Task.Yield();    
     }
 }

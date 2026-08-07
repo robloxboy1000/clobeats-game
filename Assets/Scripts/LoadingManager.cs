@@ -28,9 +28,8 @@ public class LoadingManager : MonoBehaviour
             DontDestroyOnLoad(loadingCanvas.gameObject); // Persist across scenes
         }
     }
-    public async void LoadScene(string sceneName, LoadSceneMode mode = LoadSceneMode.Single)
+    public void LoadScene(string sceneName, LoadSceneMode mode = LoadSceneMode.Single)
     {
-        await System.Threading.Tasks.Task.Delay(500); // Small delay to ensure UI updates
         PreviousSceneName = SceneManager.GetActiveScene().name;
         StartCoroutine(LoadAsynchronously(sceneName, mode));
     }

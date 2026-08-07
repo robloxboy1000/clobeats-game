@@ -56,6 +56,7 @@ public class NoteSpawner : MonoBehaviour
         public float lengthMs; // preferred: sustain length in milliseconds
         public bool isFreestyleParent = false; // parent marker for freestyle sustain region
         public bool isFreestyleFake = false;   // fake per-tick placeholder inside freestyle
+        public bool isfretRelease = false; // fret-release styled for gamepad mode
     }
     public class GlobalEventInfo
     {
@@ -67,15 +68,17 @@ public class NoteSpawner : MonoBehaviour
     public class LyricEventInfo
     {
         public float spawnTick; // must comply to tempo map
-        public string sungNote;
+        public float spawnTickMs;
+        public int sungNote;
         public float length;
+        public int lengthMs;
         public string value;
         public bool passed = false;
     }
     // Prewarm pooled note and sustain prefabs based on note density in the chart.
-    private void PrewarmNotePools()
+    private async Task PrewarmNotePools()
     {
-        Debug.Log($"Prewarming note pools...");
+        Debug.Log($"[PrewarmNotePools] Prewarming note pools...");
         try
         {
             // count notes per fret and sustains
@@ -138,11 +141,75 @@ public class NoteSpawner : MonoBehaviour
                 NotePoolManager.Instance.Prewarm(openNotePrefab, cnt);
                 logOpen = cnt;
             }
+            await Task.Yield();
             Debug.Log($"[PrewarmNotePools] Notes prewarmed: {{{logGreen}, {logRed}, {logYellow}, {logBlue}, {logOrange}, {logOpen}}}");
         }
         catch (System.Exception ex)
         {
-            Debug.LogWarning("PrewarmNotePools failed: " + ex);
+            Debug.LogWarning("[PrewarmNotePools] PrewarmNotePools failed: " + ex);
+        }
+    }
+
+    // Prewarm pooled note and sustain prefabs based on specified number.
+    private async Task PrewarmNotePoolsNonChart(int amount)
+    {
+        Debug.Log($"[PrewarmNotePools] Prewarming note pools... (specified number)");
+        try
+        {
+            int logGreen = 0, logRed = 0, logYellow = 0, logBlue = 0, logOrange = 0, logOpen = 0, logFree = 0;
+
+            // multiplier and minimum to avoid too-small pools
+            const float multiplier = 1.25f;
+            const int minPool = 8;
+     
+            if (greenNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(greenNotePrefab, cnt);
+                logGreen = cnt;
+            }
+            if (redNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(redNotePrefab, cnt);
+                logRed = cnt;
+            }
+            if (yellowNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(yellowNotePrefab, cnt);
+                logYellow = cnt;
+            }
+            if (blueNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(blueNotePrefab, cnt);
+                logBlue = cnt;
+            }
+            if (orangeNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(orangeNotePrefab, cnt);
+                logOrange = cnt;
+            }
+            if (openNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(openNotePrefab, cnt);
+                logOpen = cnt;
+            }
+            if (beginnerNotePrefab != null)
+            {
+                int cnt = Mathf.Max(minPool, Mathf.CeilToInt(amount * multiplier));
+                NotePoolManager.Instance.Prewarm(beginnerNotePrefab, cnt);
+                logFree = cnt;
+            }
+            await Task.Yield();
+            Debug.Log($"[PrewarmNotePools] Specific notes prewarmed: {{{logGreen}, {logRed}, {logYellow}, {logBlue}, {logOrange}, {logOpen}, {logFree}}}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("[PrewarmNotePools] PrewarmNotePools failed: " + ex);
         }
     }
     public class SyncInfo
@@ -194,10 +261,7 @@ public class NoteSpawner : MonoBehaviour
     private SongLoader songLoader;
     [SerializeField]
     private SongFolderLoader songFolderLoader;
-    private string chartFileData = "";
     private string audioClipPath = "";
-    private string desiredDifficultySingleThreaded = "Expert";
-
     public float noteSpawningXOffset = 0;
     public float noteSpawningZOffset = 0;
     public float desiredHyperspeedSingleThreaded = 5f;
@@ -214,22 +278,20 @@ public class NoteSpawner : MonoBehaviour
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
         gameManager =  FindAnyObjectByType<GameManager>();
-        //DontDestroyOnLoad(gameObject); // to cache notes for restarting
+        DontDestroyOnLoad(gameObject);
     }
-    async void Awake()
+    void Awake()
     {
         if (Instance == null) Instance = this; else if (Instance != this) Destroy(gameObject);
         songLoader = FindFirstObjectByType<SongLoader>();
         songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
-        desiredDifficultySingleThreaded = PlayerPrefs.GetString("SelectedDifficulty", "Expert");
         desiredHyperspeedSingleThreaded = PlayerPrefs.GetFloat("Hyperspeed", 5f);
-        await Load();
     }
 
 
     
     
-    private async Task Load()
+    public async Task Load()
     {
         if (songLoader == null)
         {
@@ -238,19 +300,15 @@ public class NoteSpawner : MonoBehaviour
         if (musicPlayer == null) musicPlayer = FindAnyObjectByType<MusicPlayer>();
         if (songLoader != null && songLoader.songDataSet)
         {
-            await songLoader.LoadSongData((txtAsset, 
-            audioClip, 
-            videoClip) =>
-            {
-                chartFileData = txtAsset;
-                audioClipPath = audioClip;
-                videoClipPath = videoClip;
-            });
             if (uiUpdater != null)
             {
                 uiUpdater.SetSongInfoOpacity(0);
+                uiUpdater.ScoreVisibility(false);
             }
+            await songLoader.LoadSongData();
             await songFolderLoader.LoadIniFile(songFolderLoader.songFolderPath + @"\song.ini");
+            audioClipPath = songFolderLoader.songAudioClipPath;
+
             Debug.Log("[NoteSpawner.Load] audioClipPath: '" + audioClipPath + "'");
             if (audioClipPath.EndsWith("mid"))
             {
@@ -260,8 +318,15 @@ public class NoteSpawner : MonoBehaviour
             {
                 await musicPlayer.loadSongAudio(audioClipPath);
             }
-            
-            musicPlayer.loadVideo(videoClipPath);
+            videoClipPath = songFolderLoader.songVideoClipPath;
+            if (PlayerPrefs.GetInt("EnableVideo", 1) == 1)
+            {
+                musicPlayer.loadVideo(videoClipPath);
+            }
+            else
+            {
+                Debug.Log("[NoteSpawner.Load] Video playback is disabled.");
+            }
             //songLengthInTicks = gameManager.currentSongLengthInTicks;
             
             if (!string.IsNullOrEmpty(videoClipPath))
@@ -277,46 +342,6 @@ public class NoteSpawner : MonoBehaviour
                     videoViewer.SetActive(false);
                 }
             }
-
-            if (uiUpdater != null)
-            {
-                Debug.Log("Song data loaded successfully.");
-                INIParser parser = new INIParser();
-                parser.Open(songFolderLoader.songFolderPath + @"\song.ini");
-                bool checkSectionCase = parser.IsSectionExists("song");
-                int preLoadedNumber = checkSectionCase ? parser.ReadValue("song", "countdown_bar_number", 0) : parser.ReadValue("Song", "countdown_bar_number", 0);
-                int enableDefaultCount = checkSectionCase ? parser.ReadValue("song", "count", 0) : parser.ReadValue("Song", "count", 0);
-                if (preLoadedNumber <= 0)
-                {
-                    enableCountdown = false;
-                    countdownBarNumber = preLoadedNumber;
-                }
-                else if (enableDefaultCount == 1)
-                {
-                    enableCountdown = true;
-                    countdownBarNumber = preLoadedNumber >= 1 ? preLoadedNumber : 2;
-                }
-                else
-                {
-                    enableCountdown = true;
-                    countdownBarNumber = preLoadedNumber;
-                }
-                CreateTempoMapPools();
-                if (allowNotePooling)
-                {
-                    PrewarmNotePools();
-                }
-                parser.Close();
-                
-                await Task.Delay(6000); // delay to let loading phrase be visible and let pools initialize
-                VenueAnimationPlayer.Instance.TryToggleCamera(true);
-                GameManager gm = FindFirstObjectByType<GameManager>();
-                if (gm != null)
-                {
-                    StartCoroutine(gm.PlaySong());
-                }
-            }
-
         }
         else if (songLoader != null && !songLoader.songDataSet)
         {
@@ -325,6 +350,49 @@ public class NoteSpawner : MonoBehaviour
         else
         {
             Debug.LogError("SongLoader instance not found.");
+        }
+    }
+
+    public async Task InitGameplay()
+    {
+        Debug.Log("Song data loaded successfully.");
+        INIParser parser = new INIParser();
+        parser.Open(songFolderLoader.songFolderPath + @"\song.ini");
+        bool checkSectionCase = parser.IsSectionExists("song");
+        int preLoadedNumber = checkSectionCase ? parser.ReadValue("song", "countdown_bar_number", 0) : parser.ReadValue("Song", "countdown_bar_number", 0);
+        int enableDefaultCount = checkSectionCase ? parser.ReadValue("song", "count", 0) : parser.ReadValue("Song", "count", 0);
+        if (preLoadedNumber <= 0)
+        {
+            enableCountdown = false;
+            countdownBarNumber = preLoadedNumber;
+        }
+        else if (enableDefaultCount == 1)
+        {
+            enableCountdown = false;
+            countdownBarNumber = preLoadedNumber >= 1 ? preLoadedNumber : 2;
+        }
+        else
+        {
+            enableCountdown = false;
+            countdownBarNumber = preLoadedNumber;
+        }
+        CreateTempoMapPools();
+        SustainManager sustainManager = FindAnyObjectByType<SustainManager>();
+        sustainManager.Prewarm(8);
+        if (allowNotePooling)
+        {
+            await PrewarmNotePools();
+        }
+        else
+        {
+            await PrewarmNotePoolsNonChart(8);
+        }
+        parser.Close();
+        VenueAnimationPlayer.Instance.TryToggleCamera(true);
+        GameManager gm = FindFirstObjectByType<GameManager>();
+        if (gm != null)
+        {
+            StartCoroutine(gm.PlaySong());     
         }
     }
     private void LoadVideoVenue()
@@ -494,6 +562,8 @@ public class NoteSpawner : MonoBehaviour
         var gate = go.GetComponent<VisibilityGate>();
         if (gate == null) gate = go.AddComponent<VisibilityGate>();
         gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+        if (PlayerPrefs.GetInt("EnableLite", 0) == 1) { Destroy(go); }
+        else
         go.SetActive(false);
         barPool.Enqueue(go);
     }
@@ -528,6 +598,8 @@ public class NoteSpawner : MonoBehaviour
         var gate = go.GetComponent<VisibilityGate>();
         if (gate == null) gate = go.AddComponent<VisibilityGate>();
         gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+        if (PlayerPrefs.GetInt("EnableLite", 0) == 1) { Destroy(go); }
+        else
         go.SetActive(false);
         beatPool.Enqueue(go);
     }
@@ -537,6 +609,8 @@ public class NoteSpawner : MonoBehaviour
     {
         if (go == null) return;
         if (go.Equals(null)) return;
+
+        
 
         // Ensure the lane manager doesn't retain references to this object
         try { LaneManager.Instance.UnregisterNote(go); } catch (Exception) { }
@@ -548,7 +622,7 @@ public class NoteSpawner : MonoBehaviour
             // remove from movement and scheduling before pooling
             RemoveObjectFromGlobalMoveY(go);
             if (scheduledTimeByObject.ContainsKey(go)) scheduledTimeByObject.Remove(go);
-            try { NotePoolManager.Instance.Return(go); } catch (Exception) { go.SetActive(false); }
+            try {if (PlayerPrefs.GetInt("EnableLite", 0) == 1) { Destroy(go); } else { NotePoolManager.Instance.Return(go);} } catch (Exception) { go.SetActive(false); }
             return;
         }
 
@@ -809,18 +883,15 @@ public class NoteSpawner : MonoBehaviour
                         orderedCounts.Add(barEvent);
                         // then add all regular beat events after the bar (prefer 13)
                         var followingBeats = beatsInBar.Where(e => e != barEvent && e.value == "13").OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
-                        if (followingBeats.Count == 0)
-                        {
-                            // fallback: any other events in the bar region except the bar marker
-                            followingBeats = beatsInBar.Where(e => e != barEvent).OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
-                        }
+                        // if (followingBeats.Count == 0) followingBeats = beatsInBar.Where(e => e != barEvent).OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        
                         orderedCounts.AddRange(followingBeats);
                     }
                     else
                     {
                         // No explicit bar marker; fallback to prefer regular beats (13) or any available events
                         var regularBeats = beatsInBar.Where(e => e.value == "13").OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
-                        if (regularBeats.Count == 0) regularBeats = beatsInBar.OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
+                        // if (regularBeats.Count == 0) regularBeats = beatsInBar.OrderBy(e => e.spawnTimeMs > 0f ? e.spawnTimeMs : e.spawnTime).ToList();
                         orderedCounts.AddRange(regularBeats);
                     }
 
@@ -857,7 +928,7 @@ public class NoteSpawner : MonoBehaviour
         src.volume = Mathf.Clamp01(volume);
         try
         {
-            src.PlayScheduled(dspTime - 0.04);
+            src.PlayScheduled(dspTime - Mathf.Abs(gameManager.audioOffsetSeconds));
         }
         catch (Exception ex)
         {
@@ -872,72 +943,6 @@ public class NoteSpawner : MonoBehaviour
         Destroy(go, (float)secondsUntilEnd);
     }
 
-    private bool CheckIfForcedNoteEventPassed(int index)
-    {
-        try
-        {
-            if (gameManager.currentSongForcedNoteEvents[index] != null)
-            {
-                if (gameManager.ddst == "Expert")
-                {
-                    if (gameManager.currentSongForcedNoteEvents[index].value == "102")
-                    {
-                        return true;
-                    }
-                    else if (gameManager.currentSongForcedNoteEvents[index].value == "101")
-                    {
-                        return false;
-                    }
-                }
-                else if (gameManager.ddst == "Hard")
-                {
-                    if (gameManager.currentSongForcedNoteEvents[index].value == "90")
-                    {
-                        return true;
-                    }
-                    else if (gameManager.currentSongForcedNoteEvents[index].value == "89")
-                    {
-                        return false;
-                    }
-                }
-                else if (gameManager.ddst == "Medium")
-                {
-                    if (gameManager.currentSongForcedNoteEvents[index].value == "78")
-                    {
-                        return true;
-                    }
-                    else if (gameManager.currentSongForcedNoteEvents[index].value == "77")
-                    {
-                        return false;
-                    }
-                }
-                else if (gameManager.ddst == "Easy")
-                {
-                    if (gameManager.currentSongForcedNoteEvents[index].value == "66")
-                    {
-                        return true;
-                    }
-                    else if (gameManager.currentSongForcedNoteEvents[index].value == "65")
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                return false;
-            }
-        }
-        catch
-        {
-            return false;
-        }
-        return false;
-    }
     // Spawn a single note (pooled) with sustain handling and lane registration
     private void SpawnNoteInstance(int noteIndex, float timeSeconds, float spacingFactor)
     {
@@ -1055,6 +1060,8 @@ public class NoteSpawner : MonoBehaviour
         inst.SetActive(true);
         AddObjectToGlobalMoveY(inst);
 
+        
+
         // hopo handling
         //lastNoteSpawnTime = lastN?.spawnTime ?? n.spawnTime;
         int calcThreshold = (resolution / 3) + 1; // 192 = 64 ticks, 480 = 160 ticks
@@ -1072,6 +1079,14 @@ public class NoteSpawner : MonoBehaviour
                 visual.currentNoteType = NoteVisualChanger.NoteType.Forced;
         }
 
+        // fret-release handling
+        if (n.isfretRelease)
+        {
+            var visual = inst.GetComponent<NoteVisualChanger>();
+            if (visual != null)
+                visual.currentNoteType = NoteVisualChanger.NoteType.FretRelease;
+        }
+
         // sustain handling
         if (n.length > calcThreshold)
         {
@@ -1087,6 +1102,134 @@ public class NoteSpawner : MonoBehaviour
                 SetupSustain(sustainObj, n.spawnTime, n.length, spacingFactor, inst.transform.position);
                 sustainObj.SetActive(true);
             }
+            SpawnArbitraryNoteInstance(new NoteInfo{
+                spawnTime = n.spawnTime + n.length,
+                spawnTimeMs = n.spawnTimeMs + n.lengthMs,
+                length = 0,
+                lengthMs = 0,
+                fret = n.fret,
+                isfretRelease = true,
+            }, GetTimeInSecondsAtTick(n.spawnTime + n.length), spacingFactor);
+        }
+    }
+
+    // Spawn a single note (unpooled) with sustain handling and lane registration
+    private void SpawnArbitraryNoteInstance(NoteInfo noteEntry, float timeSeconds, float spacingFactor)
+    {
+        if (noteEntry == null) return;
+        // Allow the first note (index 0) to spawn even when there is no previous note.
+        // HOPO detection below will handle a null lastN safely.
+
+        // Handle freestyle parent (sustain region): spawn sustain visuals across lanes
+        if (noteEntry.isFreestyleParent)
+        {
+            float startSec = (noteEntry.spawnTimeMs > 0f) ? noteEntry.spawnTimeMs / 1000f : GetTimeInSecondsAtTick(noteEntry.spawnTime);
+            float endSec = 0f;
+            if (noteEntry.lengthMs > 0f) endSec = startSec + (noteEntry.lengthMs / 1000f); else endSec = GetTimeInSecondsAtTick(noteEntry.spawnTime + noteEntry.length);
+            float dur = Mathf.Max(0.001f, startSec - endSec);
+
+            if (SustainManager.Instance != null)
+            {
+                int laneCount = 5;
+                try { if (SustainManager.Instance.laneXPositions != null) laneCount = SustainManager.Instance.laneXPositions.Length; } catch { }
+                for (int lane = 0; lane < 5; lane++)
+                {
+                    try { SustainManager.Instance.StartSustain(lane, dur, Color.white, true); } catch { }
+                }
+            }
+            return;
+        }
+
+        //Debug.Log($"Spawning note [spawnTime={n.spawnTime}, spawnTimeMs={n.spawnTimeMs}, fret={n.fret}, length={n.length}, lengthMs={n.lengthMs}] at index " + noteIndex + " at timeSeconds " + timeSeconds + " with hyperspeed " + spacingFactor);
+        int fret = noteEntry.fret;
+        float strikeY = GetStrikeLineY();
+        float currentSongSeconds = musicPlayer != null ? (float)musicPlayer.GetElapsedTimeDsp() : 0f;
+        float yPosition = preSpawnLongPlane
+            ? strikeY + startingYPosition + startingYOffset + (timeSeconds + spawnLeadSeconds) * spacingFactor
+            : strikeY + startingYPosition + startingYOffset + ((timeSeconds - currentSongSeconds) + spawnLeadSeconds) * spacingFactor;
+
+        Vector3 pos = new Vector3((fret - 2f) + noteSpawningXOffset, yPosition, 0f + noteSpawningZOffset);
+        Vector3 openpos = new Vector3(0 + noteSpawningXOffset, yPosition, 0f + noteSpawningZOffset);
+        GameObject inst = null;
+        Color gemColor = Color.white;
+
+        if (fret == 7)
+        {
+            if (openNotePrefab != null) try { inst = NotePoolManager.Instance.Get(openNotePrefab); gemColor = Color.magenta; } catch { inst = null; }
+        }
+        else
+        {
+            switch (fret)
+            {
+                case 0: if (greenNotePrefab != null) try { inst = NotePoolManager.Instance.Get(greenNotePrefab); gemColor = Color.green; } catch { inst = null; } break;
+                case 1: if (redNotePrefab != null) try { inst = NotePoolManager.Instance.Get(redNotePrefab); gemColor = Color.red; } catch { inst = null; } break;
+                case 2: if (yellowNotePrefab != null) try { inst = NotePoolManager.Instance.Get(yellowNotePrefab); gemColor = Color.yellow; } catch { inst = null; } break;
+                case 3: if (blueNotePrefab != null) try { inst = NotePoolManager.Instance.Get(blueNotePrefab); gemColor = Color.blue; } catch { inst = null; } break;
+                case 4: if (orangeNotePrefab != null) try { inst = NotePoolManager.Instance.Get(orangeNotePrefab); gemColor = new Color(1f, 0.5f, 0f); } catch { inst = null; } break;
+                case 8: if (beginnerNotePrefab != null) try { inst = NotePoolManager.Instance.Get(beginnerNotePrefab); gemColor = Color.blue; } catch { inst = null; } break;
+                default: break;
+            }
+        }
+
+        
+
+        if (inst == null) return;
+        if (fret == 7 || fret == 8)
+        {
+            inst.transform.position = openpos;
+        }
+        else
+        {
+            inst.transform.position = pos;
+        }
+        inst.hideFlags = HideFlags.HideAndDontSave;
+        
+        // attach scheduled time so GlobalMoveY can compute exact positions relative to song time
+        var sched = inst.GetComponent<ScheduledTime>();
+        if (sched == null) sched = inst.AddComponent<ScheduledTime>();
+        sched.scheduledSeconds = timeSeconds;
+        var gate = inst.GetComponent<VisibilityGate>(); if (gate == null) gate = inst.AddComponent<VisibilityGate>();
+        gate.Initialize(GetStrikeLineY() + startingYPosition + startingYOffset);
+        try { LaneManager.Instance.RegisterNote(inst, fret); } catch (Exception) { }
+        inst.SetActive(true);
+        AddObjectToGlobalMoveY(inst);
+
+        // hopo handling
+        //lastNoteSpawnTime = lastN?.spawnTime ?? n.spawnTime;
+        int calcThreshold = (resolution / 3) + 1; // 192 = 64 ticks, 480 = 160 ticks
+
+        // fret-release handling
+        if (noteEntry.isfretRelease)
+        {
+            var visual = inst.GetComponent<NoteVisualChanger>();
+            if (visual != null)
+                visual.currentNoteType = NoteVisualChanger.NoteType.FretRelease;
+        }
+
+
+        // sustain handling
+        if (noteEntry.length > calcThreshold)
+        {
+            var sust = inst.GetComponent<SustainedNote>();
+            if (sust == null) sust = inst.AddComponent<SustainedNote>();
+            sust.durationSeconds = GetTimeInSecondsAtTick(noteEntry.spawnTime + noteEntry.length) - GetTimeInSecondsAtTick(noteEntry.spawnTime);
+            var sustainObj = inst.GetComponentInChildren<Sustain>()?.gameObject;
+            if (sustainObj != null)
+            {
+                var scr = sustainObj.GetComponent<Sustain>();
+                scr.color = gemColor;
+                sustainObj.transform.position = inst.transform.position;
+                SetupSustain(sustainObj, noteEntry.spawnTime, noteEntry.length, spacingFactor, inst.transform.position);
+                sustainObj.SetActive(true);
+            }
+            SpawnArbitraryNoteInstance(new NoteInfo{
+                spawnTime = noteEntry.spawnTime + noteEntry.length,
+                spawnTimeMs = noteEntry.spawnTimeMs + noteEntry.lengthMs,
+                length = 0,
+                lengthMs = 0,
+                fret = noteEntry.fret,
+                isfretRelease = true
+            }, GetTimeInSecondsAtTick(noteEntry.spawnTime + noteEntry.length), spacingFactor);
         }
     }
 

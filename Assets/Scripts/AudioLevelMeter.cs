@@ -56,11 +56,5 @@ public class AudioLevelMeter : MonoBehaviour
             Debug.LogError("Failed to get audio level: " + ex);
         }
         
-        CameraEffects cameraEffects = FindAnyObjectByType<CameraEffects>();
-        if (cameraEffects != null)
-        {
-            cameraEffects.SetChromaticAberration(audioLevel);
-        }
-        
     }
 }

@@ -59,7 +59,7 @@ public class ImprovedStrikeline : MonoBehaviour
     {
         Vector3 flamePosition = new Vector3(xOffset, gameObject.transform.position.y, gameObject.transform.position.z);
         StartCoroutine(SustainFlame(flamePosition, 0.5f));
-        EnableSustainSparks(Mathf.CeilToInt(xOffset));
+        EnableSustainSparks((int)xOffset);
     }
 
     // co-routines
@@ -358,6 +358,74 @@ public class ImprovedStrikeline : MonoBehaviour
             Debug.LogWarning("Invalid fret lane index: " + laneIndex);
         }
     }
+
+    public void SLTopHold(float laneIndex)
+    {
+        if (laneIndex == 0)
+        {
+            if (SLGreenTopPrefab != null)
+            {
+                SLGreenTopPrefab.transform.position = new Vector3(-2,0,-0.3f);
+            }
+        }
+        else if (laneIndex == 1)
+        {
+            if (SLRedTopPrefab != null)
+            {
+                SLRedTopPrefab.transform.position = new Vector3(-1,0,-0.3f);
+            }
+        }
+        else if (laneIndex == 2)
+        {
+            if (SLYellowTopPrefab != null)
+            {
+                SLYellowTopPrefab.transform.position = new Vector3(0,0,-0.3f);
+            }
+        }
+        else if (laneIndex == 3)
+        {
+            if (SLBlueTopPrefab != null)
+            {
+                SLBlueTopPrefab.transform.position = new Vector3(1,0,-0.3f);
+            }
+        }
+        else if (laneIndex == 4)
+        {
+            if (SLOrangeTopPrefab != null)
+            {
+                SLOrangeTopPrefab.transform.position = new Vector3(2,0,-0.3f);
+            }
+        }
+        else if (laneIndex == 7)
+        {
+            if (SLGreenTopPrefab != null)
+            {
+                SLGreenTopPrefab.transform.position = new Vector3(-2,0,-0.3f);
+            }
+            if (SLRedTopPrefab != null)
+            {
+                SLRedTopPrefab.transform.position = new Vector3(-1,0,-0.3f);
+            }
+            if (SLYellowTopPrefab != null)
+            {
+                SLYellowTopPrefab.transform.position = new Vector3(0,0,-0.3f);
+            }
+            if (SLBlueTopPrefab != null)
+            {
+                SLBlueTopPrefab.transform.position = new Vector3(1,0,-0.3f);
+            }
+            if (SLOrangeTopPrefab != null)
+            {
+                SLOrangeTopPrefab.transform.position = new Vector3(2,0,-0.3f);
+            }
+        }
+        else
+        {
+            Debug.LogWarning("Invalid fret lane index: " + laneIndex);
+        }
+    }
+
+
     public void EnableSustainSparks(int fret)
     {
         if (sustainSparksPrefab != null)
@@ -366,16 +434,13 @@ public class ImprovedStrikeline : MonoBehaviour
         {
             Quaternion rotation = Quaternion.Euler(0f, 180f, 0f);
             Vector3 position = new Vector3(fret, 0, 0);
-            activeSustainSparks.Add(fret+2, Instantiate(sustainSparksPrefab, position, rotation));
+            GameObject sparkWTimeout = Instantiate(sustainSparksPrefab, position, rotation);
+            sparkWTimeout.AddComponent<DestroyOnTimeout>();
+            activeSustainSparks.Add(fret+2, sparkWTimeout);
         }
-        catch (System.Exception)
+        catch (System.Exception ex)
         {
-            if (activeSustainSparks.TryGetValue(fret+2, out GameObject spark))
-            {
-                Destroy(spark);
-                activeSustainSparks.Remove(fret+2);
-            }
-            
+            Debug.LogWarning("[ImprovedStrikeline.EnableSustainSparks] Failed to spawn sustain sparks: " + ex.Message);
         }
     }
     public void DisableSustainSparks(int xOffset)
@@ -387,6 +452,7 @@ public class ImprovedStrikeline : MonoBehaviour
             {
                 Destroy(spark);
                 activeSustainSparks.Remove(xOffset+2);
+                SLTopHit(xOffset); // SLTopHold already called
             }
         }
     }

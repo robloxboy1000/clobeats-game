@@ -5,6 +5,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.IO;
+using System.Threading.Tasks;
+
 #if !IL2CPP
 using System.Windows.Forms;
 #endif
@@ -18,14 +20,14 @@ public class ButtonHandler : MonoBehaviour
         if (myButton != null)
         {
             // Add a listener to the button's onClick event
-            myButton.onClick.AddListener(OnButtonClick);
+            myButton.onClick.AddListener(async () => {await OnButtonClick();});
         }
     }
-    public void PerformClick()
+    public async Task PerformClick()
     {
-        OnButtonClick();
+        await OnButtonClick();
     }
-    void OnButtonClick()
+    async Task OnButtonClick()
     {
         Debug.Log("Button clicked: " + myButton.name);
         if (myButton.name == "LoadGameplaySceneButton")
@@ -69,6 +71,8 @@ public class ButtonHandler : MonoBehaviour
             if (exceptionPanel != null)
             {
                 Destroy(exceptionPanel);
+                MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
+                musicPlayer.MuteAllAudio(false);
             }
         }
         else if (myButton.name == "ResumeButton")
@@ -112,11 +116,8 @@ public class ButtonHandler : MonoBehaviour
                 gameManager.ResetAllValues();
                 gameManager.inSong = false;
                 SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
-                gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
+                await gameManager.EnableLoadUnCachedSongVisual(gameManager.unDestructibleLoadingPhraseScreen, Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
             }
-            
-                
-            
             Time.timeScale = 1f; // Ensure time scale is reset
             LoadingManager loader = FindAnyObjectByType<LoadingManager>();
             if (loader != null)
@@ -219,25 +220,19 @@ public class ButtonHandler : MonoBehaviour
             {
                 SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\CloBeats\songs\local"
             };
-            if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
+            if (folderBrowserDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 TMPro.TMP_InputField sfpField = GameObject.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
                 sfpField.text = folderBrowserDialog.SelectedPath;
                 Debug.Log("Folder selected: '" + folderBrowserDialog.SelectedPath + "'");
             }
-            #elif IL2CPP
-                MessageBox.Instance.Show("Please enter the path manually as your system does not support folder dialogs.");
             #else
-                FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog()
-                {
-                    SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\CloBeats\songs\local"
-                };
-                if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
-                {
-                    TMPro.TMP_InputField sfpField = GameObject.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
-                    sfpField.text = folderBrowserDialog.SelectedPath;
-                    Debug.Log("Folder selected: '" + folderBrowserDialog.SelectedPath + "'");
-                }
+                SimpleFileBrowser.FileBrowser.ShowLoadDialog( ( paths ) => { TMPro.TMP_InputField sfpField = GameObject.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
+                sfpField.text = paths[0];
+                Debug.Log("Folder selected: '" + paths[0] + "'"); },
+								   () => { Debug.Log( "Canceled" ); },
+								   SimpleFileBrowser.FileBrowser.PickMode.Folders, false, null, null, "Select Folder", "Select" );
+
             #endif
 
         }
