@@ -306,7 +306,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             DontDestroyOnLoad(loadscreen);
             gameManager.unDestructibleLoadingPhraseScreen = loadscreen;
             gameManager.DisableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen);
-            string documentsPath = Application.persistentDataPath;
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             gameManager.savePath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "save";
             if (!Directory.Exists(gameManager.savePath))
             {
@@ -395,8 +395,8 @@ public class PlayerPrefsLoader : MonoBehaviour
             try
             {
                 Debug.Log("Loading custom songs");
-                
-                string songFoldersPath = Application.persistentDataPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
+                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                string songFoldersPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
                 if (!Directory.Exists(songFoldersPath))
                 {
                     Directory.CreateDirectory(songFoldersPath);
