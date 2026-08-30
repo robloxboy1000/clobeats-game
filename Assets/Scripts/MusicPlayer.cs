@@ -443,10 +443,10 @@ public class MusicPlayer : MonoBehaviour
         {
             previewAudioStream.clip = audioClip;
             previewAudioStream.time = startPoint / 1000;
-            yield return StartCoroutine(FadeInCoroutine(volume));
             previewAudioStream.loop = true;
             previewAudioStream.Play();
             previewAudioPlaying = true;
+            yield return StartCoroutine(FadeInCoroutine(volume));
             yield return null;
         }
     }
@@ -466,12 +466,11 @@ public class MusicPlayer : MonoBehaviour
     {
         float duration = 1f; // Duration for the fill animation
         float elapsed = 0f;
-        float fillAmount = 1f;
 
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            fillAmount = Mathf.Lerp(lerpFromVol, 0f, elapsed / duration);
+            float fillAmount = Mathf.Lerp(lerpFromVol, 0f, elapsed / duration);
             if (previewAudioStream != null)
             {
                 previewAudioStream.volume = fillAmount;
