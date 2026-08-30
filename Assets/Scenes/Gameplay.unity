@@ -508,7 +508,6 @@ GameObject:
   m_Component:
   - component: {fileID: 330585546}
   - component: {fileID: 330585545}
-  - component: {fileID: 330585549}
   m_Layer: 0
   m_Name: Highway_cam
   m_TagString: Untagged
@@ -582,14 +581,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: -72, y: 0, z: 0}
---- !u!81 &330585549
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
 --- !u!1 &404228864
 GameObject:
   m_ObjectHideFlags: 0
