@@ -443,23 +443,26 @@ public class MusicPlayer : MonoBehaviour
         {
             previewAudioStream.clip = audioClip;
             previewAudioStream.time = startPoint / 1000;
-            previewAudioStream.volume = volume;
+            yield return StartCoroutine(FadeInCoroutine(volume));
+            previewAudioStream.loop = true;
             previewAudioStream.Play();
             previewAudioPlaying = true;
             yield return null;
         }
     }
-    public void StopPreviewAudio()
+    public IEnumerator StopPreviewAudio(float fadeFromVol)
     {
         if (previewAudioStream != null)
         {
+            yield return StartCoroutine(FadeOutCoroutine(fadeFromVol));
             previewAudioStream.Stop();
             previewAudioStream.clip = null;
             previewAudioStream.time = 0;
             previewAudioPlaying = false;
+            yield return null;
         }
     }
-    IEnumerator FadeOutCoroutine()
+    IEnumerator FadeOutCoroutine(float lerpFromVol)
     {
         float duration = 1f; // Duration for the fill animation
         float elapsed = 0f;
@@ -468,33 +471,23 @@ public class MusicPlayer : MonoBehaviour
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            fillAmount = Mathf.Lerp(1f, 0f, elapsed / duration);
+            fillAmount = Mathf.Lerp(lerpFromVol, 0f, elapsed / duration);
             if (previewAudioStream != null)
             {
                 previewAudioStream.volume = fillAmount;
             }
             yield return null;
         }
-
-        if (fillAmount == 0)
-        {
-            previewAudioStream.Stop();
-            previewAudioStream.clip = null;
-            previewAudioStream.time = 0;
-            previewAudioPlaying = false;
-        }
-        
     }
-    IEnumerator FadeInCoroutine()
+    IEnumerator FadeInCoroutine(float lerpToVol)
     {
         float duration = 1f; // Duration for the fill animation
         float elapsed = 0f;
-        
-        previewAudioStream.Play();
+
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            float fillAmount = Mathf.Lerp(0f, 1f, elapsed / duration);
+            float fillAmount = Mathf.Lerp(0f, lerpToVol, elapsed / duration);
             if (previewAudioStream != null)
             {
                 previewAudioStream.volume = fillAmount;

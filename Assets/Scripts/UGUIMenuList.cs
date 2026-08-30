@@ -404,7 +404,7 @@ public class UGUIMenuList : MonoBehaviour
 
         if (musicPlayer.previewAudioPlaying)
         {
-            musicPlayer.StopPreviewAudio();
+            StartCoroutine(musicPlayer.StopPreviewAudio(previewVolume));
         }
 
         StartCoroutine(musicPlayer.PlayPooledPreviewAudio(clip, entry.songPreviewStartTime, previewVolume));
