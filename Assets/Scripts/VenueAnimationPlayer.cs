@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using UnityEngine;
 using System.Linq;
@@ -6,6 +7,7 @@ using UnityEngine.SceneManagement;
 using System.Text;
 using System.Text.RegularExpressions;
 using System;
+using UnityEngine.Rendering.PostProcessing;
 
 public class VenueAnimationPlayer : MonoBehaviour
 {
@@ -18,10 +20,138 @@ public class VenueAnimationPlayer : MonoBehaviour
     public AnimationType type = AnimationType.MIDI;
 
     public GameObject mainCamera = null;
+    public GameObject highwayCamera = null;
     public string cameraAnimationFile;
     public float currentTick = -1f;
     public float currentRealtimeSecs = -1f;
     NoteSpawner ns;
+
+    
+    [Header("Haptic Beat Impact")]
+    public bool hapticOnEveryFourthNote = false;
+    public bool hapticToggle
+    {
+        get => hapticOnEveryFourthNote;
+        set{
+            if (hapticOnEveryFourthNote != value)
+            {
+                hapticOnEveryFourthNote = value;
+                OnHapticChanged(value);
+            }
+        }
+    }
+    [Range(0f, 1f)] public float hapticLeftImpact = 1f;
+    [Range(0f, 1f)] public float hapticRightImpact = 1f;
+    [Range(0.01f, 0.5f)] public float hapticAttack = 0.08f;
+    [Range(0.01f, 1f)] public float hapticRelease = 0.35f;
+    public float hapticPulseDuration = 0.05f;
+    public int hapticPulseDivision = 1;
+    Coroutine hapticCoroutine;
+    OldInputManager oldInputManager;
+    [Header("Chromatic Aberration Beat Impact")]
+    public bool chromaticAberrationOnQuarterNotes = false;
+    public bool chrabrToggle
+    {
+        get => chromaticAberrationOnQuarterNotes;
+        set {
+            if (chromaticAberrationOnQuarterNotes != value)
+            {
+                chromaticAberrationOnQuarterNotes = value;
+                OnChrAbrChanged(value);
+            }
+        }
+    }
+    [Range(0f, 1f)] public float chromaticAberrationImpact = 1f;
+    [Range(0.01f, 0.5f)] public float chromaticAberrationAttack = 0.08f;
+    [Range(0.01f, 1f)] public float chromaticAberrationRelease = 0.35f;
+    public void StartHapticPulse()
+    {
+        StopHapticPulse();
+        hapticCoroutine = StartCoroutine(HapticPulseRoutine());
+    }
+
+    public void StopHapticPulse()
+    {
+        if (hapticCoroutine != null)
+        {
+            StopCoroutine(hapticCoroutine);
+            hapticCoroutine = null;
+        }
+
+        SendHaptic(0f, 0f, 0f);
+    }
+
+    IEnumerator HapticPulseRoutine()
+    {
+        int nextFourthNoteTick = -1;
+
+        while (true)
+        {
+            if (ns == null)
+            {
+                ns = FindAnyObjectByType<NoteSpawner>();
+                yield return null;
+                continue;
+            }
+
+            int current = Mathf.Max(0, ns.currentTick);
+            int quarterTicks = ns.GetTicksPerQuarterNoteAtTick(current);
+            int fourthNoteLength = Mathf.Max(1, quarterTicks * hapticPulseDivision);
+
+            if (nextFourthNoteTick <= current)
+            {
+                nextFourthNoteTick = ((current / fourthNoteLength) + 1) * fourthNoteLength;
+            }
+
+            while (ns.currentTick < nextFourthNoteTick)
+            {
+                yield return null;
+            }
+
+            quarterTicks = ns.GetTicksPerQuarterNoteAtTick(nextFourthNoteTick);
+            float attackTicks = Mathf.Max(1f, quarterTicks * hapticAttack);
+            float releaseTicks = Mathf.Max(1f, quarterTicks * hapticRelease);
+            int impactStartTick = ns.currentTick;
+
+            while (ns.currentTick < impactStartTick + attackTicks)
+            {
+                float t = Mathf.Clamp01((ns.currentTick - impactStartTick) / attackTicks);
+                float amount = Mathf.Lerp(0f, 1f, t);
+                SendHaptic(hapticLeftImpact * amount, hapticRightImpact * amount, hapticPulseDuration);
+                yield return null;
+            }
+
+            int releaseStartTick = ns.currentTick;
+            while (ns.currentTick < releaseStartTick + releaseTicks)
+            {
+                float t = Mathf.Clamp01((ns.currentTick - releaseStartTick) / releaseTicks);
+                float amount = Mathf.Lerp(1f, 0f, t);
+                SendHaptic(hapticLeftImpact * amount, hapticRightImpact * amount, hapticPulseDuration);
+                yield return null;
+            }
+
+            SendHaptic(0f, 0f, 0f);
+            nextFourthNoteTick += fourthNoteLength;
+        }
+    }
+
+    void SendHaptic(float leftMotor, float rightMotor, float duration)
+    {
+        if (oldInputManager == null)
+        {
+            oldInputManager = FindAnyObjectByType<OldInputManager>();
+        }
+
+        if (oldInputManager != null)
+        {
+            oldInputManager.TriggerVibration(
+                Mathf.Clamp01(leftMotor),
+                Mathf.Clamp01(rightMotor),
+                Mathf.Max(0f, duration));
+        }
+    }
+    Coroutine chromaticAberrationCoroutine;
+    ChromaticAberration chromaticAberration;
 
     // --- Scripting support ---
     [System.Serializable]
@@ -44,11 +174,138 @@ public class VenueAnimationPlayer : MonoBehaviour
 
     [System.Serializable]
     public class ScriptBundle { public ScriptDef[] scripts; public ScriptEvent[] scriptEvents; }
+    [Header("VRM Testing")]
+    // VRM testing
+    public string vocalistVRMPath = "";
+    public string guitaristVRMPath = "";
+    public string bassistVRMPath = "";
+    public string drumsistVRMPath = "";
+
+    public string currentVowel;
+    
+    [Range(0f, 1f)] public float lipsyncLerpImpact = 1f;
+    [Range(0.01f, 0.5f)] public float lipsyncLerpAttack = 0.08f;
+    [Range(0.01f, 1f)] public float lipsyncLerpRelease = 0.35f;
 
 
     void Start()
     {
         ns = FindAnyObjectByType<NoteSpawner>();
+        if (chromaticAberrationOnQuarterNotes)
+        {
+            StartChromaticAberrationPulse();
+        }
+        if (hapticOnEveryFourthNote)
+        {
+            StartHapticPulse();
+        }
+    }
+    void OnChrAbrChanged(bool yes)
+    {
+        if (yes)
+        {
+            StartChromaticAberrationPulse();
+        }
+        else
+        {
+            StopChromaticAberrationPulse();
+        }
+    }
+    void OnHapticChanged(bool yes)
+    {
+        if (yes)
+        {
+            StartHapticPulse();
+        }
+        else
+        {
+            StopHapticPulse();
+        }
+    }
+
+    void OnDisable()
+    {
+        StopChromaticAberrationPulse();
+        StopHapticPulse();
+    }
+
+    public void StartChromaticAberrationPulse()
+    {
+        StopChromaticAberrationPulse();
+        chromaticAberrationCoroutine = StartCoroutine(ChromaticAberrationPulseRoutine());
+    }
+
+    public void StopChromaticAberrationPulse()
+    {
+        if (chromaticAberrationCoroutine != null)
+        {
+            StopCoroutine(chromaticAberrationCoroutine);
+            chromaticAberrationCoroutine = null;
+        }
+
+        SetChromaticAberration(0f, false);
+    }
+
+    IEnumerator ChromaticAberrationPulseRoutine()
+    {
+        while (true)
+        {
+            if (ns == null)
+            {
+                ns = FindAnyObjectByType<NoteSpawner>();
+                yield return null;
+                continue;
+            }
+
+            int beatTicks = ns.GetTicksPerQuarterNoteAtTick(Mathf.Max(0, ns.currentTick));
+            int nextBeatTick = (ns.currentTick / beatTicks + 1) * beatTicks;
+
+            while (ns.currentTick < nextBeatTick)
+            {
+                yield return null;
+            }
+
+            beatTicks = ns.GetTicksPerQuarterNoteAtTick(nextBeatTick);
+            float attackTicks = Mathf.Max(1f, beatTicks * chromaticAberrationAttack);
+            float releaseTicks = Mathf.Max(1f, beatTicks * chromaticAberrationRelease);
+
+            SetChromaticAberration(0f, true);
+            int impactStartTick = ns.currentTick;
+            while (ns.currentTick < impactStartTick + attackTicks)
+            {
+                float t = Mathf.Clamp01((ns.currentTick - impactStartTick) / attackTicks);
+                SetChromaticAberration(Mathf.Lerp(0f, chromaticAberrationImpact, t), true);
+                yield return null;
+            }
+
+            int releaseStartTick = ns.currentTick;
+            while (ns.currentTick < releaseStartTick + releaseTicks)
+            {
+                float t = Mathf.Clamp01((ns.currentTick - releaseStartTick) / releaseTicks);
+                SetChromaticAberration(Mathf.Lerp(chromaticAberrationImpact, 0f, t), true);
+                yield return null;
+            }
+
+            SetChromaticAberration(0f, false);
+        }
+    }
+
+    void SetChromaticAberration(float intensity, bool enabled)
+    {
+        if (mainCamera == null) return;
+        if (chromaticAberration == null)
+        {
+            PostProcessVolume volume = mainCamera.GetComponent<PostProcessVolume>();
+            if (volume == null || volume.profile == null || !volume.profile.TryGetSettings(out chromaticAberration))
+            {
+                return;
+            }
+        }
+
+        chromaticAberration.enabled.overrideState = true;
+        chromaticAberration.enabled.value = enabled;
+        chromaticAberration.intensity.overrideState = true;
+        chromaticAberration.intensity.value = Mathf.Clamp01(intensity);
     }
 
     public void TryToggleCamera(bool toggle)
@@ -62,7 +319,7 @@ public class VenueAnimationPlayer : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("[VenueAnimationPlayer.TryToggleCamera] Unable to find venue camera: " + ex.Message);
+            Debug.LogError("[VenueAnimationPlayer.TryToggleCamera] Failed to toggle venue camera: " + ex.Message);
         }
         
     }
@@ -71,10 +328,9 @@ public class VenueAnimationPlayer : MonoBehaviour
     {
         try
         {
-            GameObject camera = GameObject.Find("Highway_cam");
-            if (camera)
+            if (highwayCamera)
             {
-                camera.SetActive(toggle);
+                highwayCamera.SetActive(toggle);
             }
         }
         catch (Exception ex)
@@ -138,6 +394,15 @@ public class VenueAnimationPlayer : MonoBehaviour
         {
             Debug.LogWarning("[VenueAnimationPlayer.TrySpawnNewCamera] Failed to spawn camera: " + ex.Message);
             return null;
+        }
+    }
+
+    public void ReturnCameraToDefaultPosition()
+    {
+        if (mainCamera)
+        {
+            mainCamera.transform.position = new Vector3(28, 6, 48);
+            mainCamera.transform.rotation = Quaternion.Euler(new Vector3(-5, 164, -4));
         }
     }
 
@@ -253,7 +518,14 @@ public class VenueAnimationPlayer : MonoBehaviour
         {
             if (!mainCamera)
             {
-                mainCamera = TrySpawnNewCamera(Mathf.Abs(GetHashCode()), null, new Vector3(0,0,0), new Vector3(0,180,0),false);
+                mainCamera = Camera.main.gameObject;
+            }
+        }
+        if (SceneManager.GetSceneByBuildIndex(1).isLoaded)
+        {
+            if (!highwayCamera)
+            {
+                highwayCamera = GameObject.Find("Highway_cam");
             }
         }
         
@@ -319,10 +591,12 @@ public class VenueAnimationPlayer : MonoBehaviour
             {
                 if (!ev.passed && currentTick >= ev.spawnTick)
                 {
-                    if (ev.sungNote == 3520 || ev.value.StartsWith("[")) continue; // ignore "[play]" notes
-                    //Debug.Log(ev.value + " (Freq=" + ev.sungNote + ", StartTick=" + ev.spawnTick +", EndTick=" + (ev.spawnTick + ev.length) + ")"); // log lyrics to console for now
-                    Debug.Log("$beep," + ev.sungNote + "," + ev.lengthMs); // custom debug console synth
-                    //NAudioBeepSynth.PlayToneNAudio(double.Parse(ev.sungNote), (int)ev.length);
+                    if (ev.value.StartsWith("[")) continue; // ignore "[play]" notes
+                    //Debug.Log(ev.value + " (Freq=" + ev.sungNote + ", StartTick=" + ev.spawnTick + ", EndTick=" + (ev.spawnTick + ev.length) + ")"); // log lyrics to console for now
+                    //Debug.Log($"$beep,{ev.sungNote},{ev.lengthMs},1.0,Sine"); // custom debug console synth
+                    //System.Threading.Thread playThread = new System.Threading.Thread(() => NAudioBeepSynth.PlayToneNAudio(ev.sungNote, (int)ev.lengthMs, 1.0));
+                    //playThread.IsBackground = true;
+                    //playThread.Start();
                     ev.passed = true;
                 }
             }
@@ -336,7 +610,7 @@ public class VenueAnimationPlayer : MonoBehaviour
     void RegisterBuiltins()
     {
         fnRegistry.Clear();
-
+        // regular scripts
         fnRegistry["venue.camera.move"] = (args) =>
         {
             float x = ParseF(args, 0), y = ParseF(args, 1), z = ParseF(args, 2);
@@ -524,6 +798,101 @@ public class VenueAnimationPlayer : MonoBehaviour
             gameManager.ExitGame(false);
         };
 
+        // RBN2 scripting
+
+        // full band
+        fnRegistry["[coop_all_behind]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Band behind shot");
+        };
+        fnRegistry["[coop_all_far]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Band far shot");
+        };
+        fnRegistry["[coop_all_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Band near shot");
+        };
+        // guitarist, vocals, bassist
+        fnRegistry["[coop_front_behind]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Band Front behind shot");
+        };
+        fnRegistry["[coop_front_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Band Front near shot");
+        };
+        // 2-character cut
+        fnRegistry["[coop_gv_behind]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Vocals behind shot");
+        };
+        fnRegistry["[coop_gv_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Vocals near shot");
+        };
+
+        fnRegistry["[coop_gk_behind]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Keys behind shot");
+        };
+        fnRegistry["[coop_gk_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Keys near shot");
+        };
+
+        fnRegistry["[coop_bg_behind]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Bass behind shot");
+        };
+        fnRegistry["[coop_bg_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Guitar/Bass near shot");
+        };
+        fnRegistry["[coop_bd_near]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            Debug.Log("[VenueAnimationPlayer] Parsed Camera cut: Bass/Drums near shot");
+        };
+        fnRegistry["[lighting ()]"] = (args) =>
+        {
+            if (args.Count > 0) return;
+            LightingManager lighting = FindAnyObjectByType<LightingManager>();
+            StartCoroutine(lighting.PlayCue("default"));
+        };
+        fnRegistry["lighting"] = (args) =>
+        {
+            LightingManager lighting = FindAnyObjectByType<LightingManager>();
+            StartCoroutine(lighting.PlayCue(args[0]));
+        };
+        // other scripting cues
+        fnRegistry["chrabr4thnote_on"] = (args) =>
+        {
+            chrabrToggle = true;
+        };
+        fnRegistry["chrabr4thnote_off"] = (args) =>
+        {
+            chrabrToggle = false;
+        };
+        fnRegistry["haptic4thnote_on"] = (args) =>
+        {
+            hapticToggle = true;
+        };
+        fnRegistry["haptic4thnote_off"] = (args) =>
+        {
+            hapticToggle = false;
+        };
 
     }
 
@@ -548,18 +917,32 @@ public class VenueAnimationPlayer : MonoBehaviour
         try
         {
             if (string.IsNullOrEmpty(ev)) return;
-            // format: "function|arg1,arg2" or just "function"
+            string originalFunctionName = ev.Trim();
+            string expression = originalFunctionName;
+            bool wrappedInBrackets = expression.StartsWith("[") && expression.EndsWith("]");
+
+            // Accept: "function", "function(args)", or "[function (args)]".
+            if (wrappedInBrackets)
+            {
+                expression = expression.Substring(1, expression.Length - 2).Trim();
+            }
+
             string funcName;
             string argsText = string.Empty;
-            int sep = ev.IndexOf('|');
+            int sep = expression.IndexOf('(');
             if (sep >= 0)
             {
-                funcName = ev.Substring(0, sep);
-                if (sep + 1 < ev.Length) argsText = ev.Substring(sep + 1);
+                funcName = expression.Substring(0, sep).Trim();
+                int close = expression.LastIndexOf(')');
+                if (close > sep)
+                {
+                    argsText = expression.Substring(sep + 1, close - sep - 1);
+                }
             }
             else
             {
-                funcName = ev;
+                // Preserve bracket-only legacy names such as [coop_all_near].
+                funcName = wrappedInBrackets ? originalFunctionName : expression.Trim();
             }
 
             // parse arguments using the existing ParseArgs (handles quoted strings)
@@ -574,8 +957,18 @@ public class VenueAnimationPlayer : MonoBehaviour
             }
 
             // allow calling a single function name directly
-            if (fnRegistry.TryGetValue(funcName, out var fn)) fn(argSplits != null ? argSplits : new List<string>());
-            else Debug.LogWarning("Script or function not found: " + funcName);
+            if (fnRegistry.TryGetValue(funcName, out var fn))
+            {
+                fn(argSplits);
+            }
+            else if (wrappedInBrackets && fnRegistry.TryGetValue(originalFunctionName, out var legacyFn))
+            {
+                legacyFn(argSplits);
+            }
+            else
+            {
+                Debug.LogWarning("Script or function not found: " + funcName);
+            }
         }
         catch (Exception ex)
         {

@@ -31,6 +31,7 @@ TagManager:
   - Open_HOPO_Note
   - Strikeline
   - DelayedStrikeline
+  - PreLoaderCam
   layers:
   - Default
   - TransparentFX
@@ -42,7 +43,7 @@ TagManager:
   - Post-process
   - Highway Post Process
   - Main Menu Post Process
-  - 
+  - GuitarPlayer
   - 
   - 
   - 

@@ -337,7 +337,14 @@ public class LaneInputManager : MonoBehaviour
                 // Optionally: play sustain start FX / scoring events here
                 if (strikeline != null)
                 {
-                    strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                    if (laneIndex != 7) 
+                    {
+                        strikeline.HitNote(laneIndex - 2); // zero-based xOffset
+                    }
+                    else
+                    {
+                        strikeline.HitNote(7);
+                    }
                     strikeline.HitSustain(laneIndex - 2); // zero-based xOffset
                     strikeline.SLTopHold(laneIndex);
                 }

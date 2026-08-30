@@ -81,10 +81,11 @@ public class StarMeter : MonoBehaviour
 
     private void OnValueChanged()
     {
+        GameManager gameManager = FindAnyObjectByType<GameManager>();
         UIUpdater updater = FindAnyObjectByType<UIUpdater>();
         if (value == 0)
         {
-            updater.StarPowerToggle(false);
+            updater.StarPowerToggle(gameManager.currentPart.ToLower(), false);
         }
         else if (value == 50 && !updater.inStar)
         {

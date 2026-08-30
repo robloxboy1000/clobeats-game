@@ -21,7 +21,7 @@ public class DebugSender : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError("Failed to connect: " + ex.Message);
+            Debug.LogWarning("Failed to connect: " + ex.Message); // warning to allow other scripts to execute
         }
     }
 

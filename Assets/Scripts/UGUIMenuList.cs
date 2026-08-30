@@ -18,7 +18,7 @@ public class UGUIMenuList : MonoBehaviour
     public Transform contentContainer;
     public Transform rootTransform;
     public ScrollRect scrollRect;
-    public Button regenerateItemsButton;
+    //public Button regenerateItemsButton;
     public bool rebuildOnEnable = true;
     public bool wrapSelection = true;
     public bool autoScrollToSelection = true;
@@ -32,6 +32,8 @@ public class UGUIMenuList : MonoBehaviour
     public TextMeshProUGUI songArtistText;
     public Texture placeholderAlbumTexture;
     public bool playPreviewAudio = true;
+    [Range(0f,1f)]
+    public float previewVolume = 1.0f;
 
     [Header("Selection Style")]
     public Color selectedItemColor = new Color(0.18f, 0.52f, 1f, 1f);
@@ -56,11 +58,11 @@ public class UGUIMenuList : MonoBehaviour
         public Color normalTextColor;
     }
 
-    private readonly List<SongMenuItem> items = new List<SongMenuItem>();
-    private readonly List<GameObject> instantiatedListItems = new List<GameObject>();
-    private readonly Dictionary<int, SongMenuItem> itemsBySongNumber = new Dictionary<int, SongMenuItem>();
-    private readonly Dictionary<int, SongMenuItem> itemsByCachedId = new Dictionary<int, SongMenuItem>();
-    private readonly Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
+    private List<SongMenuItem> items = new List<SongMenuItem>();
+    private List<GameObject> instantiatedListItems = new List<GameObject>();
+    private Dictionary<int, SongMenuItem> itemsBySongNumber = new Dictionary<int, SongMenuItem>();
+    private Dictionary<int, SongMenuItem> itemsByCachedId = new Dictionary<int, SongMenuItem>();
+    private Dictionary<int, ListObject> itemPaths = new Dictionary<int, ListObject>();
 
     private int selectedIndex = -1;
     private int rebuildVersion;
@@ -74,14 +76,9 @@ public class UGUIMenuList : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
-
-        if (regenerateItemsButton != null)
-        {
-            regenerateItemsButton.onClick.AddListener(Refresh);
-        }
     }
 
-    private async void OnEnable()
+    async void OnEnable()
     {
         if (rebuildOnEnable)
         {
@@ -89,14 +86,9 @@ public class UGUIMenuList : MonoBehaviour
         }
     }
 
-    private void OnDisable()
+    void OnDisable()
     {
         rebuildVersion++;
-    }
-
-    public void Refresh()
-    {
-        _ = RebuildAsync();
     }
 
     public async Task RebuildAsync()
@@ -112,14 +104,15 @@ public class UGUIMenuList : MonoBehaviour
             return;
         }
 
-        foreach (KeyValuePair<int, GameManager.SongEntryInfo> entry in gameManager.cachedEntries.OrderBy(k => k.Value.songNumber))
+        foreach (GameManager.SongEntryInfo entry in gameManager.cachedEntries) // attempting dont sort entries
         {
             if (version != rebuildVersion)
             {
+                Debug.LogWarning("Rebuild version is invalid.");
                 return;
             }
 
-            await AddEntryAsync(entry.Value);
+            await AddEntryAsync(entry);
         }
 
         SongFolderLoader songFolderLoader = FindFirstObjectByType<SongFolderLoader>();
@@ -252,7 +245,7 @@ public class UGUIMenuList : MonoBehaviour
         bool changed = selectedIndex != index;
         selectedIndex = index;
         UpdateSelectionVisuals();
-        //FocusSelectedItem(item);
+        FocusSelectedItem(item);
         ScrollToSelectedItem();
 
         if (updatePreview && (changed || forcePreview))
@@ -286,16 +279,13 @@ public class UGUIMenuList : MonoBehaviour
     {
         if (entry == null || string.IsNullOrEmpty(entry.songPath))
         {
-            return;
-        }
-
-        if (Path.GetFileName(entry.songPath).StartsWith("sub_", StringComparison.OrdinalIgnoreCase))
-        {
+            Debug.LogWarning("Song entry is null or path is missing.");
             return;
         }
 
         if (!await HasPlayableAudioAsync(entry.songPath))
         {
+            Debug.LogWarning("Song entry audio is missing.");
             return;
         }
 
@@ -359,7 +349,7 @@ public class UGUIMenuList : MonoBehaviour
             songPath = entry.songPath,
             songID = entry.cachedSongID
         };
-
+        Debug.Log("Added entry: " + entry.songTitle);
         await Task.Yield();
     }
 
@@ -417,7 +407,7 @@ public class UGUIMenuList : MonoBehaviour
             musicPlayer.StopPreviewAudio();
         }
 
-        StartCoroutine(musicPlayer.PlayPooledPreviewAudio(clip, entry.songPreviewStartTime));
+        StartCoroutine(musicPlayer.PlayPooledPreviewAudio(clip, entry.songPreviewStartTime, previewVolume));
     }
 
     private Texture LoadAlbumTexture(string songPath)
@@ -488,7 +478,7 @@ public class UGUIMenuList : MonoBehaviour
             return;
         }
 
-        //EventSystem.current.SetSelectedGameObject(item.view);
+        EventSystem.current.SetSelectedGameObject(item.view);
     }
 
     private void ScrollToSelectedItem()
@@ -586,10 +576,10 @@ public class UGUIMenuList : MonoBehaviour
             contentContainer = scrollRect.content;
         }
 
-        if (rootTransform == null && menuManager != null && menuManager.quickplayPanel != null)
+        /*if (rootTransform == null && menuManager != null && menuManager.ReturnMenuGO(MenuManager.QuickPlayMenuId) != null)
         {
-            rootTransform = menuManager.quickplayPanel.transform;
-        }
+            rootTransform = menuManager.ReturnMenuGO(MenuManager.QuickPlayMenuId).transform;
+        }*/
 
         Transform songInfoPanel = rootTransform != null ? FindDeepChild(rootTransform, "SongInfoPanel") : null;
         if (songInfoPanel != null)

@@ -77,7 +77,7 @@ public class UIUpdater : MonoBehaviour
         
     }
 
-    public void StarPowerToggle(bool toggle)
+    public void StarPowerToggle(string part, bool toggle)
     {
         SFXPlayer sFX = FindAnyObjectByType<SFXPlayer>();
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
@@ -89,13 +89,13 @@ public class UIUpdater : MonoBehaviour
             savedcombo = savedcombo * 2;
             sFX.PlayClip("Star_Deployed");
             //sFX.PlayClip("FeverCheer1");
-            musicPlayer.ToggleReverb(true);
+            musicPlayer.ToggleStemReverb(part, true);
         }
         else
         {
             combolimit = 4;
             sFX.PlayClip("Star_Release");
-            musicPlayer.ToggleReverb(false);
+            musicPlayer.ToggleStemReverb(part, false);
         }
 
     }

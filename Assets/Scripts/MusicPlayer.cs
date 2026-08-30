@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.Video;
 using ManagedBass;
@@ -10,11 +11,12 @@ using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Multimedia;
 using Melanchall.DryWetMidi.Interaction;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 public class MusicPlayer : MonoBehaviour
 {
-
+    public double musicVolume = 1.0;
     public VideoPlayer videoPlayer;
     public bool previewAudioPlaying = false;
     public double dspSongStart = 0.0;
@@ -37,7 +39,7 @@ public class MusicPlayer : MonoBehaviour
     int reverbFX = 0;
     // DSP fallback for platforms / channels that don't support ChannelSetFX
     int reverbDSP = 0;
-    ManagedBass.DSPProcedure reverbDspProc = null;
+    //ManagedBass.DSPProcedure reverbDspProc = null;
     // per-channel delay buffers for stereo wet output
     float[][] reverbDelayBuffers = null;
     int reverbFramePos = 0; // frame index into per-channel delay buffers
@@ -61,6 +63,24 @@ public class MusicPlayer : MonoBehaviour
     private OutputDevice midiOutput = null;
     private MidiFile currentMidiFile = null;
     private Coroutine midiScheduledCoroutine = null;
+
+    [System.Serializable]
+    public class AudioStem
+    {
+        public string name;
+        public int handle;
+        public List<int> childHandles = new List<int>();
+        public bool isPlaying;
+        public float volume = 1f;
+        public bool reverbEnabled;
+        public int reverbFxHandle;
+        public int reverbDspHandle;
+    }
+
+    private readonly Dictionary<string, AudioStem> stemChannels = new Dictionary<string, AudioStem>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, int> stemReverbFxByHandle = new Dictionary<int, int>();
+    private readonly Dictionary<int, int> stemReverbDspByHandle = new Dictionary<int, int>();
+    private readonly Dictionary<int, bool> stemReverbDspFallbackByHandle = new Dictionary<int, bool>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -362,7 +382,7 @@ public class MusicPlayer : MonoBehaviour
             yield return null;
         }
         // start BASS streams synchronized
-        if (bassInitialized)
+        /*if (bassInitialized)
         {
             try
             {
@@ -375,7 +395,8 @@ public class MusicPlayer : MonoBehaviour
             {
                 Debug.LogError("Failed to start BASS streams at scheduled time: " + ex.Message);
             }
-        }
+        }*/
+        PlayAllStems();
         bassScheduledCoroutine = null;
         yield break;
     }
@@ -416,13 +437,13 @@ public class MusicPlayer : MonoBehaviour
         return Math.Max(0.0, GetElapsedTimeDsp());
     }
 
-    public IEnumerator PlayPooledPreviewAudio(AudioClip audioClip, float startPoint = 0)
+    public IEnumerator PlayPooledPreviewAudio(AudioClip audioClip, float startPoint = 0, float volume = 1.0f)
     {
         if (audioClip != null)
         {
             previewAudioStream.clip = audioClip;
             previewAudioStream.time = startPoint / 1000;
-            previewAudioStream.volume = 1;
+            previewAudioStream.volume = volume;
             previewAudioStream.Play();
             previewAudioPlaying = true;
             yield return null;
@@ -630,6 +651,17 @@ public class MusicPlayer : MonoBehaviour
             }
         }
     }
+
+    public void SetMusicVolume(double amount)
+    {
+        if (bassInitialized)
+        {
+            if (songStreamHandle != 0)
+            {
+                try { Bass.ChannelSetAttribute(songStreamHandle, ChannelAttribute.Volume, amount); } catch { }
+            }
+        }
+    }
     public void RestartAt(double time)
     {
         if (isPaused) return;
@@ -670,11 +702,12 @@ public class MusicPlayer : MonoBehaviour
             lastMusicCheckTime = Time.time;
             if (gameManager.inSong && GetElapsedTimeDsp() != noteSpawner.GetTimeInSecondsAtTick(noteSpawner.currentTick) && !isPaused && !seamlessMode)
             {
-                RestartAt(GetElapsedTimeDsp());
+                //RestartAt(GetElapsedTimeDsp());
             }
         }
 
-        
+        //SetMusicVolume(musicVolume);
+        SetAllStemVolume((float)musicVolume);
         if (noteSpawner == null)
         {
             noteSpawner = FindFirstObjectByType<NoteSpawner>();
@@ -692,8 +725,8 @@ public class MusicPlayer : MonoBehaviour
                 noteSpawner.UpdateCurrentTick(-0.01f);
             }
             currentTimeDSP = dspElapsed;
-            currentTime = GetElapsedTime();
-            songLength = GetSongLength();
+            //currentTime = GetElapsedTime();
+            songLength = noteSpawner.songLengthInTicks / 1000;
             
             if (gameManager.inSong && currentTimeDSP >= songLength + graceEndSeconds)
             {
@@ -728,6 +761,7 @@ public class MusicPlayer : MonoBehaviour
             videoPlayer.enabled = false;
         }
     }
+    // Unloads song resources and plays "You Rock" animation if player successfully cleared the song
     public IEnumerator EndSong(bool songCleared = true)
     {
         Debug.Log("[MusicPlayer.EndSong] Unloading song...");
@@ -743,7 +777,8 @@ public class MusicPlayer : MonoBehaviour
         {
             noteSpawner.songLengthInTicks = 0;
         }
-        stopAudio(false);
+        //stopAudio(false);
+        StopAllStems(false);
         if (videoPlayer != null)
         {
             videoPlayer.Stop();
@@ -763,16 +798,14 @@ public class MusicPlayer : MonoBehaviour
         {
             strikeline.ResetAnims();
         }
-        GameObject gp = GameObject.Find("GuitarPlayer");
-        if (gp != null)
-        {
-            gp.SetActive(false);
-        }
+        
         VenueAnimationPlayer.Instance.Unload();
+        VenueAnimationPlayer.Instance.TryToggleHighwayCam(false);
         Debug.Log("[MusicPlayer.EndSong] Song unloaded.");
         if (songCleared) StartCoroutine(gameManager.PlayerRocksAnim());
         yield return null;
     }
+    // returns non-DSP elapsed time
     public double GetElapsedTime()
     {
         if (midiPlayback != null)
@@ -796,6 +829,7 @@ public class MusicPlayer : MonoBehaviour
         }
         return 0f;
     }
+    // returns song audio length
     public double GetSongLength()
     {
         if (midiPlayback != null)
@@ -819,6 +853,7 @@ public class MusicPlayer : MonoBehaviour
         }
         return 0f;
     }
+    // unused, returns non-stem song peak amplitude
     public short GetSongAudioLevel()
     {
         if (bassInitialized && songStreamHandle != 0)
@@ -832,6 +867,7 @@ public class MusicPlayer : MonoBehaviour
         }
         return 0;
     }
+    // unused, returns sample data
     public int GetSongData()
     {
         if (bassInitialized && songStreamHandle != 0)
@@ -846,15 +882,464 @@ public class MusicPlayer : MonoBehaviour
         }
         return 0;
     }
-    public void ToggleReverb(bool on)
+    #region Stem API
+    private string GetSupportedStemFilePath(string songFolderPath, string stemName)
     {
-        if (bassInitialized && songStreamHandle != 0)
+        if (string.IsNullOrEmpty(songFolderPath) || !Directory.Exists(songFolderPath))
+        {
+            return null;
+        }
+
+        var loader = SongFolderLoader.Instance;
+        var supportedExtensions = loader != null && loader.supportedFormats != null && loader.supportedFormats.Count > 0
+            ? loader.supportedFormats
+            : new List<string> { "wav", "ogg", "mp3", "opus", "mid", "midi" };
+
+        foreach (var extension in supportedExtensions)
+        {
+            var candidatePath = Path.Combine(songFolderPath, stemName + "." + extension.TrimStart('.'));
+            if (File.Exists(candidatePath))
+            {
+                return candidatePath;
+            }
+        }
+
+        foreach (var file in Directory.GetFiles(songFolderPath))
+        {
+            var fileStem = Path.GetFileNameWithoutExtension(file);
+            var extension = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+            if (string.Equals(fileStem, stemName, StringComparison.OrdinalIgnoreCase)
+                && supportedExtensions.Any(ext => string.Equals(ext, extension, StringComparison.OrdinalIgnoreCase)))
+            {
+                return file;
+            }
+        }
+
+        return null;
+    }
+
+    private List<string> GetStemFilesByName(string songFolderPath, string stemName)
+    {
+        if (string.IsNullOrEmpty(songFolderPath) || !Directory.Exists(songFolderPath))
+        {
+            return new List<string>();
+        }
+
+        var loader = SongFolderLoader.Instance;
+        var supportedExtensions = loader != null && loader.supportedFormats != null && loader.supportedFormats.Count > 0
+            ? loader.supportedFormats
+            : new List<string> { "wav", "ogg", "mp3", "opus", "mid", "midi" };
+
+        var matchingFiles = Directory.GetFiles(songFolderPath)
+            .Where(file =>
+            {
+                var fileStem = Path.GetFileNameWithoutExtension(file);
+                var extension = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+                return supportedExtensions.Any(ext => string.Equals(ext, extension, StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(fileStem, stemName, StringComparison.OrdinalIgnoreCase);
+            })
+            .OrderBy(file => file)
+            .ToList();
+
+        if (matchingFiles.Count > 0)
+        {
+            return matchingFiles;
+        }
+
+        if (string.Equals(stemName, "drums", StringComparison.OrdinalIgnoreCase))
+        {
+            return Directory.GetFiles(songFolderPath)
+                .Where(file =>
+                {
+                    var fileStem = Path.GetFileNameWithoutExtension(file);
+                    var extension = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
+                    return supportedExtensions.Any(ext => string.Equals(ext, extension, StringComparison.OrdinalIgnoreCase))
+                        && fileStem.StartsWith("drums_", StringComparison.OrdinalIgnoreCase)
+                        && fileStem.Length > "drums_".Length;
+                })
+                .OrderBy(file => file)
+                .ToList();
+        }
+
+        return new List<string>();
+    }
+
+    public void LoadAvailableStemsInPath(string songFolderPath)
+    {
+        if (string.IsNullOrEmpty(songFolderPath) || !Directory.Exists(songFolderPath))
+        {
+            Debug.LogError("[MusicPlayer.LoadAvailableStemsInPath] Invalid song folder path: " + songFolderPath);
+            return;
+        }
+
+        string[] stemNames = { "song", "guitar", "rhythm", "bass", "keys", "drums", "vocals" };
+        foreach (var stemName in stemNames)
+        {
+            if (string.Equals(stemName, "drums", StringComparison.OrdinalIgnoreCase))
+            {
+                var drumFiles = GetStemFilesByName(songFolderPath, stemName);
+                if (drumFiles.Count > 1)
+                {
+                    if (LoadSplitStemAudio(stemName, drumFiles) != null)
+                    {
+                        Debug.Log("[MusicPlayer.LoadAvailableStemsInPath] Loaded mixed-down drums audio from " + drumFiles.Count + " split files.");
+                    }
+                    continue;
+                }
+            }
+
+            string stemPath = GetSupportedStemFilePath(songFolderPath, stemName);
+            if (string.IsNullOrEmpty(stemPath))
+            {
+                continue;
+            }
+
+            if (LoadStemAudio(stemName, stemPath) != null)
+            {
+                Debug.Log("[MusicPlayer.LoadAvailableStemsInPath] Loaded " + stemName + " audio from " + Path.GetFileName(stemPath) + ".");
+            }
+        }
+    }
+
+    private AudioStem LoadSplitStemAudio(string stemName, List<string> drumFiles)
+    {
+        if (drumFiles == null || drumFiles.Count == 0)
+        {
+            return null;
+        }
+
+        if (stemChannels.TryGetValue(stemName, out var existingStem) && existingStem.handle != 0)
+        {
+            StopStem(stemName, true);
+        }
+
+        var primaryStem = LoadStemAudio(stemName, drumFiles[0]);
+        if (primaryStem == null)
+        {
+            return null;
+        }
+
+        primaryStem.childHandles.Clear();
+        for (int i = 1; i < drumFiles.Count; i++)
+        {
+            int childHandle = Bass.CreateStream(drumFiles[i], 0, 0, BassFlags.Prescan);
+            if (childHandle == 0)
+            {
+                Debug.LogWarning("LoadSplitStemAudio: failed to create split drums handle for '" + drumFiles[i] + "': " + Bass.LastError);
+                continue;
+            }
+
+            Bass.ChannelSetAttribute(childHandle, ChannelAttribute.Volume, 1f);
+            primaryStem.childHandles.Add(childHandle);
+        }
+
+        return primaryStem;
+    }
+
+    public AudioStem LoadStemAudio(string stemName, string audioClipPath, float volume = 1f, bool autoplay = false)
+    {
+        if (string.IsNullOrWhiteSpace(stemName))
+        {
+            Debug.LogError("LoadStemAudio: stemName is required.");
+            return null;
+        }
+        if (string.IsNullOrEmpty(audioClipPath))
+        {
+            Debug.LogError("LoadStemAudio: audioClipPath is required for stem '" + stemName + "'.");
+            return null;
+        }
+
+        if (!bassInitialized) InitBASS();
+        if (!bassInitialized) return null;
+
+        if (stemChannels.TryGetValue(stemName, out var existingStem) && existingStem.handle != 0)
+        {
+            StopStem(stemName, true);
+        }
+
+        int stemHandle = Bass.CreateStream(audioClipPath, 0, 0, BassFlags.Prescan);
+        if (stemHandle == 0)
+        {
+            Debug.LogError("LoadStemAudio: failed to create stem handle for '" + stemName + "': " + Bass.LastError);
+            return null;
+        }
+
+        Bass.ChannelSetAttribute(stemHandle, ChannelAttribute.Volume, Mathf.Clamp01(volume));
+
+        var stem = new AudioStem
+        {
+            name = stemName,
+            handle = stemHandle,
+            volume = Mathf.Clamp01(volume),
+            isPlaying = autoplay,
+            reverbEnabled = false,
+            reverbFxHandle = 0,
+            reverbDspHandle = 0
+        };
+
+        stemChannels[stemName] = stem;
+
+        if (autoplay)
+        {
+            Bass.ChannelPlay(stemHandle);
+        }
+
+        return stem;
+    }
+
+    public void PlayStem(string stemName)
+    {
+        if (stemChannels.TryGetValue(stemName, out var stem) && stem.handle != 0)
+        {
+            try
+            {
+                Bass.ChannelPlay(stem.handle);
+                foreach (var childHandle in stem.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        Bass.ChannelPlay(childHandle);
+                    }
+                }
+                stem.isPlaying = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("PlayStem failed for '" + stemName + "': " + ex.Message);
+            }
+        }
+    }
+
+
+    public void PauseStem(string stemName)
+    {
+        if (stemChannels.TryGetValue(stemName, out var stem) && stem.handle != 0)
+        {
+            pausedElapsedDsp = GetElapsedTimeDsp();
+            isPaused = true;
+            try
+            {
+                Bass.ChannelPause(stem.handle);
+                foreach (var childHandle in stem.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        Bass.ChannelPause(childHandle);
+                    }
+                }
+                stem.isPlaying = false;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("PauseStem failed for '" + stemName + "': " + ex.Message);
+            }
+        }
+    }
+
+    public void PlayAllStems()
+    {
+        foreach (var pair in stemChannels)
+        {
+            if (pair.Value == null || pair.Value.handle == 0) continue;
+            try
+            {
+                Bass.ChannelPlay(pair.Value.handle);
+                foreach (var childHandle in pair.Value.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        Bass.ChannelPlay(childHandle);
+                    }
+                }
+                pair.Value.isPlaying = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("PlayAllStems failed for '" + pair.Key + "': " + ex.Message);
+            }
+        }
+    }
+
+    public void PauseAllStems()
+    {
+        pausedElapsedDsp = GetElapsedTimeDsp();
+        isPaused = true;
+
+        foreach (var pair in stemChannels)
+        {
+            if (pair.Value == null || pair.Value.handle == 0) continue;
+            try
+            {
+                Bass.ChannelPause(pair.Value.handle);
+                foreach (var childHandle in pair.Value.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        Bass.ChannelPause(childHandle);
+                    }
+                }
+                pair.Value.isPlaying = false;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("PauseAllStems failed for '" + pair.Key + "': " + ex.Message);
+            }
+        }
+    }
+
+    public void StopAllStems(bool freeStems = true)
+    {
+        foreach (var pair in new List<KeyValuePair<string, AudioStem>>(stemChannels))
+        {
+            if (pair.Value == null || pair.Value.handle == 0) continue;
+            try
+            {
+                ToggleReverb(false, pair.Value.handle);
+                foreach (var childHandle in pair.Value.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        ToggleReverb(false, childHandle);
+                        Bass.ChannelStop(childHandle);
+                        if (freeStems)
+                        {
+                            Bass.StreamFree(childHandle);
+                        }
+                    }
+                }
+                Bass.ChannelStop(pair.Value.handle);
+                if (freeStems)
+                {
+                    Bass.StreamFree(pair.Value.handle);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("StopAllStems failed for '" + pair.Key + "': " + ex.Message);
+            }
+            finally
+            {
+                pair.Value.isPlaying = false;
+                pair.Value.childHandles.Clear();
+                if (freeStems)
+                {
+                    pair.Value.handle = 0;
+                }
+            }
+        }
+    }
+
+    public void StopStem(string stemName, bool freeStem = true)
+    {
+        if (stemChannels.TryGetValue(stemName, out var stem) && stem.handle != 0)
+        {
+            try
+            {
+                ToggleReverb(false, stem.handle);
+                Bass.ChannelStop(stem.handle);
+                foreach (var childHandle in stem.childHandles)
+                {
+                    if (childHandle != 0)
+                    {
+                        ToggleReverb(false, childHandle);
+                        Bass.ChannelStop(childHandle);
+                        if (freeStem)
+                        {
+                            Bass.StreamFree(childHandle);
+                        }
+                    }
+                }
+                if (freeStem)
+                {
+                    Bass.StreamFree(stem.handle);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("StopStem failed for '" + stemName + "': " + ex.Message);
+            }
+            finally
+            {
+                stem.isPlaying = false;
+                stem.childHandles.Clear();
+                stem.handle = 0;
+                stemChannels.Remove(stemName);
+            }
+        }
+    }
+
+    public void SetStemVolume(string stemName, float volume)
+    {
+        if (stemChannels.TryGetValue(stemName, out var stem) && stem.handle != 0)
+        {
+            var clamped = Mathf.Clamp01(volume);
+            stem.volume = clamped;
+            try { Bass.ChannelSetAttribute(stem.handle, ChannelAttribute.Volume, clamped); } catch { }
+            foreach (var childHandle in stem.childHandles)
+            {
+                if (childHandle != 0)
+                {
+                    try { Bass.ChannelSetAttribute(childHandle, ChannelAttribute.Volume, clamped); } catch { }
+                }
+            }
+        }
+    }
+
+    public void SetAllStemVolume(float volume)
+    {
+        var clamped = Mathf.Clamp01(volume);
+        foreach (var pair in stemChannels)
+        {
+            if (pair.Value == null || pair.Value.handle == 0) continue;
+            pair.Value.volume = clamped;
+            try { Bass.ChannelSetAttribute(pair.Value.handle, ChannelAttribute.Volume, clamped); } catch { }
+            foreach (var childHandle in pair.Value.childHandles)
+            {
+                if (childHandle != 0)
+                {
+                    try { Bass.ChannelSetAttribute(childHandle, ChannelAttribute.Volume, clamped); } catch { }
+                }
+            }
+        }
+    }
+
+    public void ToggleStemReverb(string stemName, bool on)
+    {
+        if (stemChannels.TryGetValue(stemName, out var stem))
+        {
+            ToggleReverb(on, stem.handle);
+            foreach (var childHandle in stem.childHandles)
+            {
+                if (childHandle != 0)
+                {
+                    ToggleReverb(on, childHandle);
+                }
+            }
+            stem.reverbEnabled = on;
+        }
+    }
+
+    public int GetStemHandle(string stemName)
+    {
+        return stemChannels.TryGetValue(stemName, out var stem) ? stem.handle : 0;
+    }
+    #endregion
+
+    // starpower reverb (per handle, so stems can be affected independently from the main song stream)
+    public void ToggleReverb(bool on, int handleToAffect)
+    {
+        if (bassInitialized && handleToAffect != 0)
         {
             if (on)
             {
                 try
                 {
-                    int fxHandle = Bass.ChannelSetFX(songStreamHandle, EffectType.Echo, 0);
+                    if (stemReverbFxByHandle.TryGetValue(handleToAffect, out var existingFx) && existingFx != 0)
+                    {
+                        return;
+                    }
+
+                    int fxHandle = Bass.ChannelSetFX(handleToAffect, EffectType.Echo, 0);
                     if (fxHandle == 0)
                     {
                         var lastErr = Bass.LastError;
@@ -862,20 +1347,19 @@ public class MusicPlayer : MonoBehaviour
                         try
                         {
                             ChannelInfo info;
-                            Bass.ChannelGetInfo(songStreamHandle, out info);
+                            Bass.ChannelGetInfo(handleToAffect, out info);
                             Debug.Log($"Channel info - Freq: {info.Frequency}, Chans: {info.Channels}, Flags: {info.Flags}, Resolution: {info.Resolution}");
                         }
                         catch (Exception ex)
                         {
                             Debug.LogWarning("Failed to retrieve channel info: " + ex.Message);
                         }
-                        // Try DSP fallback if FX unavailable
-                        EnableReverbDspFallback();
+                        EnableReverbDspFallback(handleToAffect);
                     }
                     else
                     {
-                        reverbFX = fxHandle;
-                        Debug.Log(reverbFX + " Added reverb/echo to song stream. LastError: " + Bass.LastError);
+                        stemReverbFxByHandle[handleToAffect] = fxHandle;
+                        Debug.Log(fxHandle + " Added reverb/echo to handle " + handleToAffect + ". LastError: " + Bass.LastError);
                     }
                 }
                 catch (Exception ex)
@@ -887,14 +1371,14 @@ public class MusicPlayer : MonoBehaviour
             {
                 try
                 {
-                    if (reverbFX != 0)
+                    if (stemReverbFxByHandle.TryGetValue(handleToAffect, out var fxHandle) && fxHandle != 0)
                     {
-                        Bass.ChannelRemoveFX(songStreamHandle, reverbFX);
-                        reverbFX = 0;
+                        Bass.ChannelRemoveFX(handleToAffect, fxHandle);
+                        stemReverbFxByHandle.Remove(handleToAffect);
                     }
-                    if (reverbUsingDspFallback || reverbDSP != 0)
+                    if (stemReverbDspFallbackByHandle.TryGetValue(handleToAffect, out var isFallback) && isFallback)
                     {
-                        DisableReverbDspFallback();
+                        DisableReverbDspFallback(handleToAffect);
                     }
                 }
                 catch (Exception ex)
@@ -904,53 +1388,128 @@ public class MusicPlayer : MonoBehaviour
             }
         }
     }
-
-    private void EnableReverbDspFallback()
+    // DSP fallback for starpower reverb if BASS ChannelSetFX doesn't work (enables)
+    private void EnableReverbDspFallback(int handleToAffect)
     {
         try
         {
             ChannelInfo info;
-            if (!Bass.ChannelGetInfo(songStreamHandle, out info))
+            if (!Bass.ChannelGetInfo(handleToAffect, out info))
             {
                 Debug.LogWarning("EnableReverbDspFallback: Failed to get channel info.");
                 return;
             }
 
-            reverbDspChannels = Math.Max(1, info.Channels);
+            int dspChannels = Math.Max(1, info.Channels);
             int freq = Math.Max(4000, info.Frequency);
-            reverbDelayLen = Math.Max(64, (int)(freq * reverbFallbackDelaySeconds));
-            // allocate per-channel delay buffers
-            reverbDelayBuffers = new float[reverbDspChannels][];
-            for (int c = 0; c < reverbDspChannels; c++)
+            int delayLen = Math.Max(64, (int)(freq * reverbFallbackDelaySeconds));
+
+            var delayBuffers = new float[dspChannels][];
+            for (int c = 0; c < dspChannels; c++)
             {
-                reverbDelayBuffers[c] = new float[reverbDelayLen];
-            }
-            reverbFramePos = 0;
-            // set small stereo offset for widening if 2+ channels
-            reverbChannelOffset = new int[reverbDspChannels];
-            if (reverbDspChannels >= 2)
-            {
-                int stereoOffset = Math.Max(1, (int)(freq * 0.006f)); // ~6ms offset
-                reverbChannelOffset[0] = 0;
-                reverbChannelOffset[1] = stereoOffset;
-                for (int c = 2; c < reverbDspChannels; c++) reverbChannelOffset[c] = stereoOffset * (c % 2 == 0 ? -1 : 1);
-            }
-            else
-            {
-                reverbChannelOffset[0] = 0;
+                delayBuffers[c] = new float[delayLen];
             }
 
-            reverbDspProc = new ManagedBass.DSPProcedure(ReverbDsp);
-            reverbDSP = Bass.ChannelSetDSP(songStreamHandle, reverbDspProc, IntPtr.Zero, 0);
-            if (reverbDSP == 0)
+            var channelOffset = new int[dspChannels];
+            if (dspChannels >= 2)
             {
-                Debug.LogError("EnableReverbDspFallback: ChannelSetDSP failed: " + Bass.LastError);
-                reverbUsingDspFallback = false;
+                int stereoOffset = Math.Max(1, (int)(freq * 0.006f));
+                channelOffset[0] = 0;
+                channelOffset[1] = stereoOffset;
+                for (int c = 2; c < dspChannels; c++) channelOffset[c] = stereoOffset * (c % 2 == 0 ? -1 : 1);
             }
             else
             {
-                reverbUsingDspFallback = true;
-                Debug.Log($"Enabled DSP reverb fallback (handle={reverbDSP}) delaySamples={reverbDelayLen} channels={reverbDspChannels}");
+                channelOffset[0] = 0;
+            }
+
+            var dspProc = new ManagedBass.DSPProcedure((h, ch, buffer, length, user) =>
+            {
+                try
+                {
+                    bool floatDsp = Bass.FloatingPointDSP;
+                    if (floatDsp)
+                    {
+                        int floats = length / 4;
+                        if (floats <= 0) return;
+                        var tmpFloat = new float[floats];
+                        Marshal.Copy(buffer, tmpFloat, 0, floats);
+
+                        int frames = floats / Math.Max(1, dspChannels);
+                        for (int f = 0; f < frames; f++)
+                        {
+                            int idx = f * dspChannels;
+                            for (int c = 0; c < dspChannels; c++)
+                            {
+                                int s = idx + c;
+                                float inC = tmpFloat[s];
+                                float delayed = 0f;
+                                int readPos = (reverbFramePos + channelOffset[c]) % delayLen;
+                                if (readPos < 0) readPos += delayLen;
+                                if (delayBuffers[c].Length > 0)
+                                {
+                                    delayed = delayBuffers[c][readPos];
+                                }
+                                float wetAdd = delayed * reverbFallbackMix * reverbWetGain;
+                                float outSample = inC + wetAdd;
+                                outSample = Mathf.Clamp(outSample, -1f, 1f);
+                                tmpFloat[s] = outSample;
+                                delayBuffers[c][reverbFramePos] = inC + delayed * reverbFallbackFeedback;
+                            }
+                            reverbFramePos++;
+                            if (reverbFramePos >= delayLen) reverbFramePos = 0;
+                        }
+                        Marshal.Copy(tmpFloat, 0, buffer, floats);
+                    }
+                    else
+                    {
+                        int shorts = length / 2;
+                        if (shorts <= 0) return;
+                        var tmpShort = new short[shorts];
+                        Marshal.Copy(buffer, tmpShort, 0, shorts);
+
+                        int frames = shorts / Math.Max(1, dspChannels);
+                        for (int f = 0; f < frames; f++)
+                        {
+                            int idx = f * dspChannels;
+                            for (int c = 0; c < dspChannels; c++)
+                            {
+                                int s = idx + c;
+                                float inC = tmpShort[s] / 32768f;
+                                float delayed = 0f;
+                                int readPos = (reverbFramePos + channelOffset[c]) % delayLen;
+                                if (readPos < 0) readPos += delayLen;
+                                if (delayBuffers[c].Length > 0)
+                                {
+                                    delayed = delayBuffers[c][readPos];
+                                }
+                                float wetAdd = delayed * reverbFallbackMix * reverbWetGain;
+                                float outSample = inC + wetAdd;
+                                outSample = Mathf.Clamp(outSample, -1f, 1f);
+                                int v = (int)Mathf.Clamp(outSample * 32767f, short.MinValue, short.MaxValue);
+                                tmpShort[s] = (short)v;
+                                delayBuffers[c][reverbFramePos] = inC + delayed * reverbFallbackFeedback;
+                            }
+                            reverbFramePos++;
+                            if (reverbFramePos >= delayLen) reverbFramePos = 0;
+                        }
+                        Marshal.Copy(tmpShort, 0, buffer, shorts);
+                    }
+                }
+                catch { }
+            });
+
+            int dspHandle = Bass.ChannelSetDSP(handleToAffect, dspProc, IntPtr.Zero, 0);
+            if (dspHandle == 0)
+            {
+                Debug.LogError("EnableReverbDspFallback: ChannelSetDSP failed: " + Bass.LastError);
+                stemReverbDspFallbackByHandle[handleToAffect] = false;
+            }
+            else
+            {
+                stemReverbDspFallbackByHandle[handleToAffect] = true;
+                stemReverbDspByHandle[handleToAffect] = dspHandle;
+                Debug.Log($"Enabled DSP reverb fallback (handle={dspHandle}) delaySamples={delayLen} channels={dspChannels}");
             }
         }
         catch (Exception ex)
@@ -958,31 +1517,25 @@ public class MusicPlayer : MonoBehaviour
             Debug.LogError("EnableReverbDspFallback exception: " + ex.Message);
         }
     }
-
-    private void DisableReverbDspFallback()
+    // DSP fallback for starpower reverb if BASS ChannelSetFX doesn't work (disables)
+    private void DisableReverbDspFallback(int handleToAffect)
     {
         try
         {
-            if (reverbDSP != 0 && songStreamHandle != 0)
+            if (stemReverbDspByHandle.TryGetValue(handleToAffect, out var dspHandle) && dspHandle != 0)
             {
-                Bass.ChannelRemoveDSP(songStreamHandle, reverbDSP);
+                Bass.ChannelRemoveDSP(handleToAffect, dspHandle);
+                stemReverbDspByHandle.Remove(handleToAffect);
             }
         }
         catch (Exception ex)
         {
             Debug.LogWarning("DisableReverbDspFallback exception: " + ex.Message);
         }
-        reverbDSP = 0;
-        reverbUsingDspFallback = false;
-        reverbDelayBuffers = null;
-        reverbTmpFloat = null;
-        reverbTmpShort = null;
-        reverbChannelOffset = null;
-        reverbFramePos = 0;
-        reverbDelayLen = 0;
+        stemReverbDspFallbackByHandle[handleToAffect] = false;
     }
 
-    // Simple mono delay-based reverb/echo DSP callback (applies same effect to all channels)
+    // Simple mono delay-based reverb/echo DSP callback (applies same effect to all channels) (logic)
     private void ReverbDsp(int handle, int channel, IntPtr buffer, int length, IntPtr user)
     {
         try

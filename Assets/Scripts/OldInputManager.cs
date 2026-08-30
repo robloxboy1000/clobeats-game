@@ -6,6 +6,14 @@ using Rewired;
 
 public class OldInputManager : MonoBehaviour
 {
+    public enum InputUpdateType
+    {
+        PerFrame,
+        Fixed,
+        Late
+    }
+
+    public InputUpdateType updateType = InputUpdateType.PerFrame;
     public int rewiredPlayerId = 1;
     private Player player;
     public GameObject pauseMenu;
@@ -16,8 +24,8 @@ public class OldInputManager : MonoBehaviour
     public float currentTimeScale = 1;
     public float whammyAmount = -1;
     public float tiltAmount = -1;
-    public bool inHSScreen = false;
-    public bool inMainMenu = false;
+    public float scrollAxis = 0f;
+
 
     // Start is called before the first frame update
     void Start()
@@ -30,10 +38,6 @@ public class OldInputManager : MonoBehaviour
         rewiredPlayerId = ReInput.players.GetPlayerId("Player0");
         player = ReInput.players.GetPlayer(rewiredPlayerId);
         DontDestroyOnLoad(this.gameObject);
-        SceneManager.sceneLoaded += OnLevelLoaded; 
-        pauseMenu = Instantiate(pauseMenu);
-        DontDestroyOnLoad(pauseMenu);
-        pauseMenu.SetActive(false);
         laneInputManager = FindFirstObjectByType<LaneInputManager>();
     }
 
@@ -57,7 +61,9 @@ public class OldInputManager : MonoBehaviour
     {
         if (laneInputManager != null)
         {
-            if (!laneInputManager.OnStrum())
+            GameManager gameManager = FindAnyObjectByType<GameManager>();
+            if (gameManager)
+            if (!laneInputManager.OnStrum() && gameManager.inSong)
             {
                 var sfx = FindAnyObjectByType<SFXPlayer>();
                 sfx.PlayOverstrumClip();
@@ -73,36 +79,72 @@ public class OldInputManager : MonoBehaviour
     // Update is called once per frame
     async void Update()
     {   
+        laneInputManager = FindFirstObjectByType<LaneInputManager>();
+        if (laneInputManager == null) return;
         if (player == null)
         {
             player = ReInput.players.GetPlayer(rewiredPlayerId);
         }
         Time.timeScale = currentTimeScale;
         if (denyInput) return;
-        await GetInput();
-        laneInputManager = FindFirstObjectByType<LaneInputManager>();
-        if (laneInputManager == null) return;
+        if (updateType == InputUpdateType.PerFrame)
+        {
+            await GetInput();
+        }
+    }
+
+    async void FixedUpdate()
+    {
+        if (updateType == InputUpdateType.Fixed)
+        {
+            await GetInput();
+        }
+    }
+    async void LateUpdate()
+    {
+        if (updateType == InputUpdateType.Late)
+        {
+            await GetInput();
+        }
+    }
+    public void TriggerVibration(float leftMotor, float rightMotor, float duration)
+    {   
+        // Pass motor index, motor level (0.0 to 1.0), and duration in seconds
+        // Motor 0 is typically the Left/Low-Frequency motor
+        player.SetVibration(0, leftMotor, duration);
+        
+        // Motor 1 is typically the Right/High-Frequency motor
+        player.SetVibration(1, rightMotor, duration);
+    }
+    public void MobileVibrate()
+    {
+        //Handheld.Vibrate(); // untested, may vibrate continuously
+        Solo.MOST_IN_ONE.MOST_HapticFeedback.Generate(Solo.MOST_IN_ONE.MOST_HapticFeedback.HapticTypes.MediumImpact);
     }
     private async Task GetInput()
     {
-        if (inHSScreen)
+        scrollAxis = player.GetAxis("ScrollWheel");
+        whammyAmount = player.GetAxis("Whammy");
+        tiltAmount = player.GetAxis("Tilt");
+        if (SceneManager.GetSceneByName("HS_Screen").isLoaded)
         {
-            
+            return;
         }
-        else if (inMainMenu)
+        if (SceneManager.GetSceneByName("MainMenu").isLoaded && !SceneManager.GetSceneByName("Gameplay").isLoaded)
         {
             //Debug.Log("In MainMenu");
             MenuManager menuManager = FindAnyObjectByType<MenuManager>();
             if (menuManager != null)
             {
+                
                 if (player.GetButtonDown("Green"))
                 {
                     Debug.Log("Green button pressed");
-                    if (menuManager.startPanel.activeSelf)
+                    if (menuManager.IsMenuOpen(MenuManager.StartMenuId))
                     {
                         menuManager.Submit(2);
                     }
-                    else if (menuManager.quickplayPanel.activeSelf)
+                    else if (menuManager.IsMenuOpen(MenuManager.QuickPlayMenuId))
                     {
                         menuManager.Submit(1);
                     }
@@ -117,19 +159,14 @@ public class OldInputManager : MonoBehaviour
                     Debug.Log("Red button pressed");
                     menuManager.Exit();
                 }
-                if (player.GetButtonDown("Orange"))
+                if (menuManager.IsMenuOpen(MenuManager.QuickPlayMenuId))
                 {
-                    Debug.Log("Orange button pressed");
-                    menuManager.Submit(4);
-                }
-                if (menuManager.quickplayPanel.activeSelf)
-                {
-                    if (player.GetButtonSinglePressDown("StrumDown"))
+                    if (player.GetButtonDown("StrumDown") || scrollAxis == 1)
                     {
                         UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
                         if (menuList != null) menuList.SelectNext();
                     }
-                    else if (player.GetButtonSinglePressDown("StrumUp"))
+                    else if (player.GetButtonDown("StrumUp") || scrollAxis == -1)
                     {
                         UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
                         if (menuList != null) menuList.SelectPrevious();
@@ -137,11 +174,11 @@ public class OldInputManager : MonoBehaviour
                 }
                 else
                 {
-                    if (player.GetButtonSinglePressDown("StrumDown"))
+                    if (player.GetButtonDown("StrumDown"))
                     {
                         menuManager.SelectNextControl();
                     }
-                    else if (player.GetButtonSinglePressDown("StrumUp"))
+                    else if (player.GetButtonDown("StrumUp"))
                     {
                         menuManager.SelectPreviousControl();
                     }
@@ -149,7 +186,7 @@ public class OldInputManager : MonoBehaviour
                 
             }
         }
-        else
+        else if (SceneManager.GetSceneByName("Gameplay").isLoaded)
         {
             if (!gamepadMode)
             {
@@ -170,8 +207,7 @@ public class OldInputManager : MonoBehaviour
                 if (player.GetButtonUp("Start")) PauseGame();
                 if (player.GetButtonUp("Select")) ReleaseSP();
 
-                whammyAmount = player.GetAxis("Whammy");
-                tiltAmount = player.GetAxis("Tilt");
+                
                 if (tiltAmount == 1)
                 {
                     ReleaseSP();
@@ -201,13 +237,14 @@ public class OldInputManager : MonoBehaviour
         // automatically handled by just releasing whenever star power hits 100% just like in regular roBeats
         if (SceneManager.GetSceneByBuildIndex(1).isLoaded)
         {
+            GameManager gameManager = FindAnyObjectByType<GameManager>();
             StarMeter spmeter = FindAnyObjectByType<StarMeter>();
             UIUpdater uIUpdater = FindAnyObjectByType<UIUpdater>();
             if (spmeter != null && uIUpdater != null)
             {
                 if (spmeter.value >= 50 && !uIUpdater.inStar)
                 {
-                    uIUpdater.StarPowerToggle(true);
+                    uIUpdater.StarPowerToggle(gameManager.currentPart.ToLower(), true);
                 }
                 else
                 {
@@ -225,17 +262,24 @@ public class OldInputManager : MonoBehaviour
             {
                 if (musicPlayer != null)
                 {
-                    musicPlayer.resumeAudio();
+                    //musicPlayer.resumeAudio();
+                    musicPlayer.PlayAllStems();
                 }
                 //currentTimeScale = 1.0f; // Resume game
-                if (pauseMenu != null)
+                MenuManager menu = FindAnyObjectByType<MenuManager>();
+                if (menu != null)
                 {
-                    pauseMenu.SetActive(false);
+                    menu.ShowMenu("null");
                 }
                 ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
                 if (strikeline != null)
                 {
                     strikeline.ResetAnims();
+                }
+                VenueAnimationPlayer venue = FindAnyObjectByType<VenueAnimationPlayer>();
+                if (venue)
+                {
+                    venue.TryToggleCamera(true);
                 }
                 isPaused = false;
             }
@@ -243,48 +287,29 @@ public class OldInputManager : MonoBehaviour
             {
                 if (musicPlayer != null)
                 {
-                    musicPlayer.pauseAudio();
+                    //musicPlayer.pauseAudio();
+                    musicPlayer.PauseAllStems();
                 }
                 //currentTimeScale = 1.0f; // Pause game
-                if (pauseMenu != null)
+                MenuManager menu = FindAnyObjectByType<MenuManager>();
+                if (menu != null)
                 {
-                    pauseMenu.SetActive(true);
+                    menu.ShowMenu("pause");
                 }
                 ImprovedStrikeline strikeline = FindAnyObjectByType<ImprovedStrikeline>();
                 if (strikeline != null)
                 {
                     strikeline.ResetAnims();
                 }
+                VenueAnimationPlayer venue = FindAnyObjectByType<VenueAnimationPlayer>();
+                if (venue)
+                {
+                    venue.TryToggleCamera(false);
+                }
                 isPaused = true;
             }
         }
         
     }
-    void OnLevelLoaded(Scene scene, LoadSceneMode mode)
-    {
-        Debug.Log("Scene loaded: " + scene.name);
-        if (scene.name == "Gameplay")
-        {
-            denyInput = false;
-            inHSScreen = false;
-            inMainMenu = false;
-        }
-        else if (scene.name == "HS_Screen")
-        {
-            inHSScreen = true;
-            inMainMenu = false;
-        }
-        else if (scene.name == "MainMenu")
-        {
-            inMainMenu = true;
-            denyInput = false;
-            inHSScreen = false;
-        }
-        else
-        {
-            denyInput = false;
-            inHSScreen = false;
-            inMainMenu = false;
-        }
-    }
+    
 }

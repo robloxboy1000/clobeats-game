@@ -85,7 +85,8 @@ public class ButtonHandler : MonoBehaviour
                 pauseMenu.SetActive(false);
                 Time.timeScale = 1f; // Resume the game
                 MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-                musicPlayer.resumeAudio();
+                //musicPlayer.resumeAudio();
+                musicPlayer.PlayAllStems();
                 inputManager.isPaused = false;
                 if (strikeline != null)
                 {
@@ -103,7 +104,7 @@ public class ButtonHandler : MonoBehaviour
                 pauseMenu.SetActive(false);
                 Time.timeScale = 1f; // Resume the game
                 MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-                musicPlayer.stopAudio();
+                musicPlayer.StopAllStems(true);
                 inputManager.isPaused = false;
                 if (strikeline != null)
                 {
@@ -135,7 +136,7 @@ public class ButtonHandler : MonoBehaviour
                 pauseMenu.SetActive(false);
                 Time.timeScale = 1f; // Resume the game
                 MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
-                musicPlayer.stopAudio();
+                musicPlayer.StopAllStems();
                 inputManager.isPaused = false;
                 if (strikeline != null)
                 {
@@ -166,7 +167,7 @@ public class ButtonHandler : MonoBehaviour
             MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
             if (musicPlayer != null)
             {
-                musicPlayer.stopAudio();
+                musicPlayer.StopAllStems();
             }
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -186,7 +187,7 @@ public class ButtonHandler : MonoBehaviour
             MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
             if (musicPlayer != null)
             {
-                musicPlayer.stopAudio();
+                musicPlayer.StopAllStems(true);
             }
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

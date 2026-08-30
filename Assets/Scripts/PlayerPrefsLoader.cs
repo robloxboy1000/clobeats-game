@@ -38,6 +38,7 @@ public class PlayerPrefsLoader : MonoBehaviour
     {
         QualitySettings.SetQualityLevel(2); // force normal quality
         Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow); // force fullscreen
+        
         pathInputField = gameObject.transform.Find("SongFolderPathField").GetComponent<TMPro.TMP_InputField>();
         if (pathInputField != null)
         {
@@ -252,30 +253,27 @@ public class PlayerPrefsLoader : MonoBehaviour
                 await musicPlayer.TestFullAudio();
             });
         }
+        LoadAllSFX();
         if (autoLoad)
         {
             Debug.Log("Auto Load enabled.");
-            if (blankImage != null)
-            {
-                blankImage.SetActive(true);
-            }
+            SceneManager.LoadScene("MainMenu", LoadSceneMode.Additive);
+            await Task.Delay(1000);
             if (indefiniteLoadingScreen != null)
             {
                 indefiniteLoadingScreen.SetActive(false);
+            }
+            foreach (Transform child in transform)
+            {
+                child.gameObject.SetActive(false);
             }
             PlayerPrefs.SetInt("EnableVenue", 1);
             PlayerPrefs.SetInt("EnableAutoplay", 0);
             PlayerPrefs.SetInt("EnableVSync", 0);
             Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
-            
-            if (await LoadGame())
-            {
-                Debug.Log("Loading successful.");
-            }
-            else
-            {
-                Debug.LogWarning("Loading failed.");
-            }
+            MessageBox.Instance.Show($"Welcome to {Application.productName} !<br>Loading custom songs takes a <b>VERY</b> long time, "
+            + "so if you don't want to wait, please exit the game and move your custom songs somewhere else to access the online song catalog, "
+            + "or simply wait.<br>Press OK to continue.", "Message", async () => await LoadGame());
         }
         else
         {
@@ -290,7 +288,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             }
         }
         
-        LoadAllSFX();
+        
         
     }
 
@@ -308,7 +306,7 @@ public class PlayerPrefsLoader : MonoBehaviour
             DontDestroyOnLoad(loadscreen);
             gameManager.unDestructibleLoadingPhraseScreen = loadscreen;
             gameManager.DisableLoadSongVisual(gameManager.unDestructibleLoadingPhraseScreen);
-            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string documentsPath = Application.persistentDataPath;
             gameManager.savePath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "save";
             if (!Directory.Exists(gameManager.savePath))
             {
@@ -343,10 +341,7 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             indefiniteLoadingScreen.SetActive(true);
         }
-        if (blankImage != null)
-        {
-            blankImage.SetActive(true);
-        }
+        
         if (await LoadWholeGame(loadMainMenu))
         {
             return true;
@@ -371,9 +366,12 @@ public class PlayerPrefsLoader : MonoBehaviour
             LoadingManager loader = FindFirstObjectByType<LoadingManager>();
             if (loader != null)
             {
-                loader.LoadScene("HS_Screen", LoadSceneMode.Single);
+                MenuManager manager = FindAnyObjectByType<MenuManager>();
+                manager.ShowMenu("null");
+                loader.LoadScene("HS_Screen", LoadSceneMode.Additive);
                 await Task.Delay(6000);
-                loader.LoadScene("MainMenu", LoadSceneMode.Single);
+                SceneManager.UnloadSceneAsync("HS_Screen");
+                manager.ShowMenu("start");
                 return true;
             }
             else
@@ -396,30 +394,31 @@ public class PlayerPrefsLoader : MonoBehaviour
         {
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string songFoldersPath = documentsPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
-                GameManager gameManager = FindAnyObjectByType<GameManager>();
+                Debug.Log("Loading custom songs");
+                
+                string songFoldersPath = Application.persistentDataPath + Path.DirectorySeparatorChar + "CloBeats" + Path.DirectorySeparatorChar + "songs" + Path.DirectorySeparatorChar + "local";
                 if (!Directory.Exists(songFoldersPath))
                 {
                     Directory.CreateDirectory(songFoldersPath);
                 }
+                GameManager gameManager = FindAnyObjectByType<GameManager>();
                 string[] directories = Directory.GetDirectories(songFoldersPath);
                 if (directories != null)
                 {
                     int ind = 0;
-                    TextMeshProUGUI loadingText = indefiniteLoadingScreen.transform.Find("LoadingText").GetComponent<TextMeshProUGUI>();
-                    loadingText.text = "Loading songs: (" + ind + " songs)";
+                    //TextMeshProUGUI loadingText = indefiniteLoadingScreen.transform.Find("LoadingText").GetComponent<TextMeshProUGUI>();
+                    //loadingText.text = "Loading songs: (" + ind + " songs)";
                     foreach (string dir in directories)
                     {
                         int hash = Mathf.Abs(dir.GetHashCode());
-                        int number = ind;
+                        
                         gameManager.songFolders.Add(dir);
                         songItemNames.Add(dir);
-                        gameManager.CacheSingleSong(dir, hash, number);
+                        gameManager.CacheSingleSong(dir, hash, ind);
                         StartCoroutine(gameManager.CacheAudioFile(gameManager.FindSongInPath(dir), hash));
-                        Debug.Log("Cached song dir \"" + dir + "\" with absolute hash code " + hash);
+                        Debug.Log($"Cached {ind} song dir \"" + dir + "\" with absolute hash code " + hash);
                         ind++;
-                        loadingText.text = "Loading songs: (" + ind + " songs)";
+                        //loadingText.text = "Loading songs: (" + ind + " songs)";
                         await Task.Yield();
                     }
                     return true;
@@ -443,6 +442,7 @@ public class PlayerPrefsLoader : MonoBehaviour
 
     public void LoadPart2()
     {
+        Debug.Log("Warming shaders");
         Shader.WarmupAllShaders();
         ShaderOven shaderOven = FindFirstObjectByType<ShaderOven>();
         shaderOven.shaders.WarmUp();

@@ -1701,7 +1701,7 @@ MonoBehaviour:
   _showPlayers: 1
   _showControllers: 1
   _showKeyboard: 1
-  _showMouse: 0
+  _showMouse: 1
   _maxControllersPerPlayer: 1
   _showActionCategoryLabels: 0
   _keyboardInputFieldCount: 2

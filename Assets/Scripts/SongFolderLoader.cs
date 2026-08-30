@@ -32,6 +32,7 @@ public class SongFolderLoader : MonoBehaviour
 
     void Awake()
     {
+        if (Instance == null) Instance = this; else if (Instance != this) Destroy(gameObject); // Instance support
         string savedPath = PlayerPrefs.GetString("SelectedFolderPath", null);
         if (!string.IsNullOrEmpty(savedPath))
         {

@@ -15,50 +15,42 @@ public class GeneralSettingsObject : MonoBehaviour
     public string serverAddress = "clobeats.pixlplaya5.xyz:8090";
 
     //TMPro.TMP_InputField songsFolderPathInputField;
-    TMPro.TMP_InputField songDifficultyDropdown;
-    TMPro.TMP_InputField usernameInputField;
-    TMPro.TMP_InputField serverAddressInputField;
+    TMPro.TMP_Dropdown songDifficultyDropdown;
+    //TMPro.TMP_InputField usernameInputField;
+    //TMPro.TMP_InputField serverAddressInputField;
+    Slider fpsSlider;
     Slider hpSlider;
     Toggle enableVenueToggle;
     Toggle enableTMToggle;
-    Slider fpsSlider;
 
-    TMPro.TMP_InputField resInput;
+    //TMPro.TMP_InputField resInput;
     TMPro.TMP_Dropdown resDropdown;
-
-    Button findServerButton;
     Button saveSettingsButton;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        songsFolderPath = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
+        //songsFolderPath = PlayerPrefs.GetString("SongsFolderPath", string.Empty);
         songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty");
-        username = PlayerPrefs.GetString("Username", string.Empty);
-        serverAddress = PlayerPrefs.GetString("ServerAddress", string.Empty);
+        //username = PlayerPrefs.GetString("Username", string.Empty);
+        //serverAddress = PlayerPrefs.GetString("ServerAddress", string.Empty);
 
-        songDifficultyDropdown = transform.Find("SongDifficultyObject").
-        gameObject.transform.Find("DifficultyInputField").
-        gameObject.GetComponent<TMPro.TMP_InputField>();
+        songDifficultyDropdown = transform.Find("SongDifficultyObject/DiffDropdown").
+        gameObject.GetComponent<TMPro.TMP_Dropdown>();
 
-        hpSlider = transform.Find("HyperspeedSliderObject").
-        gameObject.transform.Find("HyperspeedSlider").
+        hpSlider = transform.Find("HyperspeedSliderObject/HyperspeedSlider").
         gameObject.GetComponent<Slider>();
 
-        enableVenueToggle = transform.Find("EnableVenueObject").
-        gameObject.transform.Find("VenueToggle").
+        enableVenueToggle = transform.Find("EnableVenueObject/VenueToggle").
         gameObject.GetComponent<Toggle>();
 
-        enableTMToggle = transform.Find("EnableTMObject").
-        gameObject.transform.Find("TMToggle").
+        enableTMToggle = transform.Find("EnableTMObject/TMToggle").
         gameObject.GetComponent<Toggle>();
 
-        fpsSlider = transform.Find("FramerateSliderObject").
-        gameObject.transform.Find("FPSSlider").
+        fpsSlider = transform.Find("FramerateSliderObject/FPSSlider").
         gameObject.GetComponent<Slider>();
 
-        resDropdown = transform.Find("ResolutionDropdownObject").
-        gameObject.transform.Find("ResDropdownOptions").
+        resDropdown = transform.Find("ResolutionDropdownObject/ResDropdownOptions").
         gameObject.GetComponent<TMPro.TMP_Dropdown>();
         List<Resolution> options = new List<Resolution>();
         List<string> options1 = new List<string>();
@@ -67,7 +59,7 @@ public class GeneralSettingsObject : MonoBehaviour
             foreach (var res in Screen.resolutions)
             {
                 options.Add(res);
-                options1.Add(res.width + "x" + res.height);
+                options1.Add(res.width + "x" + res.height + "@" + res.refreshRateRatio);
             }
             
             resDropdown.AddOptions(options1);
@@ -77,27 +69,31 @@ public class GeneralSettingsObject : MonoBehaviour
             });
         }
 
-        saveSettingsButton = transform.Find("SaveSettingsButton").gameObject.GetComponent<Button>();
+        saveSettingsButton = GameObject.Find("SaveSettingsButton").gameObject.GetComponent<Button>(); // outside local transform
 
         saveSettingsButton.onClick.AddListener(() =>
         {
             Debug.Log("Saving general settings...");
             //PlayerPrefs.SetString("SongsFolderPath", songsFolderPathInputField.text);
             PlayerPrefs.SetString("SelectedDifficulty", songDifficultyString);
-            PlayerPrefs.SetString("Username", usernameInputField.text);
-            PlayerPrefs.SetString("ServerAddress", serverAddressInputField.text);
+            //PlayerPrefs.SetString("Username", usernameInputField.text);
+            //PlayerPrefs.SetString("ServerAddress", serverAddressInputField.text);
             PlayerPrefs.SetFloat("Hyperspeed", hpSlider.value);
             PlayerPrefs.SetInt("EnableVenue", enableVenueToggle.isOn ? 1 : 0);
             PlayerPrefs.SetInt("EnableBarBeats", enableTMToggle.isOn ? 1 : 0);
 
             PlayerPrefs.SetInt("Framerate", (int)fpsSlider.value);
-            PlayerPrefs.SetString("Resolution", resInput.text);
+            PlayerPrefs.SetString("Resolution", resDropdown.options[resDropdown.value].text);
             PlayerPrefs.Save();
 
             Application.targetFrameRate = (int)fpsSlider.value;
 
             
         });
+    }
+    void OnEnable()
+    {
+        
     }
 
     void Awake()
@@ -124,7 +120,7 @@ public class GeneralSettingsObject : MonoBehaviour
                 {
                     Debug.Log("Recieved string: " + response);
                     MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-                    await menuManager.ConnectionSuccessful();
+                    //await menuManager.ConnectionSuccessful();
                 }
                 
             }
@@ -158,11 +154,32 @@ public class GeneralSettingsObject : MonoBehaviour
         if (songDifficultyDropdown != null)
         {
             songDifficultyString = PlayerPrefs.GetString("SelectedDifficulty");
+            int savedDifficulty = songDifficultyString switch
+            {
+                "Easy" => 0,
+                "Medium" => 1,
+                "Hard" => 2,
+                "Expert" => 3,
+                _ => 0,
+            };
+            if (savedDifficulty >= 0 && savedDifficulty < songDifficultyDropdown.options.Count)
+            {
+                songDifficultyDropdown.value = savedDifficulty;
+            }
             songDifficultyDropdown.onValueChanged.AddListener(SDD_OnValueChanged);
         }
     }
-    void SDD_OnValueChanged(string value)
+    void SDD_OnValueChanged(int value)
     {
-        PlayerPrefs.SetString("SelectedDifficulty", value);
+        string savedDifficulty = value switch
+        {
+            0 => "Easy",
+            1 => "Medium",
+            2 => "Hard",
+            3 => "Expert",
+            _ => string.Empty,
+        };
+        PlayerPrefs.SetString("SelectedDifficulty", savedDifficulty);
+        PlayerPrefs.Save();
     }
 }

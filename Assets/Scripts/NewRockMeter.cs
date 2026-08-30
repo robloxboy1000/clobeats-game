@@ -53,7 +53,7 @@ public class NewRockMeter : MonoBehaviour
         GameManager gameManager = FindAnyObjectByType<GameManager>();
         if (currentValue <= 0f && gameManager.allowFail)
         {
-            gameManager.FailSong();
+            StartCoroutine(gameManager.FailSong());
         }
     }
     private void UpdateIndicators()

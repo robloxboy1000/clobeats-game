@@ -17,7 +17,8 @@ public class MessageBox : MonoBehaviour
     {
         if (mbPrefab != null)
         {
-            GameObject instance = Instantiate(mbPrefab);
+            MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+            GameObject instance = menuManager.ReturnMenuGO("message");
             TMPro.TextMeshProUGUI title = instance.transform.Find("Canvas/MessageBox/Title").gameObject.GetComponent<TMPro.TextMeshProUGUI>();
             TMPro.TextMeshProUGUI text1 = instance.transform.Find("Canvas/MessageBox/Text").gameObject.GetComponent<TMPro.TextMeshProUGUI>();
             Button button = instance.transform.Find("Canvas/MessageBox/DismissButton2").gameObject.GetComponent<Button>();
@@ -31,7 +32,12 @@ public class MessageBox : MonoBehaviour
             }
             if (button != null)
             {
-                if (actionOnMessageClose != null) button.onClick.AddListener(() => actionOnMessageClose.Invoke());
+                button.onClick.RemoveAllListeners();
+                if (actionOnMessageClose != null) button.onClick.AddListener(() => 
+                {
+                    menuManager.ShowMenu("null");
+                    actionOnMessageClose.Invoke();
+                });
                 EventSystem.current.SetSelectedGameObject(button.gameObject);
             }
 

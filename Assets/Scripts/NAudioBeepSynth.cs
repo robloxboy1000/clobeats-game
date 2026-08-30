@@ -19,30 +19,35 @@ public class NAudioBeepSynth : MonoBehaviour
     {
         
     }
-        public static void PlayToneNAudio(double frequency, int durationMs)
+    public static void PlayToneNAudio(double frequency, int durationMs, double volume, string waveType = "Sine")
+    {
+        NAudio.Wave.SampleProviders.SignalGeneratorType signalGeneratorType = waveType switch
         {
-            var signalGen = new NAudio.Wave.SampleProviders.SignalGenerator()
-            {
-                Gain = 0.2,
-                Frequency = frequency,
-                Type = NAudio.Wave.SampleProviders.SignalGeneratorType.Sin
-            };
-
-            var sampleProvider = signalGen.Take(TimeSpan.FromMilliseconds(durationMs));
-
-            // Convert ISampleProvider to IWaveProvider for DirectSoundOut
-            var waveProvider = sampleProvider.ToWaveProvider();
-
-            var output = new NAudio.Wave.DirectSoundOut();
-            output.Init(waveProvider);
-            output.Play();
-
-            // Wait for duration
-            Thread.Sleep(durationMs);
-        }
-        private int MidiNoteToFrequency(int noteNumber)
+            "Sine" => NAudio.Wave.SampleProviders.SignalGeneratorType.Sin,
+            "Square" => NAudio.Wave.SampleProviders.SignalGeneratorType.Square,
+            "Triangle" => NAudio.Wave.SampleProviders.SignalGeneratorType.Triangle,
+            "Sawtooth" => NAudio.Wave.SampleProviders.SignalGeneratorType.SawTooth,
+            "Noise" => NAudio.Wave.SampleProviders.SignalGeneratorType.White,
+            _ => NAudio.Wave.SampleProviders.SignalGeneratorType.Sin
+        };
+        var signalGen = new NAudio.Wave.SampleProviders.SignalGenerator()
         {
-            // MIDI Note 69 = 440 Hz (A4)
-            return (int)(440.0 * Math.Pow(2, (noteNumber - 69) / 12.0));
-        }
+            Gain = volume,
+            Frequency = frequency,
+            Type = signalGeneratorType
+        };
+        var sampleProvider = signalGen.Take(TimeSpan.FromMilliseconds(durationMs));
+        // Convert ISampleProvider to IWaveProvider for DirectSoundOut
+        var waveProvider = sampleProvider.ToWaveProvider();
+        var output = new NAudio.Wave.DirectSoundOut();
+        output.Init(waveProvider);
+        output.Play();
+        // Wait for duration
+        Thread.Sleep(durationMs);
+    }
+    private int MidiNoteToFrequency(int noteNumber)
+    {
+        // MIDI Note 69 = 440 Hz (A4)
+        return (int)(440.0 * Math.Pow(2, (noteNumber - 69) / 12.0));
+    }
 }

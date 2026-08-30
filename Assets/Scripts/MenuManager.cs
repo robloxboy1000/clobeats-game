@@ -5,13 +5,14 @@ using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class MenuManager : MonoBehaviour
 {
-    private const string StartMenuId = "start";
+    public const string StartMenuId = "start";
     private const string MainMenuId = "main";
-    private const string QuickPlayMenuId = "quickplay";
+    public const string QuickPlayMenuId = "quickplay";
     private const string OptionsMenuId = "options";
     private const string ExitMenuId = "exit";
 
@@ -45,18 +46,7 @@ public class MenuManager : MonoBehaviour
     }
 
     [Header("Scene References")]
-    public GameObject menuCanvas;
-    public GameObject startPanel;
-    public GameObject mainMenuPanel;
-    public GameObject quickplayPanel;
-    public GameObject exitgamePanel;
     public GameObject logoObject;
-    public GameObject optionsPanel;
-    public GameObject onlineIndicatorPanel;
-    public GameObject songInfoPanel;
-    public GameObject cbFeedPanel;
-    public GameObject loadingPanel;
-    public GameObject loadingPreviewImage;
 
     [Header("Flexible Menu Setup")]
     public string firstMenuId = StartMenuId;
@@ -78,11 +68,8 @@ public class MenuManager : MonoBehaviour
 
     private void Awake()
     {
-        ResolveSceneReferences();
-        BuildDefaultConfiguration();
         RebuildLookups();
         WireButtons();
-        SetPassivePanels();
         ShowMenu(string.IsNullOrWhiteSpace(firstMenuId) ? StartMenuId : firstMenuId);
     }
 
@@ -112,30 +99,6 @@ public class MenuManager : MonoBehaviour
         currentPreviewingID = cachedSongId;
     }
 
-    public async Task ConnectionSuccessful()
-    {
-        GeneralSettingsObject settings = FindAnyObjectByType<GeneralSettingsObject>();
-        string username = settings != null ? settings.username : string.Empty;
-        string serverAddress = settings != null ? settings.serverAddress : string.Empty;
-
-        if (onlineIndicatorPanel == null)
-        {
-            return;
-        }
-
-        onlineIndicatorPanel.SetActive(true);
-        TextMeshProUGUI textObject = FindChildComponent<TextMeshProUGUI>(onlineIndicatorPanel.transform, "Text");
-        if (textObject != null)
-        {
-            textObject.text = "Connected as " + username + " to " + serverAddress;
-        }
-
-        await Task.Delay(3000);
-        if (onlineIndicatorPanel != null)
-        {
-            onlineIndicatorPanel.SetActive(false);
-        }
-    }
 
     public async void Submit(int menuIndex = 0)
     {
@@ -146,7 +109,7 @@ public class MenuManager : MonoBehaviour
 
         if (menuIndex == 1)
         {
-            if (quickplayPanel != null && quickplayPanel.activeSelf)
+            if (IsMenuOpen(QuickPlayMenuId))
             {
                 await PlaySelectedSongAsync();
                 return;
@@ -166,15 +129,15 @@ public class MenuManager : MonoBehaviour
 
         if (legacySubmitBindings.TryGetValue(menuIndex, out MenuButtonBinding binding))
         {
-            //await RunMenuActionAsync(binding.action, binding.targetMenuId);
+            await RunMenuActionAsync(binding.action, binding.targetMenuId);
             return;
         }
 
-        if (IsMenuOpen(ExitMenuId) || (exitgamePanel != null && exitgamePanel.activeSelf))
+        if (IsMenuOpen(ExitMenuId))
         {
             ShowMenu(MainMenuId);
         }
-        else if (IsMenuOpen(StartMenuId) || (startPanel != null && startPanel.activeSelf))
+        else if (IsMenuOpen(StartMenuId))
         {
             ShowMenu(MainMenuId);
         }
@@ -184,18 +147,18 @@ public class MenuManager : MonoBehaviour
     {
         if (EventSystem.current == null || EventSystem.current.currentSelectedGameObject == null)
         {
-            //Submit();
+            Submit();
             return;
         }
 
         Button button = EventSystem.current.currentSelectedGameObject.GetComponent<Button>();
         if (button != null && button.IsInteractable())
         {
-            //button.onClick.Invoke();
+            button.onClick.Invoke();
             return;
         }
 
-        //Submit();
+        Submit();
     }
 
     public void SelectNextControl()
@@ -210,25 +173,37 @@ public class MenuManager : MonoBehaviour
 
     public void Exit()
     {
-        if (IsMenuOpen(QuickPlayMenuId) || (quickplayPanel != null && quickplayPanel.activeSelf))
+        if (IsMenuOpen(QuickPlayMenuId))
         {
             StopPreviewAudio();
             accentColor = Color.blue;
             ShowMenu(MainMenuId);
         }
-        else if (IsMenuOpen(OptionsMenuId) || (optionsPanel != null && optionsPanel.activeSelf))
+        else if (IsMenuOpen(OptionsMenuId))
         {
             ShowMenu(MainMenuId);
         }
-        else if (IsMenuOpen(MainMenuId) || (mainMenuPanel != null && mainMenuPanel.activeSelf))
+        else if (IsMenuOpen(MainMenuId))
         {
             ShowMenu(ExitMenuId);
         }
-        else if (IsMenuOpen(ExitMenuId) || (exitgamePanel != null && exitgamePanel.activeSelf))
+        else if (IsMenuOpen(ExitMenuId))
         {
             QuitGame();
         }
-        else if (IsMenuOpen(StartMenuId) || (startPanel != null && startPanel.activeSelf))
+        else if (IsMenuOpen(StartMenuId))
+        {
+            ShowMenu(MainMenuId);
+        }
+        else if (IsMenuOpen("null"))
+        {
+            if (SceneManager.GetSceneByName("Gameplay").isLoaded) // if null menu was loaded and in gameplay
+            {
+                return;
+            }
+            //ShowMenu(MainMenuId);
+        }
+        else if (IsMenuOpen(currentMenuId))
         {
             ShowMenu(MainMenuId);
         }
@@ -236,7 +211,7 @@ public class MenuManager : MonoBehaviour
 
     public async Task PlaySelectedSongAsync()
     {
-        if (quickplayPanel != null && !quickplayPanel.activeSelf)
+        if (!IsMenuOpen(QuickPlayMenuId))
         {
             return;
         }
@@ -288,16 +263,10 @@ public class MenuManager : MonoBehaviour
             PlayerPrefs.Save();
 
             gameManager.currentSongID = currentPreviewingID - 1;
-            songFolderLoader.songFolderPath = currentPreviewingSongPath;
-            await songFolderLoader.Load();
-
             Debug.Log("[MenuManager] Loading selected song. (Include loading visual)");
-            await gameManager.EnableLoadUnCachedSongVisual(
-                gameManager.unDestructibleLoadingPhraseScreen,
-                Path.Combine(songFolderLoader.songFolderPath, "song.ini"));
-
             StopPreviewAudio();
-            loadingManager.LoadScene("Gameplay");
+            await gameManager.PlaySongGlobal(currentPreviewingSongPath);
+            ShowMenu("null");
         }
         finally
         {
@@ -305,39 +274,7 @@ public class MenuManager : MonoBehaviour
         }
     }
 
-    private void ResolveSceneReferences()
-    {
-        if (menuCanvas == null)
-        {
-            menuCanvas = GameObject.Find("MenuCanvas");
-        }
-
-        Transform canvas = menuCanvas != null ? menuCanvas.transform : null;
-        startPanel = startPanel != null ? startPanel : FindChildGameObject(canvas, "StartPanel");
-        mainMenuPanel = mainMenuPanel != null ? mainMenuPanel : FindChildGameObject(canvas, "MainMenuPanel");
-        quickplayPanel = quickplayPanel != null ? quickplayPanel : FindChildGameObject(canvas, "QuickPlayPanel");
-        exitgamePanel = exitgamePanel != null ? exitgamePanel : FindChildGameObject(canvas, "ExitGamePanel");
-        logoObject = logoObject != null ? logoObject : FindChildGameObject(canvas, "Logo");
-        optionsPanel = optionsPanel != null ? optionsPanel : FindChildGameObject(canvas, "OptionsPanel");
-        onlineIndicatorPanel = onlineIndicatorPanel != null ? onlineIndicatorPanel : FindChildGameObject(canvas, "OnlineIndicatorPanel");
-        loadingPanel = loadingPanel != null ? loadingPanel : FindChildGameObject(canvas, "LoadingPanel");
-
-        if (songInfoPanel == null && quickplayPanel != null)
-        {
-            songInfoPanel = FindChildGameObject(quickplayPanel.transform, "SongInfoPanel");
-        }
-
-        if (loadingPreviewImage == null && songInfoPanel != null)
-        {
-            GameObject albumImage = FindChildGameObject(songInfoPanel.transform, "AlbumImage");
-            loadingPreviewImage = albumImage != null ? FindChildGameObject(albumImage.transform, "LoadingImage") : null;
-        }
-
-        if (songList == null)
-        {
-            songList = FindFirstObjectByType<UGUIMenuList>();
-        }
-    }
+    
 
     private void BuildDefaultConfiguration()
     {
@@ -346,7 +283,7 @@ public class MenuManager : MonoBehaviour
             return;
         }
 
-        AddScreenIfMissing(StartMenuId, startPanel, true);
+        /*AddScreenIfMissing(StartMenuId, startPanel, true);
         AddScreenIfMissing(MainMenuId, mainMenuPanel, true);
         AddScreenIfMissing(QuickPlayMenuId, quickplayPanel, false);
         AddScreenIfMissing(OptionsMenuId, optionsPanel, false);
@@ -356,7 +293,7 @@ public class MenuManager : MonoBehaviour
         {
             AddButtonBinding(FindButton(mainMenuPanel, "quickplay"), MenuAction.ShowMenu, QuickPlayMenuId, 1);
             AddButtonBinding(FindButton(mainMenuPanel, "options"), MenuAction.ShowMenu, OptionsMenuId, 4);
-        }
+        }*/
     }
 
     private void AddScreenIfMissing(string id, GameObject panel, bool showLogo)
@@ -479,12 +416,14 @@ public class MenuManager : MonoBehaviour
         }
     }
 
-    private void ShowMenu(string menuId)
+    public async void ShowMenu(string menuId)
     {
         if (string.IsNullOrWhiteSpace(menuId))
         {
             return;
         }
+
+        
 
         if (screensById.Count == 0)
         {
@@ -520,28 +459,35 @@ public class MenuManager : MonoBehaviour
 
             EventSystem.current.SetSelectedGameObject(selected != null ? selected.gameObject : null);
         }
+
+        if (menuId == QuickPlayMenuId)
+        {
+            UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
+            await menuList.RebuildAsync();
+        }
     }
 
-    private void SetPassivePanels()
+    public GameObject ReturnMenuGO(string menuId)
     {
-        if (onlineIndicatorPanel != null)
+        if (string.IsNullOrWhiteSpace(menuId))
         {
-            onlineIndicatorPanel.SetActive(false);
+            return null;
         }
 
-        if (cbFeedPanel != null)
+        if (!screensById.TryGetValue(menuId, out MenuScreen targetScreen))
         {
-            cbFeedPanel.SetActive(true);
+            Debug.LogWarning("Menu screen not configured: " + menuId);
+            return null;
         }
 
-        if (loadingPanel != null)
+        if (targetScreen != null)
         {
-            loadingPanel.SetActive(false);
+            ShowMenu(menuId);
+            return targetScreen.panel;
         }
-
-        if (loadingPreviewImage != null)
+        else
         {
-            loadingPreviewImage.SetActive(false);
+            return null;
         }
     }
 

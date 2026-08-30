@@ -28,7 +28,7 @@ public class GameManager : MonoBehaviour
     public List<string> songFolders;
 
     public Dictionary<int, SongInfo> cachedSongs = new Dictionary<int, SongInfo>();
-    public Dictionary<int, SongEntryInfo> cachedEntries = new Dictionary<int, SongEntryInfo>();
+    public List<SongEntryInfo> cachedEntries = new List<SongEntryInfo>();
     public Dictionary<int, AudioClip> cachedAudioClips = new Dictionary<int, AudioClip>();
 
     public class SongInfo
@@ -43,7 +43,7 @@ public class GameManager : MonoBehaviour
         public List<NoteSpawner.GlobalEventInfo> venueAnimCueEvents = new List<NoteSpawner.GlobalEventInfo>();
         public List<NoteSpawner.LyricEventInfo> lyricEvents = new List<NoteSpawner.LyricEventInfo>();
     }
-
+    [Serializable]
     public class SongEntryInfo
     {
         public string songTitle;
@@ -93,6 +93,7 @@ public class GameManager : MonoBehaviour
     // note mappings (RBN2)
     Dictionary<string, Dictionary<int, int>> partGuitarDifficultyMappings = new Dictionary<string, Dictionary<int,int>>
     {
+        ["EasyRhythm"] = new Dictionary<int,int> { {94,8} },
         ["Easy"] = new Dictionary<int,int> { {60,0}, {61,1}, {62,2}, {63,3}, {64,4}, {59,7} },
         ["Medium"] = new Dictionary<int,int> { {72,0}, {73,1}, {74,2}, {75,3}, {76,4}, {71,7} },
         ["Hard"] = new Dictionary<int,int> { {84,0}, {85,1}, {86,2}, {87,3}, {88,4}, {83,7} },
@@ -106,6 +107,32 @@ public class GameManager : MonoBehaviour
         ["Hard"] = new Dictionary<int,int> { {89,0}, {85,1}, {86,2}, {87,3}, {88,4}, {84,7} },
         ["Expert"] = new Dictionary<int,int> { {97,0}, {98,1}, {99,2}, {100,3}, {101,4}, {96,7}, {95,7} },
     };
+
+    public async Task PlaySongGlobal(string path)
+    {
+        await EnableLoadUnCachedSongVisual(unDestructibleLoadingPhraseScreen, Path.Combine(path, "song.ini"));
+        SongFolderLoader songFolderLoader = FindAnyObjectByType<SongFolderLoader>();
+        if (songFolderLoader != null)
+        {
+            songFolderLoader.songFolderPath = path;
+            await songFolderLoader.Load();
+        }
+        else
+        {
+            Debug.LogError("SongFolderLoader not found in scene!");
+        }
+            
+        SceneManager.LoadScene("Gameplay", LoadSceneMode.Additive); // load synchronously
+            
+        NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
+        if (noteSpawner)
+        {
+            await noteSpawner.Load();
+            await noteSpawner.InitGameplay();
+            
+            
+        }
+    }
 
     public void ExitGame(bool ask)
     {
@@ -140,7 +167,7 @@ public class GameManager : MonoBehaviour
             new Vector3(0,0,0),
             24);
         yield return new WaitForSeconds(6);
-        ForceExitGame();
+        SceneManager.LoadScene("MainMenu");
     }
 
     // Start is called before the first frame update
@@ -161,33 +188,28 @@ public class GameManager : MonoBehaviour
 
     public SongEntryInfo GetCachedSongEntry(int id)
     {
-        try
-        {
-            return cachedEntries[id];
-        }
-        catch
-        {
-            return null;
-        }
+        return cachedEntries.FirstOrDefault(entry =>
+            entry.songNumber == id ||
+            entry.cachedSongID == id);
     }
 
     
     public void CacheSingleSong(string folder, int songID, int count)
     {
-        if (!File.Exists(folder + "/song.ini")) return;
+        if (!File.Exists(folder + Path.DirectorySeparatorChar + "song.ini")) return;
         INIParser parser = new INIParser();
-        parser.Open(folder + "/song.ini");
-        cachedEntries.Add(songID, new SongEntryInfo
+        parser.Open(folder + Path.DirectorySeparatorChar + "song.ini");
+        cachedEntries.Add(new SongEntryInfo
         {
             songTitle = parser.ReadValue("song", "name", string.Empty),
             songArtist = parser.ReadValue("song", "artist", string.Empty),
             songAlbum = parser.ReadValue("song", "album", string.Empty),
-            songYear = int.Parse(parser.ReadValue("song", "year", "0")),
+            songYear = parser.ReadValue("song", "year", 0),
             songLoadingPhrase = parser.ReadValue("song", "loading_phrase", string.Empty),
             songAuthor = parser.ReadValue("song", "charter", string.Empty),
-            songLength = int.Parse(parser.ReadValue("song", "song_length", string.Empty)),
+            songLength = parser.ReadValue("song", "song_length", 0),
             songAccentColor = parser.ReadValue("song", "back_color", "#0000ff"),
-            songPreviewStartTime = int.Parse(parser.ReadValue("song", "preview_start_time", string.Empty)),
+            songPreviewStartTime = parser.ReadValue("song", "preview_start_time", 0),
             cachedSongID = songID,
             songPath = folder,
             songNumber = count
@@ -407,7 +429,7 @@ public class GameManager : MonoBehaviour
             string chosenPart = currentPart.ToUpper();
         
             if (string.IsNullOrEmpty(chosenDiff)) chosenDiff = "Expert";
-            if (chosenPart == "DRUMS")
+            /*if (chosenPart == "DRUMS")
             {
                 if (partDrumsDifficultyMappings.TryGetValue(chosenDiff, out var map))
                 {
@@ -422,6 +444,11 @@ public class GameManager : MonoBehaviour
                     var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
                     foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
                 }
+            }*/
+            if (partGuitarDifficultyMappings.TryGetValue(chosenDiff, out var map))
+            {
+                var trackNotes = GetNotesFromTrackByName(midi, "PART " + chosenPart, map, scale);
+                foreach (var ni in trackNotes) info.noteInfos.Enqueue(ni);
             }
         }
         catch (Exception ex)
@@ -490,7 +517,7 @@ public class GameManager : MonoBehaviour
 
         try
         {
-            var vAnimEvents = GetVenueTextEventsFromTrackByName(midi, "SCRIPTING", scale);
+            var vAnimEvents = GetVenueTextEventsFromTrackByName(midi, "VENUE", scale);
             foreach (var vae in vAnimEvents) info.venueAnimCueEvents.Add(vae);
         }
         catch (Exception ex)
@@ -526,21 +553,22 @@ public class GameManager : MonoBehaviour
         // Auto-generate BEAT track events from the sync track if none were provided in the MIDI
         try
         {
-            bool hasHigherBeatEvents = info.beatEvents != null && info.beatEvents.Any(ev => int.TryParse(ev.value, out int noteNum) && noteNum > 13);
-            if (info.beatEvents == null || info.beatEvents.Count == 0 || !hasHigherBeatEvents)
+            if (info.beatEvents == null || info.beatEvents.Count == 0)
             {
                 if (info.beatEvents == null) info.beatEvents = new List<NoteSpawner.GlobalEventInfo>();
 
-                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: !hasHigherBeatEvents);
+                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: false);
                 if (generated != null && generated.Count > 0)
                 {
                     foreach (var be in generated)
                     {
-                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime);
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
                         if (!alreadyExists) info.beatEvents.Add(be);
                     }
                 }
             }
+
+            PruneFastTempoBeatSubdivisions(info);
         }
         catch (Exception ex)
         {
@@ -702,7 +730,8 @@ public class GameManager : MonoBehaviour
                     spawnTimeMs = 0f,
                     length = enableSustains ? length : 0,
                     lengthMs = 0f,
-                    fret = fret
+                    fret = fret,
+                    belongingPart = chosenPart.ToLower()
                 });
                 Debug.Log("[GameManager.CacheChartFile] parsed Note entry: \"fret=" + fret + ", length=" + length + "\" at tick " + tick);
             }
@@ -738,21 +767,22 @@ public class GameManager : MonoBehaviour
         // Auto-generate BEAT track events from the sync track if none were provided in the chart
         try
         {
-            bool hasHigherBeatEvents = info.beatEvents != null && info.beatEvents.Any(ev => int.TryParse(ev.value, out int noteNum) && noteNum > 13);
-            if (info.beatEvents == null || info.beatEvents.Count == 0 || !hasHigherBeatEvents)
+            if (info.beatEvents == null || info.beatEvents.Count == 0)
             {
                 if (info.beatEvents == null) info.beatEvents = new List<NoteSpawner.GlobalEventInfo>();
 
-                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: !hasHigherBeatEvents);
+                var generated = GenerateBeatEventsFromSync(info, includeEighthNotes: false);
                 if (generated != null && generated.Count > 0)
                 {
                     foreach (var be in generated)
                     {
-                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime);
+                        bool alreadyExists = info.beatEvents.Any(existing => existing.spawnTime == be.spawnTime && existing.value == be.value);
                         if (!alreadyExists) info.beatEvents.Add(be);
                     }
                 }
             }
+
+            PruneFastTempoBeatSubdivisions(info);
         }
         catch (Exception ex)
         {
@@ -809,6 +839,32 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void PruneFastTempoBeatSubdivisions(SongInfo info)
+    {
+        if (info == null || info.beatEvents == null || info.beatEvents.Count == 0) return;
+        if (info.syncInfos == null || info.syncInfos.Count == 0) return;
+
+        var pruned = new List<NoteSpawner.GlobalEventInfo>();
+        foreach (var ev in info.beatEvents)
+        {
+            if (!int.TryParse(ev.value, out int noteNum) || noteNum <= 13)
+            {
+                pruned.Add(ev);
+                continue;
+            }
+
+            var sync = info.syncInfos.Where(s => s.time <= ev.spawnTime).OrderByDescending(s => s.time).FirstOrDefault();
+            if (sync != null && sync.bpm > 180f)
+            {
+                continue;
+            }
+
+            pruned.Add(ev);
+        }
+
+        info.beatEvents = pruned;
+    }
+
     // Generate beat and bar events (value "12"=bar, "13"=beat). When requested, also add 8th-note subdivisions.
     private List<NoteSpawner.GlobalEventInfo> GenerateBeatEventsFromSync(SongInfo info, bool includeEighthNotes = false)
     {
@@ -843,6 +899,7 @@ public class GameManager : MonoBehaviour
                 int beatsPerBar = Math.Max(1, numerator);
                 int ticksPerBar = ticksPerBeat * beatsPerBar;
                 int eighthNoteStep = Math.Max(1, ticksPerBeat / 2);
+                bool allowEighthsInSection = includeEighthNotes && sync.bpm <= 180f;
 
                 // start bars at the segment start; if you want alignment to zero-based bars, adjust here
                 for (int barTick = segStart; barTick < segEnd; barTick += ticksPerBar)
@@ -870,7 +927,7 @@ public class GameManager : MonoBehaviour
                         });
                     }
 
-                    if (includeEighthNotes)
+                    if (allowEighthsInSection)
                     {
                         for (int step = 1; step < beatsPerBar * 2; step++)
                         {
@@ -969,7 +1026,8 @@ public class GameManager : MonoBehaviour
                     spawnTimeMs = (float)(startSeconds * 1000.0),
                     length = enableSustains ? (int)Math.Round(note.Length * scale) : 0,
                     lengthMs = enableSustains ? (float)(lengthSeconds * 1000.0) : 0,
-                    fret = fret
+                    fret = fret,
+                    belongingPart = trackName.Replace("PART ", "").ToLower()
                 });
                 Debug.Log("[GameManager.CacheMidiFile.GetNotesFromTrackByName] parsed Note entry: \"fret=" + fret + ", length=" + (enableSustains ? (int)Math.Round(note.Length * scale) : 0) + "\" at tick " + (int)Math.Round(note.Time * scale));
             }
@@ -985,6 +1043,7 @@ public class GameManager : MonoBehaviour
                     length = r.lengthScaled,
                     lengthMs = r.lengthMs,
                     fret = -1,
+                    belongingPart = trackName.Replace("PART ", "").ToLower(),
                     // mark as parent so spawner can create sustain visuals
                     isFreestyleParent = true
                 });
@@ -1090,6 +1149,7 @@ public class GameManager : MonoBehaviour
                 var textEvent = (BaseTextEvent)note.Event;
                 var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
                 double startSeconds = metricStart.TotalMicroseconds / 1_000_000.0;
+                if (textEvent.Text == name) continue;
                 result.Add(new NoteSpawner.GlobalEventInfo
                 {
                     spawnTime = (int)Math.Round(note.Time * scale),
@@ -1134,10 +1194,8 @@ public class GameManager : MonoBehaviour
 
                 foreach (var note in matchingNotes)
                 {
-                    int sungNote;
-                    
                     double freq = 440.0 * Math.Pow(2.0, (note.NoteNumber - 69) / 12.0);
-                    sungNote = Mathf.RoundToInt((float)freq);
+                    
                     var tempoMap = midi.GetTempoMap();
                     var metricStart = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, tempoMap);
                     var metricLength = TimeConverter.ConvertTo<MetricTimeSpan>(note.Length, tempoMap);
@@ -1148,7 +1206,7 @@ public class GameManager : MonoBehaviour
                     {
                         spawnTick = (float)Math.Round(note.Time * scale),
                         spawnTickMs = (float)(startSeconds * 1000.0),
-                        sungNote = sungNote,
+                        sungNote = freq,
                         length = (float)Math.Round(note.Length * scale),
                         lengthMs = (int)(lengthSeconds * 1000.0),
                         value = lyricValue
@@ -1161,33 +1219,22 @@ public class GameManager : MonoBehaviour
     }
     public string GetCachedSongTitle(int cachedEntry)
     {
-        if (cachedEntries.TryGetValue(cachedEntry, out var song))
-        {
-            return song.songTitle;
-        }
-        else
-        {
-            return null;
-        }
+        var song = GetCachedSongEntry(cachedEntry);
+        return song != null ? song.songTitle : null;
     }
 
     public string GetCachedSongLoadingPhrase(int cachedEntry)
     {
-        if (cachedEntries.TryGetValue(cachedEntry, out var song))
-        {
-            return song.songLoadingPhrase;
-        }
-        else
-        {
-            return null;
-        }
+        var song = GetCachedSongEntry(cachedEntry);
+        return song != null ? song.songLoadingPhrase : null;
     }
     public void EnableLoadSongVisual(GameObject loadingCanvas, int cachedID)
     {
         if (loadingCanvas != null)
         {
             loadingCanvas.SetActive(true);
-            if (cachedEntries.TryGetValue(cachedID, out var song))
+            var song = GetCachedSongEntry(cachedID);
+            if (song != null)
             {
                 TextMeshProUGUI textObj = loadingCanvas.transform.Find("SongLoadingOverlay/LoadingPhraseText").GetComponent<TextMeshProUGUI>();
                 textObj.text = song.songLoadingPhrase;
@@ -1232,16 +1279,20 @@ public class GameManager : MonoBehaviour
         UIUpdater uiUpdater = FindAnyObjectByType<UIUpdater>();
         GameObject gp = GameObject.Find("GuitarPlayer");
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
+        VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
         if (uiUpdater != null)
         {
             StartCoroutine(uiUpdater.SongInfoAnim());
             uiUpdater.InitializeUI();
-            uiUpdater.ScoreVisibility(false);
+            
         }
-        VenueAnimationPlayer venueAnimationPlayer = FindAnyObjectByType<VenueAnimationPlayer>();
+        
         if (venueAnimationPlayer != null)
         {
+            venueAnimationPlayer.TryToggleHighwayCam(false);
             venueAnimationPlayer.Load();
+            uiUpdater.ScoreVisibility(false);
+
         }
         if (unDestructibleLoadingPhraseScreen != null && unDestructibleLoadingPhraseScreen.activeSelf)
         {
@@ -1251,17 +1302,23 @@ public class GameManager : MonoBehaviour
         
         if (SceneManager.GetSceneByBuildIndex(2).isLoaded)
         {
-            VenueAnimationPlayer vap = FindAnyObjectByType<VenueAnimationPlayer>();
+            
             AnimationClip vEntry = Resources.Load<AnimationClip>("VenueEntry");
-            vap.TrySpawnNewCamera(Mathf.Abs(GetHashCode()), vEntry, new Vector3(1000,0,-1100), new Vector3(0,180,0), false);
+            venueAnimationPlayer.TryCueCamAnim(venueAnimationPlayer.mainCamera, vEntry);
+            yield return new WaitForSeconds(vEntry.length);
+            venueAnimationPlayer.ReturnCameraToDefaultPosition();
+            
         }
 
         if (gp != null)
         {
             NoteSpawner noteSpawner = FindAnyObjectByType<NoteSpawner>();
             gp.transform.position = new Vector3(0, 0, 0);
+            
             if (noteSpawner != null)
             {
+                venueAnimationPlayer.TryToggleHighwayCam(true);
+                //yield return noteSpawner.InitGameplay();
                 noteSpawner.Play();
                 inSong = true;
             }
@@ -1277,13 +1334,14 @@ public class GameManager : MonoBehaviour
         
     }
 
-    public void FailSong()
+    public IEnumerator FailSong()
     {
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
         StartCoroutine(musicPlayer.EndSong(false));
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
         sFXPlayer.PlaySongFailedClip();
-        ForceExitGame();
+        yield return new WaitForSecondsRealtime(3);
+        SceneManager.LoadScene("MainMenu");
     }
 
     public void ResetAllValues()

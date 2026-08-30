@@ -69,7 +69,7 @@ public class GlobalMoveY : MonoBehaviour
         float currentSongSeconds = 0f;
         if (mp != null)
         {
-            currentSongSeconds = (float)mp.GetElapsedTime();
+            currentSongSeconds = (float)mp.GetElapsedTimeDsp();
         }
         else if (ns != null)
         {

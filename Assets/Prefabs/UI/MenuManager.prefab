@@ -1,0 +1,131 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6058206940105017313
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5975742816656037155}
+  - component: {fileID: 263298099105794211}
+  m_Layer: 0
+  m_Name: MenuManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5975742816656037155
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6058206940105017313}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -88.97113, y: 3.38256, z: 108.60125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &263298099105794211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6058206940105017313}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a37642385414d94d9e20d10ef1cd1e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  menuCanvas: {fileID: 0}
+  startPanel: {fileID: 0}
+  mainMenuPanel: {fileID: 0}
+  quickplayPanel: {fileID: 0}
+  exitgamePanel: {fileID: 0}
+  logoObject: {fileID: 0}
+  optionsPanel: {fileID: 0}
+  onlineIndicatorPanel: {fileID: 0}
+  songInfoPanel: {fileID: 0}
+  cbFeedPanel: {fileID: 0}
+  loadingPanel: {fileID: 0}
+  loadingPreviewImage: {fileID: 0}
+  firstMenuId: start
+  menuScreens:
+  - id: start
+    panel: {fileID: 0}
+    showLogo: 1
+    firstSelected: {fileID: 0}
+  - id: main
+    panel: {fileID: 0}
+    showLogo: 1
+    firstSelected: {fileID: 0}
+  - id: quickplay
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: options
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: exit
+    panel: {fileID: 0}
+    showLogo: 1
+    firstSelected: {fileID: 0}
+  - id: onl_multi
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: sw_char
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: debug
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: message
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  - id: pause
+    panel: {fileID: 0}
+    showLogo: 0
+    firstSelected: {fileID: 0}
+  menuButtons:
+  - button: {fileID: 0}
+    action: 1
+    targetMenuId: quickplay
+    legacySubmitIndex: 1
+  - button: {fileID: 0}
+    action: 1
+    targetMenuId: options
+    legacySubmitIndex: 4
+  - button: {fileID: 0}
+    action: 6
+    targetMenuId: 
+    legacySubmitIndex: -1
+  - button: {fileID: 0}
+    action: 1
+    targetMenuId: onl_multi
+    legacySubmitIndex: -1
+  - button: {fileID: 0}
+    action: 1
+    targetMenuId: sw_char
+    legacySubmitIndex: -1
+  - button: {fileID: 0}
+    action: 1
+    targetMenuId: debug
+    legacySubmitIndex: -1
+  useDefaultSceneLayout: 1
+  selectFirstControlOnOpen: 1
+  songList: {fileID: 0}
+  accentColor: {r: 0.007843137, g: 0.007843138, b: 1, a: 0}
+  currentPreviewingSongPath: 
+  currentPreviewingID: 0
