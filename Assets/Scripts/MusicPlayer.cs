@@ -455,6 +455,7 @@ public class MusicPlayer : MonoBehaviour
         if (previewAudioStream != null)
         {
             yield return StartCoroutine(FadeOutCoroutine(fadeFromVol));
+            yield return new WaitForSeconds(1.0f); // coroutines dont give execution length
             previewAudioStream.Stop();
             previewAudioStream.clip = null;
             previewAudioStream.time = 0;
