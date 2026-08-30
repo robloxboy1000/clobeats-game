@@ -527,9 +527,10 @@ public class MenuManager : MonoBehaviour
     private void StopPreviewAudio()
     {
         MusicPlayer musicPlayer = FindFirstObjectByType<MusicPlayer>();
-        if (musicPlayer != null && musicPlayer.previewAudioPlaying)
+        UGUIMenuList menuList = FindAnyObjectByType<UGUIMenuList>();
+        if (musicPlayer != null && menuList != null && musicPlayer.previewAudioPlaying)
         {
-            musicPlayer.StopPreviewAudio();
+            StartCoroutine(musicPlayer.StopPreviewAudio(menuList.previewVolume));
         }
     }
 
