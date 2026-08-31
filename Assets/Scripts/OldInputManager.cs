@@ -66,7 +66,6 @@ public class OldInputManager : MonoBehaviour
             if (!laneInputManager.OnStrum() && gameManager.inSong)
             {
                 var sfx = FindAnyObjectByType<SFXPlayer>();
-                sfx.PlayOverstrumClip();
                 sfx.PlayClip("Miss");
                 var ui = FindAnyObjectByType<UIUpdater>();
                 ui.UpdateForNoteMiss();

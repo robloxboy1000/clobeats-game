@@ -232,7 +232,7 @@ public class UIUpdater : MonoBehaviour
         {
             GameObject gp = GameObject.Find("GuitarPlayer");
             SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
-            sFXPlayer.PlayComboLostClip();
+            sFXPlayer.PlayClip("ComboLost");
             if (gp != null)
             {
                 Animation highwayAnim = gp.GetComponent<Animation>();

@@ -1327,7 +1327,7 @@ public class GameManager : MonoBehaviour
         if (uiUpdater != null)
         {
             uiUpdater.ScoreVisibility(true);
-            sFXPlayer.PlayScoreShowClip();
+            sFXPlayer.PlayClip("ScoreShow");
         }
         yield return null;
         
@@ -1339,7 +1339,7 @@ public class GameManager : MonoBehaviour
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
         StartCoroutine(musicPlayer.EndSong(false));
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
-        sFXPlayer.PlaySongFailedClip();
+        sFXPlayer.PlayClip("SongFailed");
         yield return new WaitForSecondsRealtime(3);
         SceneManager.LoadScene("MainMenu");
     }
