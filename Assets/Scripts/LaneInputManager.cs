@@ -153,6 +153,10 @@ public class LaneInputManager : MonoBehaviour
             if (!TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true))
             TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
         }
+        else if (CanHitTapOrHopo(laneIndex))
+        {
+            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
+        }
     }
 
     public void OnFretReleased(int laneIndex)
@@ -161,11 +165,51 @@ public class LaneInputManager : MonoBehaviour
         EndSustainForLane(laneIndex);
         if (oim.gamepadMode)
         {
-            TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.FretRelease, true);
+            if (CanHitTapOrHopo(laneIndex))
+            {
+                TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.FretRelease, true);
+            }
         }
     }
 
-    // Called when the player strums; will attempt to hit all currently held frets (chords)
+    bool CanHitTapOrHopo(int laneIndex)
+    {
+        var note = LaneManager.Instance.GetNextNoteInLane(laneIndex);
+        if (note == null) return false;
+
+        var visual = note.GetComponent<NoteVisualChanger>();
+        if (visual == null) return false;
+
+        return visual.currentNoteType == NoteVisualChanger.NoteType.Tap
+            || visual.currentNoteType == NoteVisualChanger.NoteType.HOPO;
+    }
+
+    bool IsChordAtCurrentTick()
+    {
+        if (spawner == null || heldLanes.Count < 2) return false;
+
+        int currentTick = spawner.currentTick;
+        int matchingTickCount = 0;
+
+        foreach (var lane in heldLanes)
+        {
+            var note = LaneManager.Instance.GetNextNoteInLane(lane);
+            if (note == null) continue;
+
+            var sched = note.GetComponent<ScheduledTime>();
+            if (sched == null) continue;
+
+            int noteTick = Mathf.RoundToInt(spawner.GetTickAtTimeSeconds(sched.scheduledSeconds, true));
+            if (Mathf.Abs(noteTick - currentTick) <= 1)
+            {
+                matchingTickCount++;
+            }
+        }
+
+        return matchingTickCount >= 2;
+    }
+
+    // Called when the player strums; if the upcoming note is not a chord, only the highest held fret should be strummed.
     public bool OnStrum()
     {
         if (heldLanes.Count == 0)
@@ -179,23 +223,35 @@ public class LaneInputManager : MonoBehaviour
                 return false;
             }
         }
-        else
+
+        var lanes = new List<int>(heldLanes);
+        if (!IsChordAtCurrentTick())
         {
-            // Copy so TryHitLane can modify collections safely
-            var lanes = new List<int>(heldLanes);
-            Dictionary<int, bool> laneBools = new Dictionary<int, bool>();
+            int highestLane = -1;
             foreach (var lane in lanes)
             {
-                laneBools.TryAdd(lane, TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced, true));
+                if (highestLane < lane)
+                {
+                    highestLane = lane;
+                }
             }
-            if (laneBools.ContainsValue(false))
-            {
-                return false;
-            }
-            else
-            {
-                return true;
-            }
+
+            if (highestLane < 0) return false;
+            return TryHitLane(highestLane, false, NoteVisualChanger.NoteType.Forced, false);
+        }
+
+        var chordLanes = new List<bool>();
+        foreach (var lane in lanes)
+        {
+            chordLanes.Add(TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced, true));
+        }
+        if (chordLanes.Contains(false))
+        {
+            return false;
+        }
+        else
+        {
+            return true;
         }
     }
 
