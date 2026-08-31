@@ -167,7 +167,9 @@ public class GameManager : MonoBehaviour
             new Vector3(0,0,0),
             24);
         yield return new WaitForSeconds(6);
-        SceneManager.LoadScene("MainMenu");
+        MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+        SceneManager.UnloadSceneAsync("Gameplay");
+        menuManager.ShowMenu("main");
     }
 
     // Start is called before the first frame update
@@ -1342,7 +1344,7 @@ public class GameManager : MonoBehaviour
         sFXPlayer.PlayClip("GH3_Sudden_Death");
         yield return new WaitForSecondsRealtime(3);
         MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-        SceneManager.UnloadScene("Gameplay");
+        SceneManager.UnloadSceneAsync("Gameplay");
         menuManager.ShowMenu("main");
     }
 
