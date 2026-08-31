@@ -1550,12 +1550,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2c359f2c6817f74a91225b7f8a01ffa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NoteSpawner
-  greenNotePrefab: {fileID: 5515200103857537574, guid: 76a462ac5401e234a84fbc318c60c0fe, type: 3}
-  redNotePrefab: {fileID: 5515200103857537574, guid: 40a35f2a700185d4884f31e3cf6f179d, type: 3}
-  yellowNotePrefab: {fileID: 5515200103857537574, guid: 22338d70c656d0040be4e78394263dc8, type: 3}
-  blueNotePrefab: {fileID: 5515200103857537574, guid: 83800f4211a9be847bcfc0fc5f134536, type: 3}
-  orangeNotePrefab: {fileID: 5515200103857537574, guid: da7a15180c706cd459571672c2f57bb2, type: 3}
-  openNotePrefab: {fileID: 5014210062068762395, guid: a88525100af6d4a4d8d5dffa1c02e4f7, type: 3}
+  greenNotePrefab: {fileID: 5515200103857537574, guid: bbb05ec2836a2fd4cbe37ebb495f3950, type: 3}
+  redNotePrefab: {fileID: 5515200103857537574, guid: cf20558c7b6052447b6722cbd4f42fa5, type: 3}
+  yellowNotePrefab: {fileID: 5515200103857537574, guid: c83857909108e134aa5cee75cf7a8da2, type: 3}
+  blueNotePrefab: {fileID: 5515200103857537574, guid: feae0eb7e5e17084c8a90a23522b023c, type: 3}
+  orangeNotePrefab: {fileID: 5515200103857537574, guid: 33db493db56121645a26773465e59b66, type: 3}
+  openNotePrefab: {fileID: 5014210062068762395, guid: e9671d1f47577634cbdf01a36d969190, type: 3}
   beginnerNotePrefab: {fileID: 5014210062068762395, guid: cbc7752a6567b3243a31ae52e57d1eb1, type: 3}
   freestyleDummyPrefab: {fileID: 0}
   countdownReadyClip: {fileID: 8300000, guid: 6036c38c75e860e4b8f15c15539bab5f, type: 3}
@@ -13346,6 +13346,7 @@ MonoBehaviour:
   allowFail: 1
   serverIPAddr: localhost
   songFolders: []
+  cachedEntries: []
   ddst: 
   currentPart: Guitar
   currentSongResolution: 192
