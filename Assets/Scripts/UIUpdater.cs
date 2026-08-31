@@ -230,15 +230,8 @@ public class UIUpdater : MonoBehaviour
         }
         else
         {
-            GameObject gp = GameObject.Find("GuitarPlayer");
             SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
-            sFXPlayer.PlayClip("ComboLost");
-            if (gp != null)
-            {
-                Animation highwayAnim = gp.GetComponent<Animation>();
-                highwayAnim.Stop();
-                highwayAnim.Play("ComboLostShake");
-            }
+            sFXPlayer.PlayClip("ui_lose_multiplier_hq");
             savedcombo = 1;
             savednotesHit = 0;
             comboDotsCount = 0;
