@@ -1339,9 +1339,11 @@ public class GameManager : MonoBehaviour
         MusicPlayer musicPlayer = FindAnyObjectByType<MusicPlayer>();
         StartCoroutine(musicPlayer.EndSong(false));
         SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
-        sFXPlayer.PlayClip("SongFailed");
+        sFXPlayer.PlayClip("GH3_Sudden_Death");
         yield return new WaitForSecondsRealtime(3);
-        SceneManager.LoadScene("MainMenu");
+        MenuManager menuManager = FindAnyObjectByType<MenuManager>();
+        SceneManager.UnloadScene("Gameplay");
+        menuManager.ShowMenu("main");
     }
 
     public void ResetAllValues()
