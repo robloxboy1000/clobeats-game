@@ -87,7 +87,7 @@ public class UIUpdater : MonoBehaviour
         {
             combolimit = 8;
             savedcombo = savedcombo * 2;
-            sFX.PlayClip("Star_Deployed");
+            sFX.PlayClip("Woosh");
             //sFX.PlayClip("FeverCheer1");
             musicPlayer.ToggleStemReverb(part, true);
         }
