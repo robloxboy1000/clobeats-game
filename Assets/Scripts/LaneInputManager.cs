@@ -153,6 +153,10 @@ public class LaneInputManager : MonoBehaviour
             if (!TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true))
             TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
         }
+        else if (laneIndex == 8)
+        {
+            TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true);
+        }
         else if (CanHitTapOrHopo(laneIndex))
         {
             TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.Any, true);
@@ -165,7 +169,7 @@ public class LaneInputManager : MonoBehaviour
         EndSustainForLane(laneIndex);
         if (oim.gamepadMode)
         {
-            if (CanHitTapOrHopo(laneIndex))
+            if (CanHitTapOrHopo(laneIndex) || laneIndex == 8)
             {
                 TryHitLane(laneIndex, false, NoteVisualChanger.NoteType.FretRelease, true);
             }
@@ -188,9 +192,7 @@ public class LaneInputManager : MonoBehaviour
     {
         if (spawner == null || heldLanes.Count < 2) return false;
 
-        int currentTick = spawner.currentTick;
-        int matchingTickCount = 0;
-
+        List<float> noteTimes = new List<float>();
         foreach (var lane in heldLanes)
         {
             var note = LaneManager.Instance.GetNextNoteInLane(lane);
@@ -199,14 +201,27 @@ public class LaneInputManager : MonoBehaviour
             var sched = note.GetComponent<ScheduledTime>();
             if (sched == null) continue;
 
-            int noteTick = Mathf.RoundToInt(spawner.GetTickAtTimeSeconds(sched.scheduledSeconds, true));
+            float scheduledSeconds = sched.scheduledSeconds;
+            int noteTick = Mathf.RoundToInt(spawner.GetTickAtTimeSeconds(scheduledSeconds, true));
+            int currentTick = spawner.currentTick;
             if (Mathf.Abs(noteTick - currentTick) <= 1)
             {
-                matchingTickCount++;
+                noteTimes.Add(scheduledSeconds);
             }
         }
 
-        return matchingTickCount >= 2;
+        if (noteTimes.Count < 2) return false;
+        noteTimes.Sort();
+
+        for (int i = 1; i < noteTimes.Count; i++)
+        {
+            if (Mathf.Abs(noteTimes[i] - noteTimes[0]) <= hitWindowSeconds)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Called when the player strums; if the upcoming note is not a chord, only the highest held fret should be strummed.
@@ -214,7 +229,7 @@ public class LaneInputManager : MonoBehaviour
     {
         if (heldLanes.Count == 0)
         {
-            if (TryHitLane(7))
+            if (TryHitLane(7, false, NoteVisualChanger.NoteType.Any, true) || TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true))
             {
                 return true;
             }
@@ -222,6 +237,11 @@ public class LaneInputManager : MonoBehaviour
             {
                 return false;
             }
+        }
+
+        if (heldLanes.Contains(8))
+        {
+            return TryHitLane(8, false, NoteVisualChanger.NoteType.Any, true);
         }
 
         var lanes = new List<int>(heldLanes);
@@ -239,18 +259,12 @@ public class LaneInputManager : MonoBehaviour
             if (highestLane < 0) return false;
             return TryHitLane(highestLane, false, NoteVisualChanger.NoteType.Forced, false);
         }
-
-        var chordLanes = new List<bool>();
-        foreach (var lane in lanes)
-        {
-            chordLanes.Add(TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced, true));
-        }
-        if (chordLanes.Contains(false))
-        {
-            return false;
-        }
         else
         {
+            foreach (var lane in lanes)
+            {
+                TryHitLane(lane, false, NoteVisualChanger.NoteType.Forced, true);
+            }
             return true;
         }
     }

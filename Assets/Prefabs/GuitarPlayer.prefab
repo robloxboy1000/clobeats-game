@@ -256,7 +256,6 @@ GameObject:
   m_Component:
   - component: {fileID: 57090506542548296}
   - component: {fileID: -8040941786978696180}
-  - component: {fileID: 6677290383359149272}
   m_Layer: 10
   m_Name: GuitarPlayer
   m_TagString: Untagged
@@ -294,24 +293,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4384f317b0d82224e84830bcf2946dc5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
---- !u!111 &6677290383359149272
-Animation:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 728462308556609631}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Animation: {fileID: 0}
-  m_Animations:
-  - {fileID: 7400000, guid: f60b66260df0f2d4287f82f9df4cb45d, type: 2}
-  - {fileID: 7400000, guid: d87483e7840100c4881292d50b0f9953, type: 2}
-  - {fileID: 7400000, guid: d0a7fe3a91d7c2f498d04e9dfcc94419, type: 2}
-  m_WrapMode: 0
-  m_PlayAutomatically: 0
-  m_AnimatePhysics: 0
-  m_CullingType: 0
 --- !u!1 &743071208330463857
 GameObject:
   m_ObjectHideFlags: 0
@@ -574,7 +555,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 2
-  m_Sprite: {fileID: 7482667652216324306, guid: 68faa775ed681e44eb79852b6c8e7e74, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 80f275860ccb2ad44b9c56fa08faad95, type: 3}
   m_Color: {r: 1, g: 0, b: 0, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -582,7 +563,7 @@ SpriteRenderer:
   m_Size: {x: 1, y: 1}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 0
+  m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
 --- !u!1 &901960488495578018
@@ -864,7 +845,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 2
-  m_Sprite: {fileID: 7482667652216324306, guid: 68faa775ed681e44eb79852b6c8e7e74, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 80f275860ccb2ad44b9c56fa08faad95, type: 3}
   m_Color: {r: 0, g: 1, b: 0, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -872,7 +853,7 @@ SpriteRenderer:
   m_Size: {x: 1, y: 1}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 0
+  m_WasSpriteAssigned: 1
   m_MaskInteraction: 2
   m_SpriteSortPoint: 0
 --- !u!1 &1595230576276952899
@@ -2391,7 +2372,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 2
-  m_Sprite: {fileID: 7482667652216324306, guid: 68faa775ed681e44eb79852b6c8e7e74, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 80f275860ccb2ad44b9c56fa08faad95, type: 3}
   m_Color: {r: 1, g: 1, b: 0, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -2399,7 +2380,7 @@ SpriteRenderer:
   m_Size: {x: 1, y: 1}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 0
+  m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
 --- !u!1 &4528542867925893253

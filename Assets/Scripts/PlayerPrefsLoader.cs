@@ -12,6 +12,7 @@ using System.Linq;
 using System.ComponentModel;
 using TMPro;
 using System.Drawing.Text;
+using Rewired.Integration.UnityUI;
 
 public class PlayerPrefsLoader : MonoBehaviour
 {
@@ -267,10 +268,13 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 child.gameObject.SetActive(false);
             }
+            SceneManager.LoadSceneAsync(2, LoadSceneMode.Additive);
             PlayerPrefs.SetInt("EnableVenue", 1);
             PlayerPrefs.SetInt("EnableAutoplay", 0);
             PlayerPrefs.SetInt("EnableVSync", 0);
             Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
+            RewiredStandaloneInputModule inputModule = FindFirstObjectByType<RewiredStandaloneInputModule>();
+            inputModule.allowMouseInput = false;
             MessageBox.Instance.Show($"Welcome to {Application.productName} !<br>Loading custom songs takes a <b>VERY</b> long time, "
             + "so if you don't want to wait, please exit the game and move your custom songs somewhere else to access the online song catalog, "
             + "or simply wait.<br>Press OK to continue.", "Message", async () => await LoadGame());
@@ -286,6 +290,8 @@ public class PlayerPrefsLoader : MonoBehaviour
             {
                 indefiniteLoadingScreen.SetActive(false);
             }
+            RewiredStandaloneInputModule inputModule = FindFirstObjectByType<RewiredStandaloneInputModule>();
+            inputModule.allowMouseInput = true;
         }
         
         

@@ -514,6 +514,33 @@ public class MusicPlayer : MonoBehaviour
                 Debug.LogError("Failed to resume BASS streams: " + ex.Message);
             }
         }
+
+        if (isPaused)
+        {
+            double stemResumeTime = Math.Max(0.0, pausedElapsedDsp);
+            foreach (var pair in stemChannels)
+            {
+                if (pair.Value == null || pair.Value.handle == 0) continue;
+                try
+                {
+                    Bass.ChannelSetPosition(pair.Value.handle, Bass.ChannelSeconds2Bytes(pair.Value.handle, stemResumeTime));
+                    Bass.ChannelPlay(pair.Value.handle);
+                    foreach (var childHandle in pair.Value.childHandles)
+                    {
+                        if (childHandle != 0)
+                        {
+                            Bass.ChannelSetPosition(childHandle, Bass.ChannelSeconds2Bytes(childHandle, stemResumeTime));
+                            Bass.ChannelPlay(childHandle);
+                        }
+                    }
+                    pair.Value.isPlaying = true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError("Failed to resume stem '" + pair.Key + "' from paused time: " + ex.Message);
+                }
+            }
+        }
         // Resume MIDI playback if available
         if (midiPlayback != null)
         {
@@ -1080,18 +1107,39 @@ public class MusicPlayer : MonoBehaviour
         return stem;
     }
 
+    private void ResumeStemChannel(int handle, double resumeSeconds)
+    {
+        if (handle == 0) return;
+
+        try
+        {
+            if (isPaused && resumeSeconds >= 0.0)
+            {
+                long pos = Bass.ChannelSeconds2Bytes(handle, resumeSeconds);
+                Bass.ChannelSetPosition(handle, pos);
+            }
+
+            Bass.ChannelPlay(handle);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("ResumeStemChannel failed for handle '" + handle + "': " + ex.Message);
+        }
+    }
+
     public void PlayStem(string stemName)
     {
         if (stemChannels.TryGetValue(stemName, out var stem) && stem.handle != 0)
         {
             try
             {
-                Bass.ChannelPlay(stem.handle);
+                double resumeSeconds = isPaused ? Math.Max(0.0, pausedElapsedDsp) : -1.0;
+                ResumeStemChannel(stem.handle, resumeSeconds);
                 foreach (var childHandle in stem.childHandles)
                 {
                     if (childHandle != 0)
                     {
-                        Bass.ChannelPlay(childHandle);
+                        ResumeStemChannel(childHandle, resumeSeconds);
                     }
                 }
                 stem.isPlaying = true;
@@ -1131,17 +1179,19 @@ public class MusicPlayer : MonoBehaviour
 
     public void PlayAllStems()
     {
+        double resumeSeconds = isPaused ? Math.Max(0.0, pausedElapsedDsp) : -1.0;
+
         foreach (var pair in stemChannels)
         {
             if (pair.Value == null || pair.Value.handle == 0) continue;
             try
             {
-                Bass.ChannelPlay(pair.Value.handle);
+                ResumeStemChannel(pair.Value.handle, resumeSeconds);
                 foreach (var childHandle in pair.Value.childHandles)
                 {
                     if (childHandle != 0)
                     {
-                        Bass.ChannelPlay(childHandle);
+                        ResumeStemChannel(childHandle, resumeSeconds);
                     }
                 }
                 pair.Value.isPlaying = true;

@@ -175,6 +175,38 @@ PrefabInstance:
       propertyPath: m_Enabled
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 5465864526324239886, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_UpdateMode
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7192655385066953697, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 2127414298, guid: 9939f6ac23cf07f4d94190360690a01d, type: 3}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 728
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422893565328854990, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 126
+      objectReference: {fileID: 0}
     - target: {fileID: 7860972892838882811, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
       propertyPath: m_text
       value: 'Server error occoured: An error occurred while sending the request'
@@ -203,10 +235,39 @@ PrefabInstance:
     - {fileID: 0}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7006948659533137016, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4664897755020837165}
   m_SourcePrefab: {fileID: 100100000, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
 --- !u!224 &7724481330471348489 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8581262270940982960, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
   m_PrefabInstance: {fileID: 2027774637202966457}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &9014435035634779073 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7006948659533137016, guid: 520e1e6a294ebbd4fac3de0c26abd806, type: 3}
+  m_PrefabInstance: {fileID: 2027774637202966457}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &4664897755020837165
+Animator:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9014435035634779073}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: a6312c62ebbf2674eafe45e9d94ca457, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 2
+  m_ApplyRootMotion: 1
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0

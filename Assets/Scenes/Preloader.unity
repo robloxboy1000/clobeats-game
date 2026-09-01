@@ -9524,7 +9524,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 1
+  m_SortingOrder: 10
   m_TargetDisplay: 0
 --- !u!224 &1449914742
 RectTransform:
@@ -12507,7 +12507,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f0e1d310ff8b3a4198adff6dea56b75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoLoad: 1
+  autoLoad: 0
   blankImage: {fileID: 0}
   indefiniteLoadingScreen: {fileID: 1134674988}
   songItemNames: []
