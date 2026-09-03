@@ -158,6 +158,8 @@ public class OldInputManager : MonoBehaviour
                 if (player.GetButtonDown("Red"))
                 {
                     Debug.Log("Red button pressed");
+                    SFXPlayer sFXPlayer = FindAnyObjectByType<SFXPlayer>();
+                    sFXPlayer.PlayClip("MenuClose");
                     menuManager.Exit();
                 }
                 if (menuManager.IsMenuOpen(MenuManager.QuickPlayMenuId))

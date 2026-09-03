@@ -1180,7 +1180,7 @@ public class MusicPlayer : MonoBehaviour
     public void PlayAllStems()
     {
         double resumeSeconds = isPaused ? Math.Max(0.0, pausedElapsedDsp) : -1.0;
-
+        isPaused = false;
         foreach (var pair in stemChannels)
         {
             if (pair.Value == null || pair.Value.handle == 0) continue;
