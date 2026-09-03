@@ -265,8 +265,9 @@ public class MenuManager : MonoBehaviour
             gameManager.currentSongID = currentPreviewingID - 1;
             Debug.Log("[MenuManager] Loading selected song. (Include loading visual)");
             StopPreviewAudio();
-            await gameManager.PlaySongGlobal(currentPreviewingSongPath);
-            ShowMenu("null");
+            ShowMenu("songentry");
+            //await gameManager.PlaySongGlobal(currentPreviewingSongPath);
+            //ShowMenu("null");
         }
         finally
         {
