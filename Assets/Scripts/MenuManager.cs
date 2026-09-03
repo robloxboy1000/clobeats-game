@@ -262,7 +262,7 @@ public class MenuManager : MonoBehaviour
             PlayerPrefs.SetString("SelectedFolderPath", currentPreviewingSongPath);
             PlayerPrefs.Save();
 
-            gameManager.currentSongID = currentPreviewingID - 1;
+            gameManager.currentSongID = currentPreviewingID;
             Debug.Log("[MenuManager] Loading selected song. (Include loading visual)");
             StopPreviewAudio();
             ShowMenu("songentry");
