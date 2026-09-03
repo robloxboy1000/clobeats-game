@@ -12507,7 +12507,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f0e1d310ff8b3a4198adff6dea56b75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoLoad: 0
+  autoLoad: 1
   blankImage: {fileID: 0}
   indefiniteLoadingScreen: {fileID: 1134674988}
   songItemNames: []
