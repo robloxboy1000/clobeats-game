@@ -129,8 +129,6 @@ public class GameManager : MonoBehaviour
         {
             await noteSpawner.Load();
             await noteSpawner.InitGameplay();
-            
-            
         }
     }
 
