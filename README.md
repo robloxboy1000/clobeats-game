@@ -11,7 +11,7 @@
 > Anti-Piracy Notice: **Project CloBeats** is planned to **only** have songs uploaded by the community, and will **not** include any pirated songs or assets. I neither support nor endorse piracy, as it is a violation of copyright law with serious legal consequences. It is the community/uploader's responsibility to upload songs with the proper licenses and not violate copyright law. By using **Project CloBeats**, users agree not to promote or endorse piracy in any way through this platform. Complying with these principles ensures a community that respects copyright, creativity, and legal standards.
 
 ## 🚀 Planned Features
-- **Animated Venue** – Source code includes camera animation editor that saves to a JSON file. (other animation types coming soon!)
+- **Animated Venue** – Venue animation (i.e. lipsync and dance animations) will be auto-generated or use MMD2Unity for motion capture moments.
 - **Custom Online Downloads** – Download community-curated songs, venue decor, and 3D models.
 - **Custom Player Models** – Import custom player models in VRM 0.x format (models created with VRoid Studio recommended)
 - **Fast Rendering** – Powered by Unity 2022 for high performance.
