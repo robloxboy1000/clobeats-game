@@ -1,12 +1,22 @@
-# 🎵 Project: CloBeats (PROTOTYPE)
+# 🎵 Project CloBeats (PROTOTYPE)
 
-**CloBeats** is a modern, customizable, and brand-new Guitar Hero clone game built from the ground-up for simplicity, and user friendliness.
+**Project CloBeats** is a modern, customizable, and brand-new Guitar Hero clone game built from the ground-up for simplicity, and user friendliness.
 
-## 🚀 Features
-- **Custom Online Downloads** – Download community-curated songs, venue decor, and 3D models.
-- **Rapid Sustains** – When sustains show up as squiggly lines, strum as fast as you can! (until they end, of course)
+## ❗ Disclaimers
+
+> [!WARNING]
+> Most of the code here is vibe-coded (made with generative AI) and is made only for fun to prove a concept.
+
+> [!IMPORTANT]
+> Anti-Piracy Notice: **Project CloBeats** is planned to **only** have songs uploaded by the community, and will **not** include any pirated songs or assets. I neither support nor endorse piracy, as it is a violation of copyright law with serious legal consequences. It is the community/uploader's responsibility to upload songs with the proper licenses and not violate copyright law. By using **Project CloBeats**, users agree not to promote or endorse piracy in any way through this platform. Complying with these principles ensures a community that respects copyright, creativity, and legal standards.
+
+## 🚀 Planned Features
 - **Animated Venue** – Source code includes camera animation editor that saves to a JSON file. (other animation types coming soon!)
+- **Custom Online Downloads** – Download community-curated songs, venue decor, and 3D models.
+- **Custom Player Models** – Import custom player models in VRM 0.x format (models created with VRoid Studio recommended)
 - **Fast Rendering** – Powered by Unity 2022 for high performance.
+- **MMD2Unity** – MMD2Unity is a planned script that can convert MMD (MikuMikuDance) avatar motion into Unity's Humanoid animation format for avatar models, and can convert MMD-curated camera motion into a regular animation that Unity is able to understand.
+- **Rapid Sustains** – When sustains show up as squiggly lines, strum as fast as you can! (until they end, of course)
 - **Sliding Sustains** – When sliding sustains show up, keep holding the first fret of the sustain then press the fret at the end of the sustain. (similar to a HOPO, but a sustain is connected linearly to the end of the ending note.)
 - **and more coming soon!**
 
